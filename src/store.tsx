@@ -317,51 +317,64 @@ export function MailProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const mapMessages = useCallback((data: any, folder: string): Email[] => {
+    return (data.emails || [])
+      .filter((msg: any) => msg.uid)
+      .map((msg: any) => ({
+        id: String(msg.uid),
+        folderId: folder,
+        from: { id: msg.from?.email || '', name: decodeMime(msg.from?.name || ''), email: msg.from?.email || '' },
+        to: (msg.to || []).map((a: any) => ({ id: a.email, name: decodeMime(a.name), email: a.email })),
+        cc: (msg.cc || []).map((a: any) => ({ id: a.email, name: decodeMime(a.name), email: a.email })),
+        subject: decodeMime(msg.subject || '(No Subject)'),
+        snippet: decodeMime(msg.subject || ''),
+        body: '',
+        date: msg.date || new Date().toISOString(),
+        read: (msg.flags || []).includes('\\Seen'),
+        starred: (msg.flags || []).includes('\\Flagged'),
+        tags: [],
+        attachments: [],
+        headers: { messageId: msg.messageId || '', inReplyTo: msg.inReplyTo || '' },
+      }));
+  }, []);
+
+  const collectContacts = useCallback((mapped: Email[]) => {
+    const newContacts: Contact[] = [];
+    mapped.forEach(e => {
+      [e.from, ...(e.to || []), ...(e.cc || [])].forEach(c => {
+        if (c.email && !newContacts.find(x => x.email === c.email) && c.email !== settings.account.email) {
+          newContacts.push(c);
+        }
+      });
+    });
+    setContacts(prev => {
+      const merged = [...prev];
+      newContacts.forEach(c => {
+        if (!merged.find(x => x.email === c.email)) merged.push(c);
+      });
+      return merged;
+    });
+  }, [settings.account.email]);
+
+  const PAGE_SIZE = 50;
+
   const fetchEmails = useCallback(async () => {
     setIsLoading(true);
     setConnectionError(null);
     try {
       await loadFolders();
       
-      const data = await mailApi.fetchEmailList(currentFolder, 1, 50);
-      const mapped: Email[] = (data.emails || [])
-        .filter((msg: any) => msg.uid) // Skip messages without UID
-        .map((msg: any) => ({
-          id: String(msg.uid),
-          folderId: currentFolder,
-          from: { id: msg.from?.email || '', name: decodeMime(msg.from?.name || ''), email: msg.from?.email || '' },
-          to: (msg.to || []).map((a: any) => ({ id: a.email, name: decodeMime(a.name), email: a.email })),
-          cc: (msg.cc || []).map((a: any) => ({ id: a.email, name: decodeMime(a.name), email: a.email })),
-          subject: decodeMime(msg.subject || '(No Subject)'),
-          snippet: decodeMime(msg.subject || ''),
-          body: '',
-          date: msg.date || new Date().toISOString(),
-          read: (msg.flags || []).includes('\\Seen'),
-          starred: (msg.flags || []).includes('\\Flagged'),
-          tags: [],
-          attachments: [],
-          headers: { messageId: msg.messageId || '', inReplyTo: msg.inReplyTo || '' },
-        }));
+      const data = await mailApi.fetchEmailList(currentFolder, 1, PAGE_SIZE);
+      const mapped = mapMessages(data, currentFolder);
       
+      const total = data.total || 0;
       setEmails(mapped);
+      setCurrentPage(1);
+      setTotalEmails(total);
+      setHasMoreEmails(mapped.length < total);
       setIsConnected(true);
       
-      // Collect contacts
-      const newContacts: Contact[] = [];
-      mapped.forEach(e => {
-        [e.from, ...(e.to || []), ...(e.cc || [])].forEach(c => {
-          if (c.email && !newContacts.find(x => x.email === c.email) && c.email !== settings.account.email) {
-            newContacts.push(c);
-          }
-        });
-      });
-      setContacts(prev => {
-        const merged = [...prev];
-        newContacts.forEach(c => {
-          if (!merged.find(x => x.email === c.email)) merged.push(c);
-        });
-        return merged;
-      });
+      collectContacts(mapped);
     } catch (e: any) {
       console.error('fetchEmails error:', e);
       setConnectionError(e.message || 'Connection failed');

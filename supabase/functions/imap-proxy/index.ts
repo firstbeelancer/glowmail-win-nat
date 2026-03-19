@@ -348,8 +348,33 @@ Deno.serve(async (req) => {
 
         const isLikelyBase64 = (value: string): boolean => {
           const compact = value.replace(/\s/g, "");
-          if (compact.length < 64 || compact.length % 4 !== 0) return false;
+          if (compact.length < 24 || compact.length % 4 !== 0) return false;
           return /^[A-Za-z0-9+/=]+$/.test(compact);
+        };
+
+        const looksLikeMimeBlob = (value: string): boolean => {
+          if (!value) return false;
+          const lower = value.toLowerCase();
+          return lower.includes("content-type: multipart/") ||
+            lower.includes("content-transfer-encoding:") ||
+            /(?:^|\r?\n)--[^\r\n]{8,}/.test(value);
+        };
+
+        const decodeByHeuristic = (value: string, charset = "utf-8") => {
+          if (!isLikelyBase64(value)) return value;
+          const decoded = decodeContent(value, "base64", charset);
+          return decoded && decoded !== value ? decoded : value;
+        };
+
+        const extractMimeFromBlob = (value: string): { text: string; html: string } => {
+          if (!value) return { text: "", html: "" };
+          const maybeDecoded = decodeByHeuristic(value, "utf-8");
+          if (!looksLikeMimeBlob(maybeDecoded)) return { text: "", html: "" };
+          const parsed = parseMimeParts(maybeDecoded);
+          return {
+            text: (parsed.text || "").trim(),
+            html: (parsed.html || "").trim(),
+          };
         };
 
         const extractFromParts = (parts: unknown): { text: string; html: string } => {
@@ -377,7 +402,6 @@ Deno.serve(async (req) => {
             const isHtmlPart = meta ? (meta.subtype === "html") : headers.includes("text/html");
             const isPlainPart = meta ? (meta.subtype === "plain") : headers.includes("text/plain");
 
-            // Convert bytes to string for decoding
             const rawStr = new TextDecoder("latin1").decode(rawBytes);
 
             let decoded = rawStr;
@@ -386,7 +410,6 @@ Deno.serve(async (req) => {
             } else if (encoding === "quoted-printable") {
               decoded = decodeContent(rawStr, "quoted-printable", charset);
             } else {
-              // 7bit/8bit — just re-decode with the correct charset
               try {
                 decoded = new TextDecoder(charset).decode(rawBytes);
               } catch {
@@ -394,12 +417,53 @@ Deno.serve(async (req) => {
               }
             }
 
-            const looksHtml = /<\/?[a-z][\s\S]*>/i.test(decoded);
-            if ((isHtmlPart || (!isPlainPart && looksHtml)) && !html) html = decoded;
-            else if (!text) text = decoded;
+            const recovered = extractMimeFromBlob(decoded);
+            if (recovered.html && !html) html = recovered.html;
+            if (recovered.text && !text) text = recovered.text;
+            if (recovered.html || recovered.text) continue;
+
+            const decodedBase64 = decodeByHeuristic(decoded, charset);
+            const nestedRecovered = decodedBase64 !== decoded ? extractMimeFromBlob(decodedBase64) : { text: "", html: "" };
+            if (nestedRecovered.html && !html) html = nestedRecovered.html;
+            if (nestedRecovered.text && !text) text = nestedRecovered.text;
+            if (nestedRecovered.html || nestedRecovered.text) continue;
+
+            const candidate = decodedBase64;
+            const looksHtml = /<\/?[a-z][\s\S]*>/i.test(candidate);
+            const hasMimeMarkers = looksLikeMimeBlob(candidate);
+
+            if (!hasMimeMarkers && (isHtmlPart || (!isPlainPart && looksHtml)) && !html) {
+              html = candidate;
+            } else if (!text) {
+              text = candidate;
+            }
           }
 
           return { text, html };
+        };
+
+        const normalizeBodies = () => {
+          const fromHtmlBlob = extractMimeFromBlob(bodyHtml);
+          if (fromHtmlBlob.html) bodyHtml = fromHtmlBlob.html;
+          if (fromHtmlBlob.text && !bodyText) bodyText = fromHtmlBlob.text;
+
+          const fromTextBlob = extractMimeFromBlob(bodyText);
+          if (fromTextBlob.html && !bodyHtml) bodyHtml = fromTextBlob.html;
+          if (fromTextBlob.text && (!bodyText || looksLikeMimeBlob(bodyText))) bodyText = fromTextBlob.text;
+
+          if (bodyText && !bodyHtml && isLikelyBase64(bodyText)) {
+            const decodedText = decodeContent(bodyText, "base64", "utf-8");
+            if (/<\/?[a-z][\s\S]*>/i.test(decodedText)) {
+              bodyHtml = decodedText;
+            } else if (decodedText !== bodyText) {
+              bodyText = decodedText;
+            }
+          }
+
+          if (bodyHtml && isLikelyBase64(bodyHtml)) {
+            const decodedHtml = decodeContent(bodyHtml, "base64", "utf-8");
+            if (/<\/?[a-z][\s\S]*>/i.test(decodedHtml)) bodyHtml = decodedHtml;
+          }
         };
 
         // Try parts/bodyParts first
@@ -413,6 +477,8 @@ Deno.serve(async (req) => {
           bodyHtml = fromBodyParts.html;
         }
 
+        normalizeBodies();
+
         // If bodyText looks like raw MIME, parse it
         if (bodyText && bodyText.includes("Content-Type:")) {
           const parsed = parseMimeParts(bodyText);
@@ -420,9 +486,11 @@ Deno.serve(async (req) => {
           if (parsed.text) bodyText = parsed.text;
         }
 
+        normalizeBodies();
+
         // Step 2: If parts yielded nothing, try source but only for small messages (< 500KB)
         if (!bodyText && !bodyHtml) {
-          const msgSize = Number(body.size || msg.size || 0);
+          const msgSize = Number(msg.size || 0);
           const sizeLimit = 500_000;
           if (!msgSize || msgSize < sizeLimit) {
             try {
@@ -449,6 +517,8 @@ Deno.serve(async (req) => {
             console.log("Skipping source fallback for large message, size:", msgSize);
           }
         }
+
+        normalizeBodies();
 
         // If no HTML and bodyText looks like HTML
         if (!bodyHtml && bodyText && (bodyText.includes("<html") || bodyText.includes("<div") || bodyText.includes("<table"))) {

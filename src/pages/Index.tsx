@@ -190,8 +190,26 @@ function MailApp() {
       }
     }
 
-    if (/=[0-9A-Fa-f]{2}/.test(bodyText)) {
+    if (/=\r?\n|=[0-9A-Fa-f]{2}/.test(bodyText)) {
       bodyText = decodeQuotedPrintable(bodyText, 'utf-8');
+    }
+
+    if (/=\r?\n|=[0-9A-Fa-f]{2}/.test(bodyHtml)) {
+      bodyHtml = decodeQuotedPrintable(bodyHtml, 'utf-8');
+    }
+
+    const compactHtml = bodyHtml.replace(/\s/g, '');
+    const looksLikeBase64Html =
+      compactHtml.length > 256 &&
+      compactHtml.length % 4 === 0 &&
+      /^[A-Za-z0-9+/=]+$/.test(compactHtml) &&
+      /^(PCFET0|PGh0bWw|PGRpdi|PHA|PHRhYmxl)/i.test(compactHtml);
+
+    if (looksLikeBase64Html) {
+      const decodedHtml = decodeBase64(compactHtml, 'utf-8');
+      if (/<\/?[a-z][\s\S]*>/i.test(decodedHtml)) {
+        bodyHtml = decodedHtml;
+      }
     }
 
     bodyText = stripInvisible(bodyText);

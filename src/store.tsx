@@ -700,8 +700,11 @@ export function MailProvider({ children }: { children: ReactNode }) {
       isConnected,
       connectionError,
       allFoldersFlat,
+      isSearching,
+      isSearchActive,
+      searchResultCount,
     }),
-    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isLoadingMore, hasMoreEmails, totalEmails, isConnected, connectionError, fetchEmails, loadMoreEmails, allFoldersFlat]
+    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isLoadingMore, hasMoreEmails, totalEmails, isConnected, connectionError, fetchEmails, loadMoreEmails, allFoldersFlat, isSearching, isSearchActive, searchResultCount]
   );
 
   return <MailContext.Provider value={value}>{children}</MailContext.Provider>;

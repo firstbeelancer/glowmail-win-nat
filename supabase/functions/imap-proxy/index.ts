@@ -144,9 +144,9 @@ Deno.serve(async (req) => {
         let envelope: any = null;
         let flags: string[] = [];
 
+        // Try fetching with source (full RFC822)
         try {
           const messages = await (client as any).fetch(String(targetUid), {
-            byUid: true,
             uid: true,
             envelope: true,
             flags: true,
@@ -164,18 +164,52 @@ Deno.serve(async (req) => {
             } else if (typeof msg.source === "string") {
               rawSource = new TextEncoder().encode(msg.source);
             }
+
+            console.log("fetch source attempt - hasSource:", !!rawSource, "sourceType:", typeof msg.source, "keys:", Object.keys(msg).join(","));
           }
         } catch (e) {
           console.error("fetch source failed:", e);
         }
 
+        // Fallback: try BODY[] if source didn't work
+        if (!rawSource) {
+          try {
+            const messages2 = await (client as any).fetch(String(targetUid), {
+              uid: true,
+              envelope: true,
+              flags: true,
+              bodyParts: [""],
+            });
+            const fetched2 = (Array.isArray(messages2) ? messages2 : [messages2]).filter(Boolean);
+            const msg2 = fetched2.find((item: any) => Number(item?.uid) === targetUid) || fetched2[0];
+
+            if (msg2) {
+              if (!envelope) envelope = msg2.envelope;
+              if (!flags.length) flags = msg2.flags || [];
+
+              // Try various body part keys
+              const bodyContent = msg2.bodyParts?.get?.("") || msg2.body?.get?.("") || msg2["body[]"];
+              console.log("fallback bodyParts - hasContent:", !!bodyContent, "type:", typeof bodyContent, "keys:", Object.keys(msg2).join(","));
+
+              if (bodyContent instanceof Uint8Array) {
+                rawSource = bodyContent;
+              } else if (typeof bodyContent === "string") {
+                rawSource = new TextEncoder().encode(bodyContent);
+              }
+            }
+          } catch (e2) {
+            console.error("fetch bodyParts fallback failed:", e2);
+          }
+        }
+
         if (!rawSource) {
           await client.disconnect();
           client = null;
+          console.log("No raw source obtained for uid:", targetUid);
           return ok({
             uid: targetUid,
             flags: [],
-            subject: "",
+            subject: envelope?.subject || "",
             from: { name: "Unknown", email: "" },
             to: [],
             cc: [],
@@ -187,20 +221,33 @@ Deno.serve(async (req) => {
           });
         }
 
+        console.log("rawSource length:", rawSource.length, "first 200 chars:", new TextDecoder().decode(rawSource.slice(0, 200)));
+
         // Parse with postal-mime
-        const parser = new PostalMime();
-        const parsed = await parser.parse(rawSource);
+        const parsed = await PostalMime.parse(rawSource);
 
         const bodyText = parsed.text || "";
         const bodyHtml = parsed.html || "";
 
+        // Check attachments for HTML fallback
+        let finalHtml = bodyHtml;
+        if (!finalHtml && parsed.attachments?.length) {
+          const htmlAttachment = parsed.attachments.find(
+            (a: any) => a.mimeType === "text/html"
+          );
+          if (htmlAttachment?.content) {
+            finalHtml = new TextDecoder().decode(
+              htmlAttachment.content instanceof Uint8Array
+                ? htmlAttachment.content
+                : new Uint8Array(htmlAttachment.content)
+            );
+          }
+        }
+
         console.log(
-          "fetch result (postal-mime) - bodyText:",
-          bodyText.length,
-          "bodyHtml:",
-          bodyHtml.length,
-          "attachments:",
-          (parsed.attachments || []).length,
+          "postal-mime result - text:", bodyText.length,
+          "html:", finalHtml.length,
+          "attachments:", (parsed.attachments || []).length,
         );
 
         const env = envelope || {};
@@ -229,7 +276,7 @@ Deno.serve(async (req) => {
           date: parsed.date || env.date || "",
           messageId: parsed.messageId || env.messageId || "",
           bodyText,
-          bodyHtml,
+          bodyHtml: finalHtml,
         });
       }
 

@@ -391,6 +391,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             )}
+
+            {activeTab === 'appearance' && (
+              <div className="space-y-6 max-w-md">
+                <div className="space-y-4">
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.themePreference', lang)}</label>
                   <div className="grid grid-cols-2 gap-4">
                     <button
                       onClick={() => setLocalSettings({ ...localSettings, theme: 'light' })}

@@ -455,12 +455,13 @@ Deno.serve(async (req) => {
         console.log("fetch result - bodyText length:", bodyText.length, "bodyHtml length:", bodyHtml.length, "has parts:", !!msg.parts, "has raw:", !!msg.raw);
 
         const env = msg.envelope || {};
-        
+        const resolvedUid = Number.isFinite(Number(msg.uid)) ? Number(msg.uid) : targetUid;
+
         await client.disconnect();
         client = null;
 
         return ok({
-          uid: msg.uid,
+          uid: resolvedUid,
           flags: msg.flags || [],
           subject: env.subject || "",
           from: env.from?.[0] ? {

@@ -5,12 +5,15 @@ import { format } from 'date-fns';
 import { ArrowLeft, Reply, ReplyAll, Forward, MoreVertical, Star, Paperclip, Download, Trash2, Tag, File, Image as ImageIcon, FileText, AlertTriangle, Sparkles, Loader2, Edit3, Printer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { t } from '@/lib/i18n';
 
 export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: (type: 'reply' | 'replyAll' | 'forward', email: Email, quickReplyText?: string) => void; onEditDraft?: (email: Email) => void }> = ({ email, onBack, onReply, onEditDraft }) => {
   const { toggleStar, deleteEmail, settings } = useMail();
+  const lang = settings.language;
   const [showHeaders, setShowHeaders] = useState(false);
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const [isGeneratingReplies, setIsGeneratingReplies] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,7 +54,20 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
   };
 
   const handlePrint = () => {
-    window.print();
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html><head><title>${email.subject}</title><style>body{font-family:sans-serif;padding:20px;color:#222;}h1{font-size:18px;}p{margin:4px 0;}.meta{color:#666;font-size:13px;}</style></head><body>
+        <h1>${email.subject}</h1>
+        <p class="meta">From: ${email.from.name} &lt;${email.from.email}&gt;</p>
+        <p class="meta">To: ${email.to.map(t => `${t.name} &lt;${t.email}&gt;`).join(', ')}</p>
+        <p class="meta">Date: ${new Date(email.date).toLocaleString()}</p>
+        <hr/>${email.body}
+        </body></html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
   };
 
   const handleSave = () => {
@@ -97,14 +113,14 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
             <button
               onClick={handleSave}
               className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors group"
-              title="Save Email"
+              title={t('emailDetail.saveEmail', lang)}
             >
               <Download className="w-5 h-5 group-hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
             </button>
             <button
               onClick={handlePrint}
               className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors group"
-              title="Print"
+              title={t('emailDetail.print', lang)}
             >
               <Printer className="w-5 h-5 group-hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
             </button>
@@ -126,7 +142,7 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
               className="px-3 py-1.5 mr-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors flex items-center gap-2 text-sm font-medium"
             >
               <Edit3 className="w-4 h-4" />
-              Edit Further
+              {t('emailDetail.editFurther', lang)}
             </button>
           )}
           <button
@@ -147,9 +163,36 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
           >
             <Forward className="w-5 h-5" />
           </button>
-          <button className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors">
-            <MoreVertical className="w-5 h-5" />
-          </button>
+          {/* More actions menu */}
+          <div className="relative">
+            <button
+              onClick={() => setShowMoreMenu(!showMoreMenu)}
+              className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+              title={t('emailDetail.moreActions', lang)}
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
+            {showMoreMenu && (
+              <div className="absolute right-0 top-full mt-1 w-44 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
+                <div className="p-1 flex flex-col">
+                  <button
+                    onClick={() => { handleSave(); setShowMoreMenu(false); }}
+                    className="flex items-center gap-2 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                  >
+                    <Download className="w-4 h-4" />
+                    {t('emailList.save', lang)}
+                  </button>
+                  <button
+                    onClick={() => { handlePrint(); setShowMoreMenu(false); }}
+                    className="flex items-center gap-2 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                  >
+                    <Printer className="w-4 h-4" />
+                    {t('emailList.print', lang)}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -183,7 +226,7 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
                     onClick={() => setShowHeaders(!showHeaders)}
                     className="hover:text-emerald-400 transition-colors hover:underline"
                   >
-                    {showHeaders ? 'Hide Details' : 'Show Details'}
+                    {showHeaders ? t('emailDetail.hideDetails', lang) : t('emailDetail.showDetails', lang)}
                   </button>
                 </div>
               </div>
@@ -262,7 +305,7 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
             <div className="mt-12 pt-8 border-t border-zinc-800/50">
               <h3 className="text-sm font-medium text-zinc-400 mb-4 flex items-center gap-2">
                 <Paperclip className="w-4 h-4" />
-                Attachments ({email.attachments.length})
+                {t('emailDetail.attachments', lang)} ({email.attachments.length})
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {email.attachments.map((att) => {
@@ -313,7 +356,7 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
           <div className="mt-12 pt-8 border-t border-zinc-800/50">
             <h3 className="text-sm font-medium text-emerald-400 mb-4 flex items-center gap-2">
               <Sparkles className="w-4 h-4" />
-              AI Suggested Replies
+              {t('emailDetail.aiReplies', lang)}
               {isGeneratingReplies && <Loader2 className="w-3 h-3 animate-spin text-emerald-500/50" />}
             </h3>
             <div className="flex flex-wrap gap-3">
@@ -329,7 +372,7 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
                 </button>
               ))}
               {!isGeneratingReplies && quickReplies.length === 0 && (
-                <span className="text-sm text-zinc-500">Generating suggestions...</span>
+                <span className="text-sm text-zinc-500">{t('emailDetail.generating', lang)}</span>
               )}
             </div>
           </div>

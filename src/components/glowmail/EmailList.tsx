@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useMail } from '../../store';
 import { Email } from '../../types';
 import { formatDistanceToNow } from 'date-fns';
-import { Star, Paperclip, Tag, Inbox, AlertTriangle, ArrowDownAZ, ArrowUpAZ, Calendar, User, Type, Trash2 } from 'lucide-react';
+import { Star, Paperclip, Tag, Inbox, AlertTriangle, ArrowDownAZ, ArrowUpAZ, Calendar, User, Type, Trash2, MoreVertical, Download, Printer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
+import { t } from '@/lib/i18n';
 
 export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) => void, onEditDraft?: (email: Email) => void }) {
   const { emails, currentFolder, searchQuery, toggleStar, deleteEmail, settings } = useMail();
+  const lang = settings.language;
   const [sortBy, setSortBy] = useState<'date' | 'sender' | 'subject' | 'tags' | 'unread'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
   const handleSort = (type: 'date' | 'sender' | 'subject' | 'tags' | 'unread') => {
     if (sortBy === type) {
@@ -23,6 +26,38 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
   const getTagColor = (tagName: string) => {
     const tagDef = settings.availableTags.find(t => t.name === tagName);
     return tagDef ? tagDef.color : '#10b981';
+  };
+
+  const handleSaveEmail = (email: Email, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setMenuOpenId(null);
+    const content = `From: ${email.from.name} <${email.from.email}>\nTo: ${email.to.map(t => `${t.name} <${t.email}>`).join(', ')}\nDate: ${new Date(email.date).toString()}\nSubject: ${email.subject}\n\n${email.body.replace(/<[^>]*>?/gm, '')}`;
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${email.subject || 'email'}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePrintEmail = (email: Email, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setMenuOpenId(null);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html><head><title>${email.subject}</title><style>body{font-family:sans-serif;padding:20px;color:#222;}h1{font-size:18px;}p{margin:4px 0;}.meta{color:#666;font-size:13px;}</style></head><body>
+        <h1>${email.subject}</h1>
+        <p class="meta">From: ${email.from.name} &lt;${email.from.email}&gt;</p>
+        <p class="meta">To: ${email.to.map(t => `${t.name} &lt;${t.email}&gt;`).join(', ')}</p>
+        <p class="meta">Date: ${new Date(email.date).toLocaleString()}</p>
+        <hr/>${email.body}
+        </body></html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
   };
 
   const filteredEmails = emails.filter((email) => {
@@ -62,41 +97,41 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
     <div className="flex flex-col h-full bg-zinc-950">
       {/* Sort Toolbar */}
       <div className="px-4 py-2 border-b border-zinc-800/50 flex items-center justify-between bg-zinc-900/30 shrink-0">
-        <span className="text-xs font-medium text-zinc-500">Sort by:</span>
+        <span className="text-xs font-medium text-zinc-500">{t('emailList.sortBy', lang)}</span>
         <div className="flex items-center gap-2">
           <div className="flex bg-zinc-900 border border-zinc-800 rounded-lg p-0.5">
             <button
               onClick={() => handleSort('unread')}
               className={cn("p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors", sortBy === 'unread' && "bg-zinc-800 text-zinc-100")}
-              title="Unread First"
+              title={t('emailList.unreadFirst', lang)}
             >
               <Inbox className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => handleSort('date')}
               className={cn("p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors", sortBy === 'date' && "bg-zinc-800 text-zinc-100")}
-              title="Date"
+              title={t('emailList.date', lang)}
             >
               <Calendar className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => handleSort('sender')}
               className={cn("p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors", sortBy === 'sender' && "bg-zinc-800 text-zinc-100")}
-              title="Sender"
+              title={t('emailList.sender', lang)}
             >
               <User className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => handleSort('subject')}
               className={cn("p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors", sortBy === 'subject' && "bg-zinc-800 text-zinc-100")}
-              title="Subject"
+              title={t('emailList.subject', lang)}
             >
               <Type className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => handleSort('tags')}
               className={cn("p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors", sortBy === 'tags' && "bg-zinc-800 text-zinc-100")}
-              title="Tags"
+              title={t('emailList.tags', lang)}
             >
               <Tag className="w-3.5 h-3.5" />
             </button>
@@ -104,7 +139,7 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
           <button
             onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
             className="p-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
-            title={sortOrder === 'asc' ? "Ascending" : "Descending"}
+            title={sortOrder === 'asc' ? t('emailList.ascending', lang) : t('emailList.descending', lang)}
           >
             {sortOrder === 'asc' ? <ArrowUpAZ className="w-3.5 h-3.5" /> : <ArrowDownAZ className="w-3.5 h-3.5" />}
           </button>
@@ -116,7 +151,7 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
           <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(255,255,255,0.02)]">
             <Inbox className="w-8 h-8 opacity-50" />
           </div>
-          <p>No emails found</p>
+          <p>{t('emailList.noEmails', lang)}</p>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
@@ -133,7 +168,7 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
                 }
               }}
               className={cn(
-                "group flex flex-col p-4 border-b border-zinc-800/50 cursor-pointer transition-all hover:bg-zinc-900/50",
+                "group flex flex-col p-4 border-b border-zinc-800/50 cursor-pointer transition-all hover:bg-zinc-900/50 relative",
                 !email.read && "bg-zinc-900/20"
               )}
             >
@@ -167,16 +202,49 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
                       )}
                     />
                   </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteEmail(email.id);
-                    }}
-                    className="p-1 -mr-1 rounded-full hover:bg-zinc-800 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                    title="Delete Email"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {/* Three-dot menu */}
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuOpenId(menuOpenId === email.id ? null : email.id);
+                      }}
+                      className="p-1 -mr-1 rounded-full hover:bg-zinc-800 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                    {menuOpenId === email.id && (
+                      <div className="absolute right-0 top-full mt-1 w-40 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
+                        <div className="p-1 flex flex-col">
+                          <button
+                            onClick={(e) => handleSaveEmail(email, e)}
+                            className="flex items-center gap-2 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                          >
+                            <Download className="w-4 h-4" />
+                            {t('emailList.save', lang)}
+                          </button>
+                          <button
+                            onClick={(e) => handlePrintEmail(email, e)}
+                            className="flex items-center gap-2 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                          >
+                            <Printer className="w-4 h-4" />
+                            {t('emailList.print', lang)}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuOpenId(null);
+                              deleteEmail(email.id);
+                            }}
+                            className="flex items-center gap-2 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-red-400 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            {t('emailList.deleteEmail', lang)}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               

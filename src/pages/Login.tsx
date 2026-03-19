@@ -150,13 +150,13 @@ export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) 
               >
                 <div className="grid grid-cols-3 gap-2">
                   <div className="col-span-2">
-                    <label className="block text-xs text-zinc-500 mb-1">IMAP сервер</label>
+                    <label className="block text-xs text-neutral-500 mb-1">IMAP сервер</label>
                     <input
                       type="text"
                       value={imapHost}
                       onChange={(e) => setImapHost(e.target.value)}
                       placeholder={preset?.imapHost || 'imap.example.com'}
-                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-primary/50 transition"
+                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary/50 transition"
                     />
                   </div>
                   <div>

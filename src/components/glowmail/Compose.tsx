@@ -263,33 +263,35 @@ export function Compose({
                       * { margin: 0; padding: 0; box-sizing: border-box; }
                       body { font-family: 'Involve', system-ui, sans-serif; background: ${bg}; color: ${fg}; padding: 24px; }
                       .field { margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-                      .field label { color: #71717a; font-size: 14px; min-width: 60px; }
-                      .field input, .field select { flex: 1; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 8px 12px; color: #f4f4f5; font-size: 14px; outline: none; appearance: none; background-image: none; }
+                      .field label { color: ${mutedText}; font-size: 14px; min-width: 60px; }
+                      .field input, .field select { flex: 1; background: ${inputBg}; border: 1px solid ${borderColor}; border-radius: 8px; padding: 8px 12px; color: ${fg}; font-size: 14px; outline: none; appearance: none; background-image: none; }
                       .field select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; padding-right: 28px; cursor: pointer; }
                       .field input:focus, .field select:focus { border-color: rgba(16,185,129,0.5); box-shadow: 0 0 0 1px rgba(16,185,129,0.5); }
-                      .editor { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; min-height: 300px; color: #e4e4e7; font-size: 14px; outline: none; margin-bottom: 16px; overflow-y: auto; }
-                      .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: #10b981; color: #09090b; border: none; border-radius: 999px; font-weight: 600; font-size: 14px; cursor: pointer; }
+                      .editor { background: ${inputBg}; border: 1px solid ${borderColor}; border-radius: 12px; padding: 16px; min-height: 300px; color: ${fg}; font-size: 14px; outline: none; margin-bottom: 16px; overflow-y: auto; }
+                      .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: #10b981; color: ${bg}; border: none; border-radius: 999px; font-weight: 600; font-size: 14px; cursor: pointer; }
                       .btn:hover { background: #34d399; }
-                      .btn-draft { background: transparent; color: #a1a1aa; border: 1px solid #3f3f46; border-radius: 999px; padding: 10px 20px; font-size: 14px; cursor: pointer; margin-right: 8px; }
-                      .btn-draft:hover { background: #27272a; color: #f4f4f5; }
+                      .btn-draft { background: transparent; color: ${mutedText}; border: 1px solid ${borderColorHover}; border-radius: 999px; padding: 10px 20px; font-size: 14px; cursor: pointer; margin-right: 8px; }
+                      .btn-draft:hover { background: ${subtleBg}; color: ${fg}; }
                       .toolbar { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
-                      .toolbar button, .toolbar select { background: #27272a; border: 1px solid #3f3f46; border-radius: 6px; padding: 6px 8px; color: #a1a1aa; cursor: pointer; font-size: 12px; }
-                      .toolbar button:hover, .toolbar select:hover { background: #3f3f46; color: #f4f4f5; }
-                      .toolbar .sep { width: 1px; height: 16px; background: #3f3f46; margin: 0 4px; }
+                      .toolbar button, .toolbar select { background: ${subtleBg}; border: 1px solid ${borderColorHover}; border-radius: 6px; padding: 6px 8px; color: ${mutedText}; cursor: pointer; font-size: 12px; }
+                      .toolbar button:hover, .toolbar select:hover { background: ${borderColorHover}; color: ${fg}; }
+                      .toolbar .sep { width: 1px; height: 16px; background: ${borderColorHover}; margin: 0 4px; }
                       .toolbar input[type=color] { width: 24px; height: 24px; border: none; padding: 0; cursor: pointer; background: transparent; border-radius: 4px; }
                       .toolbar .ai-btn { background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.15)); border: 1px solid rgba(16,185,129,0.3); border-radius: 999px; padding: 5px 12px; color: #34d399; font-weight: 600; font-size: 12px; cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 5px; }
                       .toolbar .ai-btn:hover { background: linear-gradient(135deg, rgba(16,185,129,0.25), rgba(6,182,212,0.25)); }
                       .toolbar .ai-btn svg { width: 14px; height: 14px; }
-                      .ai-menu { display: none; position: absolute; right: 0; top: 100%; margin-top: 4px; width: 180px; background: #18181b; border: 1px solid #27272a; border-radius: 12px; overflow: hidden; z-index: 100; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+                      .ai-menu { display: none; position: absolute; right: 0; top: 100%; margin-top: 4px; width: 180px; background: ${inputBg}; border: 1px solid ${borderColor}; border-radius: 12px; overflow: hidden; z-index: 100; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
                       .ai-menu.show { display: block; }
-                      .ai-menu button { display: block; width: 100%; text-align: left; padding: 8px 12px; font-size: 13px; color: #a1a1aa; background: none; border: none; cursor: pointer; }
-                      .ai-menu button:hover { background: #27272a; color: #34d399; }
+                      .ai-menu button { display: block; width: 100%; text-align: left; padding: 8px 12px; font-size: 13px; color: ${mutedText}; background: none; border: none; cursor: pointer; }
+                      .ai-menu button:hover { background: ${subtleBg}; color: #34d399; }
                       .toolbar .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; }
                       .toolbar .icon-btn svg { width: 14px; height: 14px; }
                       .att-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-                      .att-item { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: #27272a; border-radius: 6px; font-size: 12px; color: #a1a1aa; }
-                      .att-item button { background: none; border: none; color: #71717a; cursor: pointer; padding: 0 2px; font-size: 14px; }
+                      .att-item { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: ${subtleBg}; border-radius: 6px; font-size: 12px; color: ${mutedText}; }
+                      .att-item button { background: none; border: none; color: ${mutedText}; cursor: pointer; padding: 0 2px; font-size: 14px; }
                       .att-item button:hover { color: #f87171; }
+                      .footer-bar select { background: ${inputBg}; border: 1px solid ${borderColor}; border-radius: 8px; padding: 6px 28px 6px 10px; color: ${mutedText}; font-size: 13px; outline: none; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; }
+                      .footer-bar select:focus { border-color: rgba(16,185,129,0.5); }
                     </style></head><body>
                     <h2 style="margin-bottom:16px;font-size:18px;">${t('compose.newMessage', lang)}</h2>
                     <div class="field"><label>${t('compose.to', lang)}</label><input id="to" value="${to}" /></div>

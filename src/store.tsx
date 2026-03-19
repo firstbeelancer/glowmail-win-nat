@@ -115,6 +115,7 @@ type MailContextType = {
   updateSettings: (settings: Partial<UserSettings>) => void;
   fetchEmails: () => Promise<void>;
   addFolder: (name: string) => void;
+  updateEmailTags: (id: string, tags: string[]) => void;
 };
 
 const MailContext = createContext<MailContextType | undefined>(undefined);
@@ -232,7 +233,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       date: new Date().toISOString(),
       read: true,
       starred: false,
-      tags: [],
+      tags: email.tags || [],
       attachments: email.attachments || [],
       headers: { messageId: `<${Date.now()}@example.com>` },
     };
@@ -268,7 +269,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       date: new Date().toISOString(),
       read: true,
       starred: false,
-      tags: [],
+      tags: email.tags || [],
       attachments: email.attachments || [],
       headers: { messageId: `<${Date.now()}@example.com>` },
     };
@@ -300,6 +301,12 @@ export function MailProvider({ children }: { children: ReactNode }) {
     setFolders((prev) => [...prev, newFolder]);
   };
 
+  const updateEmailTags = (id: string, tags: string[]) => {
+    setEmails((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, tags } : e))
+    );
+  };
+
   const value = useMemo(
     () => ({
       folders,
@@ -319,6 +326,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       updateSettings,
       fetchEmails,
       addFolder,
+      updateEmailTags,
     }),
     [folders, emails, contacts, settings, currentFolder, searchQuery]
   );

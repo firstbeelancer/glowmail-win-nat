@@ -59,7 +59,7 @@ export type Signature = {
   content: string;
 };
 
-export type AuthMethod = 'password' | 'oauth2' | 'app-password';
+export type AuthMethod = 'password' | 'oauth2' | 'app-password' | 'encrypted-password' | 'kerberos' | 'ntlm' | 'tls-certificate';
 
 export type UserSettings = {
   account: {

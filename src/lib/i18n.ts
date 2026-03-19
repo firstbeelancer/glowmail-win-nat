@@ -36,6 +36,8 @@ const translations = {
     'emailList.deleteEmail': 'Delete Email',
     'emailList.save': 'Save',
     'emailList.print': 'Print',
+    'emailList.addTag': 'Add Tag',
+    'emailList.assignTags': 'Assign Tags',
 
     // Email Detail
     'emailDetail.showDetails': 'Show Details',
@@ -111,6 +113,13 @@ const translations = {
     'settings.authPassword': 'Password',
     'settings.authOAuth2': 'OAuth 2.0',
     'settings.authAppPassword': 'App Password',
+    'settings.authEncryptedPassword': 'Encrypted Password',
+    'settings.authKerberos': 'Kerberos / GSSAPI',
+    'settings.authNtlm': 'NTLM',
+    'settings.authTlsCert': 'TLS Certificate',
+    'settings.tlsCertPath': 'Certificate File Path',
+    'settings.tlsKeyPath': 'Key File Path',
+    'settings.kerberosRealm': 'Kerberos Realm',
     'settings.oauthProvider': 'OAuth Provider',
     'settings.themePreference': 'Theme Preference',
     'settings.light': 'Light',
@@ -161,6 +170,7 @@ const translations = {
     'settings.ldapLoading': 'Loading...',
     'settings.ldapSection': 'LDAP Address Book',
     'layout.openInWindow': 'Open in new window',
+    'compose.tagsLabel': 'Tags:',
   },
   ru: {
     // Layout
@@ -197,6 +207,8 @@ const translations = {
     'emailList.deleteEmail': 'Удалить письмо',
     'emailList.save': 'Сохранить',
     'emailList.print': 'Печать',
+    'emailList.addTag': 'Добавить тег',
+    'emailList.assignTags': 'Назначить теги',
 
     // Email Detail
     'emailDetail.showDetails': 'Показать детали',
@@ -269,9 +281,16 @@ const translations = {
     'settings.port': 'Порт',
     'settings.secureConnection': 'Безопасное соединение (SSL/TLS)',
     'settings.authMethod': 'Метод аутентификации',
-    'settings.authPassword': 'Пароль',
+    'settings.authPassword': 'Обычный пароль',
     'settings.authOAuth2': 'OAuth 2.0',
     'settings.authAppPassword': 'Пароль приложения',
+    'settings.authEncryptedPassword': 'Зашифрованный пароль',
+    'settings.authKerberos': 'Kerberos / GSSAPI',
+    'settings.authNtlm': 'NTLM',
+    'settings.authTlsCert': 'Сертификат TLS',
+    'settings.tlsCertPath': 'Путь к сертификату',
+    'settings.tlsKeyPath': 'Путь к ключу',
+    'settings.kerberosRealm': 'Область Kerberos',
     'settings.oauthProvider': 'OAuth провайдер',
     'settings.themePreference': 'Тема оформления',
     'settings.light': 'Светлая',
@@ -322,6 +341,7 @@ const translations = {
     'settings.ldapLoading': 'Загрузка...',
     'settings.ldapSection': 'Адресная книга LDAP',
     'layout.openInWindow': 'Открыть в новом окне',
+    'compose.tagsLabel': 'Теги:',
   },
 } as const;
 

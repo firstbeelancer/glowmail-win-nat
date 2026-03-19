@@ -82,6 +82,7 @@ export type UserSettings = {
   theme: 'dark' | 'light';
   emailBackground: string;
   fontColor: string;
+  composerFont: string;
   customFonts: { name: string, url: string }[];
   availableTags: TagDef[];
   delayedSending: number;

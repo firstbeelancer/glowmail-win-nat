@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { motion } from 'framer-motion';
 import loginBg from '@/assets/login-bg.png';
 

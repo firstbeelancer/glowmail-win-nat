@@ -145,6 +145,7 @@ type MailContextType = {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   markAsRead: (id: string) => void;
+  markAsUnread: (id: string) => void;
   toggleStar: (id: string) => void;
   deleteEmail: (id: string) => void;
   moveEmailToFolder: (id: string, targetFolder: string) => void;

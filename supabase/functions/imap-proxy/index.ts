@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
         const { folder = "INBOX", page = 1, pageSize = 50 } = body;
         await client.selectMailbox(folder);
 
-        const uidResults = await client.search({ all: true }, true);
+        const uidResults = await client.search({ all: true });
         const uids = (Array.isArray(uidResults) ? uidResults : [uidResults])
           .map((value: unknown) => Number(value))
           .filter((value) => Number.isFinite(value) && value > 0);

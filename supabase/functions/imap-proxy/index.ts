@@ -171,12 +171,16 @@ Deno.serve(async (req) => {
         }
 
         const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
-        let msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || null;
+        let msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || (fetched.length === 1 ? fetched[0] : null);
 
         if (!msg) {
           try {
-            const allUids = await client.search({ all: true }, true);
-            const sequenceNumber = allUids.indexOf(targetUid) + 1;
+            const allUidResults = await client.search({ all: true }, true);
+            const allUids = (Array.isArray(allUidResults) ? allUidResults : [allUidResults])
+              .map((value: unknown) => Number(value))
+              .filter((value) => Number.isFinite(value) && value > 0);
+            const sequenceNumber = allUids.findIndex((value) => value === targetUid) + 1;
+
             if (sequenceNumber > 0) {
               const fallbackMessages = await client.fetch(String(sequenceNumber), {
                 uid: true,
@@ -186,7 +190,7 @@ Deno.serve(async (req) => {
                 full: true,
               });
               const fallbackList = (Array.isArray(fallbackMessages) ? fallbackMessages : [fallbackMessages]).filter(Boolean);
-              msg = fallbackList.find((item: any) => Number(item?.uid) === targetUid) || null;
+              msg = fallbackList.find((item: any) => Number(item?.uid) === targetUid) || fallbackList[0] || null;
             }
           } catch (fallbackErr) {
             console.error("fallback sequence fetch failed:", fallbackErr);

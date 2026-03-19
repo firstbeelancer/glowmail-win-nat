@@ -622,6 +622,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       searchQuery,
       setSearchQuery,
       markAsRead,
+      markAsUnread,
       toggleStar,
       deleteEmail: handleDeleteEmail,
       moveEmailToFolder,

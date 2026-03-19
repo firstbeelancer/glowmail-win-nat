@@ -28,6 +28,7 @@ export function Compose({
   const [showAiMenu, setShowAiMenu] = useState(false);
   const [emailTags, setEmailTags] = useState<string[]>(initialData?.tags || []);
   const [showTagPicker, setShowTagPicker] = useState(false);
+  const [showCodeMenu, setShowCodeMenu] = useState(false);
   const [selectedSignatureId, setSelectedSignatureId] = useState<string | undefined>(settings.defaultSignatureId || (settings.signatures?.length > 0 ? settings.signatures[0].id : undefined));
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

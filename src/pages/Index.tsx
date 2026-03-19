@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MailProvider, useMail } from '../store';
 import { Layout } from '../components/glowmail/Layout';
 import { EmailList } from '../components/glowmail/EmailList';
@@ -7,7 +7,7 @@ import { Compose } from '../components/glowmail/Compose';
 import { Email } from '../types';
 import { Toaster } from 'react-hot-toast';
 import { AnimatePresence } from 'framer-motion';
-import { useEffect } from 'react';
+import Login from './Login';
 
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);

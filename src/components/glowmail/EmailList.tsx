@@ -117,18 +117,10 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
   };
 
   const filteredEmails = emails.filter((email) => {
-    const matchesFolder = email.folderId === currentFolder;
-    const matchesSearch =
-      searchQuery === '' ||
-      email.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      email.from.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      email.from.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      email.to.some((t) => t.name.toLowerCase().includes(searchQuery.toLowerCase()) || t.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      email.body.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      email.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      email.attachments.some((att) => att.name.toLowerCase().includes(searchQuery.toLowerCase()));
-
-    return matchesFolder && matchesSearch;
+    // When search is active, server already filtered - show all results
+    // When not searching, filter by current folder
+    const matchesFolder = isSearchActive || email.folderId === currentFolder;
+    return matchesFolder;
   })
   .filter(email => !starredOnly || email.starred)
   .filter(email => {

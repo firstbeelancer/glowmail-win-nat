@@ -395,6 +395,16 @@ Deno.serve(async (req) => {
           }
         }
         
+        const reparsedBody = parseMultipartBlob(bodyText);
+        if (!bodyHtml && reparsedBody.html) bodyHtml = reparsedBody.html;
+        if ((!bodyText || /^this is a multi-part message/i.test(bodyText.trim())) && reparsedBody.text) {
+          bodyText = reparsedBody.text;
+        }
+
+        if (!bodyHtml && /=[0-9A-Fa-f]{2}/.test(bodyText)) {
+          bodyText = decodeContent(bodyText, "quoted-printable", "utf-8");
+        }
+
         // If we got HTML but no plain text, use HTML
         if (!bodyText && bodyHtml) bodyText = bodyHtml;
         // If bodyText looks like HTML, set bodyHtml

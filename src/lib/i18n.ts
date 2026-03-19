@@ -371,16 +371,20 @@ export function t(key: TranslationKey, language: Language, params?: Record<strin
 
 const folderNameMap: Record<string, TranslationKey> = {
   inbox: 'folder.inbox',
+  INBOX: 'folder.inbox',
   sent: 'folder.sent',
+  Sent: 'folder.sent',
   outbox: 'folder.outbox',
   drafts: 'folder.drafts',
+  Drafts: 'folder.drafts',
   spam: 'folder.spam',
   trash: 'folder.trash',
+  Trash: 'folder.trash',
   work: 'folder.work',
 };
 
 export function translateFolderName(folderId: string, folderName: string, language: Language): string {
-  const key = folderNameMap[folderId];
+  const key = folderNameMap[folderId] || folderNameMap[folderId.toLowerCase()];
   if (key) return t(key, language);
   return folderName;
 }

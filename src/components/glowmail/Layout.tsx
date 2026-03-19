@@ -1,5 +1,5 @@
 import React, { useState, ReactNode } from 'react';
-import { Menu, Search, Edit3, Settings, Inbox, Send, File, AlertCircle, Trash2, Briefcase, Plus, RefreshCw, X, Clock, BookUser, ChevronDown, ChevronRight, Mail, LogOut } from 'lucide-react';
+import { Menu, Search, Edit3, Settings, Inbox, Send, File, AlertCircle, Trash2, Briefcase, Plus, RefreshCw, X, Clock, BookUser, ChevronDown, ChevronRight, Mail, LogOut, FolderIcon, FileText } from 'lucide-react';
 import { useMail } from '../../store';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,9 +11,11 @@ const iconMap: Record<string, any> = {
   send: Send,
   clock: Clock,
   file: File,
+  'file-text': FileText,
   'alert-circle': AlertCircle,
   'trash-2': Trash2,
   briefcase: Briefcase,
+  folder: FolderIcon,
 };
 
 export function Layout({ children, onCompose }: { children: ReactNode; onCompose: (prefill?: { to?: string }) => void }) {
@@ -145,6 +147,7 @@ function SidebarContent({
 }) {
   const { fetchEmails, addFolder, emails, contacts, addContact } = useMail();
   const [isFetching, setIsFetching] = useState(false);
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ INBOX: true });
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [showAddressBook, setShowAddressBook] = useState(false);
@@ -211,31 +214,77 @@ function SidebarContent({
           </button>
         </div>
         {folders.map((folder) => {
-          const Icon = iconMap[folder.icon] || File;
+          const Icon = iconMap[folder.icon] || FolderIcon;
           const isActive = currentFolder === folder.id;
           const count = getFolderCount(folder.id);
+          const hasChildren = folder.children && folder.children.length > 0;
+          const isExpanded = expandedFolders[folder.id] ?? false;
           return (
-            <button
-              key={folder.id}
-              onClick={() => setCurrentFolder(folder.id)}
-              className={cn(
-                "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
-                isActive
-                  ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]"
-                  : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
+            <div key={folder.id}>
+              <button
+                onClick={() => setCurrentFolder(folder.id)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
+                  isActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]"
+                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
+                )}
+              >
+                {hasChildren && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedFolders(prev => ({ ...prev, [folder.id]: !isExpanded }));
+                    }}
+                    className="p-0.5 -ml-1 hover:bg-zinc-700/50 rounded transition-colors"
+                  >
+                    {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  </button>
+                )}
+                <Icon className={cn("w-4 h-4", isActive ? "text-emerald-400" : "text-zinc-500")} />
+                <span className="flex-1 text-left">{translateFolderName(folder.id, folder.name, lang)}</span>
+                {count > 0 && (
+                  <span className={cn(
+                    "px-2 py-0.5 rounded-full text-xs font-bold",
+                    isActive ? "bg-emerald-500/20 text-emerald-400" : "bg-zinc-800 text-zinc-300"
+                  )}>
+                    {count}
+                  </span>
+                )}
+              </button>
+              {hasChildren && isExpanded && (
+                <div className="ml-4 mt-0.5 space-y-0.5 border-l border-zinc-800/50 pl-2">
+                  {folder.children!.map((child) => {
+                    const ChildIcon = iconMap[child.icon] || FolderIcon;
+                    const isChildActive = currentFolder === child.id;
+                    const childCount = getFolderCount(child.id);
+                    return (
+                      <button
+                        key={child.id}
+                        onClick={() => setCurrentFolder(child.id)}
+                        className={cn(
+                          "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-200",
+                          isChildActive
+                            ? "bg-emerald-500/10 text-emerald-400"
+                            : "text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"
+                        )}
+                      >
+                        <ChildIcon className={cn("w-3.5 h-3.5", isChildActive ? "text-emerald-400" : "text-zinc-600")} />
+                        <span className="flex-1 text-left truncate">{translateFolderName(child.id, child.name, lang)}</span>
+                        {childCount > 0 && (
+                          <span className={cn(
+                            "px-1.5 py-0.5 rounded-full text-[10px] font-bold",
+                            isChildActive ? "bg-emerald-500/20 text-emerald-400" : "bg-zinc-800 text-zinc-400"
+                          )}>
+                            {childCount}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
-            >
-              <Icon className={cn("w-4 h-4", isActive ? "text-emerald-400" : "text-zinc-500")} />
-              <span className="flex-1 text-left">{translateFolderName(folder.id, folder.name, lang)}</span>
-              {count > 0 && (
-                <span className={cn(
-                  "px-2 py-0.5 rounded-full text-xs font-bold",
-                  isActive ? "bg-emerald-500/20 text-emerald-400" : "bg-zinc-800 text-zinc-300"
-                )}>
-                  {count}
-                </span>
-              )}
-            </button>
+            </div>
           );
         })}
       </div>

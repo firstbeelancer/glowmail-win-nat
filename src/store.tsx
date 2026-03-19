@@ -243,23 +243,59 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const loadFolders = useCallback(async () => {
     try {
       const remoteFolders = await mailApi.fetchFolders();
-      const mapped: Folder[] = remoteFolders.map((f: any) => {
+      
+      // Build flat list first
+      const flat: Folder[] = remoteFolders.map((f: any) => {
         const flags = (f.flags || []).join(' ').toLowerCase();
+        const path = f.path || f.name;
         let icon = 'folder';
-        if (f.name === 'INBOX') icon = 'inbox';
+        if (path === 'INBOX') icon = 'inbox';
         else if (flags.includes('sent')) icon = 'send';
-        else if (flags.includes('drafts')) icon = 'file';
+        else if (flags.includes('drafts')) icon = 'file-text';
         else if (flags.includes('junk')) icon = 'alert-circle';
         else if (flags.includes('trash')) icon = 'trash-2';
-        else icon = folderIcon(f.name);
+        else icon = folderIcon(decodeModifiedUtf7(f.name));
+        
+        const isChild = path.includes('/');
         return {
-          id: f.path || f.name,
-          name: decodeModifiedUtf7(f.name.split('/').pop() || f.name),
-          icon,
+          id: path,
+          name: decodeModifiedUtf7((f.name.split('/').pop() || f.name)),
+          icon: isChild ? 'folder' : icon,
+          parent: isChild ? path.substring(0, path.lastIndexOf('/')) : undefined,
         };
       });
-      if (mapped.length > 0) {
-        setFolders(mapped);
+
+      // Build tree: attach children to INBOX, sort INBOX first
+      const topLevel: Folder[] = [];
+      const childMap = new Map<string, Folder[]>();
+      
+      flat.forEach(f => {
+        if (f.parent) {
+          const siblings = childMap.get(f.parent) || [];
+          siblings.push(f);
+          childMap.set(f.parent, siblings);
+        } else {
+          topLevel.push(f);
+        }
+      });
+      
+      // Attach children
+      topLevel.forEach(f => {
+        const kids = childMap.get(f.id);
+        if (kids && kids.length > 0) {
+          f.children = kids;
+        }
+      });
+      
+      // Sort: INBOX first, then by name
+      topLevel.sort((a, b) => {
+        if (a.id === 'INBOX') return -1;
+        if (b.id === 'INBOX') return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      if (topLevel.length > 0) {
+        setFolders(topLevel);
       }
     } catch (e) {
       console.error('Failed to load folders:', e);

@@ -274,7 +274,7 @@ const translations = {
 export type TranslationKey = keyof typeof translations.en;
 
 export function t(key: TranslationKey, language: Language, params?: Record<string, string>): string {
-  let text = translations[language]?.[key] || translations.en[key] || key;
+  let text: string = translations[language]?.[key] || translations.en[key] || key;
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
       text = text.replace(`{${k}}`, v);

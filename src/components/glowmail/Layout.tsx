@@ -11,9 +11,11 @@ const iconMap: Record<string, any> = {
   send: Send,
   clock: Clock,
   file: File,
+  'file-text': FileText,
   'alert-circle': AlertCircle,
   'trash-2': Trash2,
   briefcase: Briefcase,
+  folder: FolderIcon,
 };
 
 export function Layout({ children, onCompose }: { children: ReactNode; onCompose: (prefill?: { to?: string }) => void }) {

@@ -648,7 +648,7 @@ export function Compose({
             ref={editorRef}
             contentEditable
             className="min-h-full outline-none text-sm max-w-none"
-            style={{ color: settings.fontColor || 'inherit' }}
+            style={{ color: settings.fontColor || 'inherit', fontFamily: settings.composerFont || 'Involve' }}
             onInput={(e) => setBody((e.target as HTMLDivElement).innerHTML)}
           />
           {!body && (

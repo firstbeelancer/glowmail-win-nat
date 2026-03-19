@@ -127,10 +127,21 @@ function MailApp() {
     if (!email.body) {
       try {
         const full = await mailApi.fetchEmailBody(currentFolder, Number(email.id));
+        
+        // Map attachments from fetch response
+        const fetchedAttachments = (full.attachments || []).map((att: any, i: number) => ({
+          id: `att-${email.id}-${i}`,
+          name: att.name || 'unnamed',
+          size: att.size || 0,
+          type: att.type || 'application/octet-stream',
+          url: att.contentBase64 ? `data:${att.type || 'application/octet-stream'};base64,${att.contentBase64}` : '',
+        }));
+
         const enriched = {
           ...email,
           body: buildRenderableEmailBody(full),
           read: true,
+          attachments: fetchedAttachments.length > 0 ? fetchedAttachments : email.attachments,
         };
         setSelectedEmail(enriched);
       } catch (e) {

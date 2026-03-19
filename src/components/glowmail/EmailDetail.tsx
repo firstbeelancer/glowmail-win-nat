@@ -645,7 +645,20 @@ export const EmailDetail: React.FC<{
                         )}
                         
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                          <button className="p-2 bg-zinc-900/80 rounded-full text-zinc-200 hover:text-emerald-400 hover:scale-110 transition-all shadow-lg">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (att.url) {
+                                const a = document.createElement('a');
+                                a.href = att.url;
+                                a.download = att.name;
+                                a.click();
+                              } else {
+                                toast(lang === 'ru' ? 'Файл недоступен для скачивания' : 'File not available for download', { icon: '⚠️' });
+                              }
+                            }}
+                            className="p-2 bg-zinc-900/80 rounded-full text-zinc-200 hover:text-emerald-400 hover:scale-110 transition-all shadow-lg"
+                          >
                             <Download className="w-5 h-5" />
                           </button>
                         </div>

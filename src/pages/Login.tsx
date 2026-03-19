@@ -84,13 +84,13 @@ export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Name */}
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Имя</label>
+              <label className="block text-xs font-medium text-neutral-400 mb-1.5">Имя</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Как вас зовут?"
-                className="w-full h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition"
+                className="w-full h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition"
               />
             </div>
 

@@ -130,6 +130,29 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
     return sortOrder === 'asc' ? comparison : -comparison;
   });
 
+  // Group emails
+  const groupBy = settings.groupBy || 'none';
+  const groupedEmails: { label: string; emails: Email[] }[] = [];
+  if (groupBy === 'none') {
+    groupedEmails.push({ label: '', emails: sortedEmails });
+  } else {
+    const groups: Record<string, Email[]> = {};
+    sortedEmails.forEach(email => {
+      let key = '';
+      if (groupBy === 'date') {
+        const d = new Date(email.date);
+        key = d.toLocaleDateString();
+      } else if (groupBy === 'sender') {
+        key = email.from.name || email.from.email;
+      } else if (groupBy === 'tag') {
+        key = email.tags.length > 0 ? email.tags[0] : (lang === 'ru' ? 'Без тега' : 'No tag');
+      }
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(email);
+    });
+    Object.entries(groups).forEach(([label, emails]) => groupedEmails.push({ label, emails }));
+  }
+
   return (
     <div className="flex flex-col h-full bg-zinc-950">
       {/* Sort Toolbar */}

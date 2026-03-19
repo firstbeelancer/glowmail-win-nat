@@ -204,9 +204,16 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
               className={cn("p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors", sortBy === 'tags' && "bg-zinc-800 text-zinc-100")}
               title={t('emailList.tags', lang)}
             >
-              <Tag className="w-3.5 h-3.5" />
+            <Tag className="w-3.5 h-3.5" />
             </button>
           </div>
+          <button
+            onClick={() => setStarredOnly(prev => !prev)}
+            className={cn("p-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors", starredOnly && "bg-yellow-500/10 text-yellow-500 border-yellow-500/30")}
+            title={t('emailList.starredOnly', lang)}
+          >
+            <Star className={cn("w-3.5 h-3.5", starredOnly && "fill-yellow-500")} />
+          </button>
           <button
             onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
             className="p-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"

@@ -19,7 +19,7 @@ export function Compose({
   const [to, setTo] = useState(initialData?.to?.map((c) => c.email).join(', ') || '');
   const [cc, setCc] = useState(initialData?.cc?.map((c) => c.email).join(', ') || '');
   const [bcc, setBcc] = useState(initialData?.bcc?.map((c) => c.email).join(', ') || '');
-  const [showCcBcc, setShowCcBcc] = useState(!!initialData?.cc?.length || !!initialData?.bcc?.length);
+  const [showCcBcc, setShowCcBcc] = useState(true);
   const [subject, setSubject] = useState(initialData?.subject || '');
   const [body, setBody] = useState(initialData?.body || '');
   const [importance, setImportance] = useState<'high' | 'normal' | 'low'>(initialData?.importance || 'normal');
@@ -59,10 +59,24 @@ export function Compose({
   }, [size]);
 
   useEffect(() => {
-    if (editorRef.current && !editorRef.current.innerHTML && body) {
-      editorRef.current.innerHTML = body;
+    if (editorRef.current && !editorRef.current.innerHTML) {
+      // Build initial content with signature placed before quoted text
+      let initialBody = body || '';
+      if (selectedSignatureId) {
+        const sig = settings.signatures?.find(s => s.id === selectedSignatureId);
+        if (sig?.content) {
+          const hrIndex = initialBody.indexOf('<hr>');
+          if (hrIndex !== -1) {
+            // Insert signature before the quoted/forwarded content
+            initialBody = initialBody.slice(0, hrIndex) + `<br><div class="email-signature">${sig.content}</div><br>` + initialBody.slice(hrIndex);
+          } else {
+            initialBody = initialBody + `<br><br><div class="email-signature">${sig.content}</div>`;
+          }
+        }
+      }
+      editorRef.current.innerHTML = initialBody;
     }
-  }, [body]);
+  }, []);
 
   // Apply default font color to editor
   useEffect(() => {
@@ -96,11 +110,6 @@ export function Compose({
     }) : [];
 
     const finalBody = editorRef.current?.innerHTML || '';
-    let selectedSignature = '';
-    if (selectedSignatureId) {
-      selectedSignature = settings.signatures?.find(s => s.id === selectedSignatureId)?.content || '';
-    }
-    const bodyWithSignature = selectedSignature ? `${finalBody}<br><br>${selectedSignature}` : finalBody;
 
     sendEmail({
       id: initialData?.id,
@@ -108,7 +117,7 @@ export function Compose({
       cc: ccContacts,
       bcc: bccContacts,
       subject,
-      body: bodyWithSignature,
+      body: finalBody,
       importance,
       attachments,
     });

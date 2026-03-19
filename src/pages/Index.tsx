@@ -269,12 +269,7 @@ const Index = () => {
   });
 
   if (!loggedIn) {
-    // Skip login screen in dev — auto-login with saved creds
-    return (
-      <div className="flex items-center justify-center h-screen bg-zinc-950 text-zinc-400">
-        <p>No credentials found. Set glowmail_credentials in localStorage.</p>
-      </div>
-    );
+    return <Login />;
   }
 
   return (

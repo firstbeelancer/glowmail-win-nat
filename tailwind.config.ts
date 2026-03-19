@@ -14,10 +14,23 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['"Inter"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['"Involve"', '"Inter"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       colors: {
+        zinc: {
+          50: "hsl(var(--zinc-50))",
+          100: "hsl(var(--zinc-100))",
+          200: "hsl(var(--zinc-200))",
+          300: "hsl(var(--zinc-300))",
+          400: "hsl(var(--zinc-400))",
+          500: "hsl(var(--zinc-500))",
+          600: "hsl(var(--zinc-600))",
+          700: "hsl(var(--zinc-700))",
+          800: "hsl(var(--zinc-800))",
+          900: "hsl(var(--zinc-900))",
+          950: "hsl(var(--zinc-950))",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

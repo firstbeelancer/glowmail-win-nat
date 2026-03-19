@@ -226,6 +226,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
         { id: '5', name: 'project', color: '#8b5cf6' },
       ],
       aiEnabled: true,
+      folderColors: {},
       ...parsedSettings,
     };
   });

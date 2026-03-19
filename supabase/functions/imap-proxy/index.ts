@@ -280,6 +280,7 @@ Deno.serve(async (req) => {
           if (msg) {
             envelope = msg.envelope;
             flags = msg.flags || [];
+            messageSize = Number(msg.size || 0);
             msgSourceType = typeof msg.source;
             msgSourceConstructor = msg.source?.constructor?.name || "undefined";
 

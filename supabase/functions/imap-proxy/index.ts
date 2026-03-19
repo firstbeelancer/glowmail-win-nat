@@ -127,15 +127,31 @@ Deno.serve(async (req) => {
 
         await client.selectMailbox(folder);
 
-        const messages = await client.fetch(String(uid), {
-          uid: true,
-          envelope: true,
-          flags: true,
-          body: true,
-        });
+        let messages;
+        try {
+          messages = await client.fetch(String(uid), {
+            uid: true,
+            envelope: true,
+            flags: true,
+            body: true,
+          });
+        } catch (fetchErr) {
+          console.error("fetch with body failed, retrying without body:", fetchErr);
+          messages = await client.fetch(String(uid), {
+            uid: true,
+            envelope: true,
+            flags: true,
+          });
+        }
 
         const msg = Array.isArray(messages) ? messages[0] : messages;
         
+        if (!msg) {
+          await client.disconnect();
+          client = null;
+          return err("Message not found", 404);
+        }
+
         // Try to extract body text
         let bodyText = "";
         let bodyHtml = "";
@@ -143,8 +159,13 @@ Deno.serve(async (req) => {
         if (msg.body) {
           if (typeof msg.body === "string") {
             bodyText = msg.body;
-          } else if (msg.body["1"] || msg.body["TEXT"]) {
-            bodyText = msg.body["1"] || msg.body["TEXT"] || "";
+          } else if (typeof msg.body === "object") {
+            bodyText = msg.body["1"] || msg.body["TEXT"] || msg.body["text"] || "";
+            if (!bodyText) {
+              // Try first available key
+              const keys = Object.keys(msg.body);
+              if (keys.length > 0) bodyText = String(msg.body[keys[0]] || "");
+            }
           }
         }
         

@@ -94,4 +94,5 @@ export type UserSettings = {
   ldapBaseDn: string;
   language: 'en' | 'ru';
   aiEnabled: boolean;
+  folderColors: Record<string, string>;
 };

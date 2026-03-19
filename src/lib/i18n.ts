@@ -38,6 +38,7 @@ const translations = {
     'emailList.print': 'Print',
     'emailList.addTag': 'Add Tag',
     'emailList.assignTags': 'Assign Tags',
+    'emailList.starredOnly': 'Starred Only',
 
     // Email Detail
     'emailDetail.showDetails': 'Show Details',

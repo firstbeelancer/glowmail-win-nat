@@ -170,6 +170,7 @@ const translations = {
     'settings.ldapLoading': 'Loading...',
     'settings.ldapSection': 'LDAP Address Book',
     'layout.openInWindow': 'Open in new window',
+    'compose.tagsLabel': 'Tags:',
   },
   ru: {
     // Layout

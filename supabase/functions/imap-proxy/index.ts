@@ -108,24 +108,30 @@ Deno.serve(async (req) => {
         const extractAttachments = (bs: any): { name: string; size: number; type: string }[] => {
           if (!bs) return [];
           const atts: { name: string; size: number; type: string }[] = [];
-          const walk = (node: any) => {
+          const walk = (node: any, depth = 0) => {
             if (!node) return;
             // Handle both possible field names from different IMAP libs
-            const disposition = (node.disposition || node.contentDisposition || '').toLowerCase();
-            const nodeType = node.type || node.mediaType || '';
-            const nodeSubtype = node.subtype || node.mediaSubtype || '';
+            const rawDisposition = node.disposition || node.contentDisposition || '';
+            const disposition = (typeof rawDisposition === 'string' ? rawDisposition : rawDisposition?.type || '').toString().toLowerCase();
+            const nodeType = (node.type || node.mediaType || '').toString();
+            const nodeSubtype = (node.subtype || node.mediaSubtype || '').toString();
             const mimeType = `${nodeType}/${nodeSubtype}`.toLowerCase();
+            
+            // Extract filename from various possible locations
             const filename = node.dispositionParameters?.filename 
               || node.parameters?.name 
               || node.contentDispositionParameters?.filename
               || node.attrs?.name
+              || (typeof rawDisposition === 'object' && rawDisposition?.params?.filename)
               || '';
 
             const isTextBody = ['text/plain', 'text/html'].includes(mimeType);
+            const isMultipart = mimeType.startsWith('multipart/') || mimeType.startsWith('message/');
+            
             const isAttachment = disposition === 'attachment' ||
               (disposition === 'inline' && node.id && mimeType.startsWith('image/')) ||
               (filename && !isTextBody) ||
-              (!isTextBody && !mimeType.startsWith('multipart/') && !mimeType.startsWith('message/') && mimeType !== '/' && disposition !== '' && disposition !== 'inline');
+              (!isTextBody && !isMultipart && mimeType !== '/' && nodeType !== '' && disposition !== '' && disposition !== 'inline');
 
             if (isAttachment) {
               atts.push({
@@ -137,12 +143,21 @@ Deno.serve(async (req) => {
             // Walk children in various structures
             const children = node.childNodes || node.parts || node.body;
             if (Array.isArray(children)) {
-              children.forEach(walk);
+              children.forEach((c: any) => walk(c, depth + 1));
             }
           };
           walk(bs);
           return atts;
         };
+
+        // Debug: log bodyStructure for first 3 messages to understand format
+        normalized.slice(0, 3).forEach((msg: any, i: number) => {
+          if (msg?.bodyStructure) {
+            try {
+              console.log(`bodyStructure[${i}] uid=${msg.uid}:`, JSON.stringify(msg.bodyStructure).slice(0, 1000));
+            } catch { console.log(`bodyStructure[${i}] uid=${msg.uid}: [not serializable]`, Object.keys(msg.bodyStructure)); }
+          }
+        });
 
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))

@@ -301,6 +301,12 @@ export function MailProvider({ children }: { children: ReactNode }) {
     setFolders((prev) => [...prev, newFolder]);
   };
 
+  const updateEmailTags = (id: string, tags: string[]) => {
+    setEmails((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, tags } : e))
+    );
+  };
+
   const value = useMemo(
     () => ({
       folders,

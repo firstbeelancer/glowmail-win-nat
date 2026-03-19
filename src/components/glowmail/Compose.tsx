@@ -300,7 +300,7 @@ export function Compose({
                     <div class="field"><label>${t('compose.subjectLabel', lang)}</label><input id="subject" value="${subject}" /></div>
                     <div class="toolbar">
                       <select onchange="document.execCommand('fontName',false,this.value)">
-                        <option value="Inter">Inter</option><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Courier New">Courier New</option>
+                        <option value="Involve"${(settings.composerFont || 'Involve') === 'Involve' ? ' selected' : ''}>Involve</option><option value="Inter"${settings.composerFont === 'Inter' ? ' selected' : ''}>Inter</option><option value="Arial"${settings.composerFont === 'Arial' ? ' selected' : ''}>Arial</option><option value="Times New Roman"${settings.composerFont === 'Times New Roman' ? ' selected' : ''}>Times New Roman</option><option value="Courier New"${settings.composerFont === 'Courier New' ? ' selected' : ''}>Courier New</option>
                       </select>
                       <select onchange="document.execCommand('fontSize',false,this.value)">
                         <option value="1">${t('compose.small', lang)}</option><option value="3" selected>${t('compose.normal', lang)}</option><option value="5">${t('compose.large', lang)}</option><option value="7">${t('compose.huge', lang)}</option>

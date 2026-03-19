@@ -121,6 +121,7 @@ function MailApp() {
   };
 
   const handleReply = (type: 'reply' | 'replyAll' | 'forward', email: Email, quickReplyText?: string) => {
+    const myEmail = settings.account.email;
     let subject = email.subject;
     let to: any[] = [];
     let cc: any[] = [];
@@ -146,9 +147,9 @@ function MailApp() {
     } else if (type === 'replyAll') {
       subject = subject.startsWith('Re:') ? subject : `Re: ${subject}`;
       to = [email.from, ...email.to].filter(
-        (c, index, self) => index === self.findIndex((t) => t.email === c.email) && c.email !== 'me@example.com'
+        (c, index, self) => index === self.findIndex((t) => t.email === c.email) && c.email.toLowerCase() !== myEmail.toLowerCase()
       );
-      cc = (email.cc || []).filter(c => c.email !== 'me@example.com');
+      cc = (email.cc || []).filter(c => c.email.toLowerCase() !== myEmail.toLowerCase());
     } else if (type === 'forward') {
       subject = subject.startsWith('Fwd:') ? subject : `Fwd: ${subject}`;
       to = [];

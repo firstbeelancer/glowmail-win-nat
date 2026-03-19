@@ -546,9 +546,10 @@ export function Compose({
         <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/30 shrink-0 overflow-visible relative">
           <select 
             onChange={(e) => execCommand('fontName', e.target.value)}
-            defaultValue="Inter"
+            defaultValue={settings.composerFont || 'Involve'}
             className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 outline-none cursor-pointer mr-1"
           >
+            <option value="Involve">Involve</option>
             <option value="Inter">Inter</option>
             <option value="Arial">Arial</option>
             <option value="Times New Roman">Times New Roman</option>

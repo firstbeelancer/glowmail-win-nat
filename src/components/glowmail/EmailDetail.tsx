@@ -2,22 +2,50 @@ import React, { useState, useEffect } from 'react';
 import { Email } from '../../types';
 import { useMail } from '../../store';
 import { format } from 'date-fns';
-import { ArrowLeft, Reply, ReplyAll, Forward, MoreVertical, Star, Paperclip, Download, Trash2, Tag, File, Image as ImageIcon, FileText, AlertTriangle, Sparkles, Loader2, Edit3, Printer, FolderInput, Copy } from 'lucide-react';
+import { ArrowLeft, Reply, ReplyAll, Forward, MoreVertical, Star, Paperclip, Download, Trash2, Tag, File, Image as ImageIcon, FileText, AlertTriangle, Sparkles, Loader2, Edit3, Printer, FolderInput, Copy, ChevronUp, ChevronDown, Mail, MailOpen, Code, ClipboardCopy, ChevronRight, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { t, translateFolderName } from '@/lib/i18n';
 import { EmailHtmlViewer, EmailTextViewer } from './EmailHtmlViewer';
+import toast from 'react-hot-toast';
 
-export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: (type: 'reply' | 'replyAll' | 'forward', email: Email, quickReplyText?: string) => void; onEditDraft?: (email: Email) => void }> = ({ email, onBack, onReply, onEditDraft }) => {
-  const { toggleStar, deleteEmail, settings, updateEmailTags, moveEmailToFolder, copyEmailToFolder, allFoldersFlat, currentFolder } = useMail();
+export const EmailDetail: React.FC<{
+  email: Email;
+  onBack: () => void;
+  onReply: (type: 'reply' | 'replyAll' | 'forward', email: Email, quickReplyText?: string) => void;
+  onEditDraft?: (email: Email) => void;
+  onNext?: () => void;
+  onPrev?: () => void;
+  hasNext?: boolean;
+  hasPrev?: boolean;
+}> = ({ email, onBack, onReply, onEditDraft, onNext, onPrev, hasNext, hasPrev }) => {
+  const { toggleStar, deleteEmail, settings, updateEmailTags, moveEmailToFolder, copyEmailToFolder, allFoldersFlat, currentFolder, markAsRead, markAsUnread } = useMail();
   const lang = settings.language;
   const [showHeaders, setShowHeaders] = useState(false);
+  const [showRawSource, setShowRawSource] = useState(false);
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const [isGeneratingReplies, setIsGeneratingReplies] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [showMovePicker, setShowMovePicker] = useState(false);
   const [showCopyPicker, setShowCopyPicker] = useState(false);
+
+  // Keyboard shortcuts for next/prev
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target as HTMLElement)?.isContentEditable) return;
+      if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); onNext?.(); }
+      if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); onPrev?.(); }
+      if (e.key === 'r' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); onReply('reply', email); }
+      if (e.key === 'a' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); onReply('replyAll', email); }
+      if (e.key === 'f' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); onReply('forward', email); }
+      if (e.key === 'Escape') { e.preventDefault(); onBack(); }
+      if (e.key === 'u') { e.preventDefault(); markAsUnread(email.id); onBack(); }
+      if (e.key === '#' || e.key === 'Delete') { e.preventDefault(); deleteEmail(email.id); onBack(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [email.id, onNext, onPrev, onBack, onReply, markAsUnread, deleteEmail]);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +140,17 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
     URL.revokeObjectURL(url);
   };
 
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success(lang === 'ru' ? `${label} скопировано` : `${label} copied`);
+    });
+  };
+
+  // Check if email body contains external sender (different domain)
+  const userDomain = settings.account.email.split('@')[1];
+  const senderDomain = email.from.email.split('@')[1];
+  const isExternalSender = userDomain && senderDomain && userDomain !== senderDomain;
+
   return (
     <motion.div
       initial={{ x: '100%', opacity: 0 }}
@@ -121,58 +160,85 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
       className="absolute inset-0 bg-zinc-950 z-20 flex flex-col h-full overflow-hidden"
     >
       {/* Top Bar */}
-      <header className="h-16 border-b border-zinc-800/50 flex items-center justify-between px-4 bg-zinc-950/80 backdrop-blur-md shrink-0">
-        <div className="flex items-center gap-2">
+      <header className="h-14 border-b border-zinc-800/50 flex items-center justify-between px-3 bg-zinc-950/80 backdrop-blur-md shrink-0">
+        <div className="flex items-center gap-1">
           <button
             onClick={onBack}
             className="p-2 -ml-2 rounded-full hover:bg-zinc-800 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-1">
+          {/* Next/Prev navigation */}
+          <div className="hidden sm:flex items-center gap-0.5 ml-1">
+            <button
+              onClick={onPrev}
+              disabled={!hasPrev}
+              className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              title={lang === 'ru' ? 'Предыдущее (k)' : 'Previous (k)'}
+            >
+              <ChevronUp className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onNext}
+              disabled={!hasNext}
+              className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              title={lang === 'ru' ? 'Следующее (j)' : 'Next (j)'}
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="w-px h-5 bg-zinc-800 mx-1 hidden sm:block" />
+          <div className="flex items-center gap-0.5">
             <button
               onClick={() => toggleStar(email.id)}
-              className="p-2 rounded-full hover:bg-zinc-800 transition-colors"
+              className="p-1.5 rounded-full hover:bg-zinc-800 transition-colors"
             >
               <Star
                 className={cn(
-                  "w-5 h-5 transition-all",
+                  "w-4 h-4 transition-all",
                   email.starred ? "fill-yellow-500 text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]" : "text-zinc-400"
                 )}
               />
             </button>
             <button
+              onClick={() => { email.read ? markAsUnread(email.id) : markAsRead(email.id); }}
+              className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors"
+              title={email.read ? (lang === 'ru' ? 'Отметить непрочитанным (u)' : 'Mark unread (u)') : (lang === 'ru' ? 'Отметить прочитанным' : 'Mark read')}
+            >
+              {email.read ? <Mail className="w-4 h-4" /> : <MailOpen className="w-4 h-4" />}
+            </button>
+            <button
               onClick={handleSave}
-              className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors group"
+              className="hidden sm:block p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors"
               title={t('emailDetail.saveEmail', lang)}
             >
-              <Download className="w-5 h-5 group-hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+              <Download className="w-4 h-4" />
             </button>
             <button
               onClick={handlePrint}
-              className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors group"
+              className="hidden sm:block p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors"
               title={t('emailDetail.print', lang)}
             >
-              <Printer className="w-5 h-5 group-hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+              <Printer className="w-4 h-4" />
             </button>
             <button
               onClick={() => {
                 deleteEmail(email.id);
                 onBack();
               }}
-              className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-red-400 transition-colors group"
+              className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-red-400 transition-colors"
             >
-              <Trash2 className="w-5 h-5 group-hover:drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]" />
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
           {/* Tag picker in toolbar */}
-          <div className="relative ml-2">
+          <div className="relative ml-1 hidden sm:block">
             <button
               onClick={() => setShowTagPicker(!showTagPicker)}
-              className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors"
+              className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors"
               title={t('compose.tagsLabel', lang)}
             >
-              <Tag className="w-5 h-5" />
+              <Tag className="w-4 h-4" />
             </button>
             {showTagPicker && (
               <div className="absolute left-0 top-full mt-1 w-44 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
@@ -211,24 +277,27 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
               className="px-3 py-1.5 mr-2 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors flex items-center gap-2 text-sm font-medium"
             >
               <Edit3 className="w-4 h-4" />
-              {t('emailDetail.editFurther', lang)}
+              <span className="hidden sm:inline">{t('emailDetail.editFurther', lang)}</span>
             </button>
           )}
           <button
             onClick={() => onReply('reply', email)}
             className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+            title={`${lang === 'ru' ? 'Ответить' : 'Reply'} (r)`}
           >
             <Reply className="w-5 h-5" />
           </button>
           <button
             onClick={() => onReply('replyAll', email)}
-            className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+            className="hidden sm:block p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+            title={`${lang === 'ru' ? 'Ответить всем' : 'Reply All'} (a)`}
           >
             <ReplyAll className="w-5 h-5" />
           </button>
           <button
             onClick={() => onReply('forward', email)}
             className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+            title={`${lang === 'ru' ? 'Переслать' : 'Forward'} (f)`}
           >
             <Forward className="w-5 h-5" />
           </button>
@@ -242,7 +311,7 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
               <MoreVertical className="w-5 h-5" />
             </button>
             {showMoreMenu && (
-              <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
+              <div className="absolute right-0 top-full mt-1 w-52 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
                 <div className="p-1 flex flex-col">
                   <button
                     onClick={() => { handleSave(); setShowMoreMenu(false); }}
@@ -257,6 +326,33 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
                   >
                     <Printer className="w-4 h-4" />
                     {t('emailList.print', lang)}
+                  </button>
+                  <div className="h-px bg-zinc-800 my-1" />
+                  {/* Copy email address */}
+                  <button
+                    onClick={() => { copyToClipboard(email.from.email, 'Email'); setShowMoreMenu(false); }}
+                    className="flex items-center gap-2 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                  >
+                    <ClipboardCopy className="w-4 h-4" />
+                    {lang === 'ru' ? 'Копировать адрес' : 'Copy email address'}
+                  </button>
+                  {/* Copy message-id */}
+                  {email.headers.messageId && (
+                    <button
+                      onClick={() => { copyToClipboard(email.headers.messageId, 'Message-ID'); setShowMoreMenu(false); }}
+                      className="flex items-center gap-2 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                    >
+                      <Code className="w-4 h-4" />
+                      {lang === 'ru' ? 'Копировать Message-ID' : 'Copy Message-ID'}
+                    </button>
+                  )}
+                  {/* Show raw source */}
+                  <button
+                    onClick={() => { setShowRawSource(!showRawSource); setShowMoreMenu(false); }}
+                    className="flex items-center gap-2 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    {lang === 'ru' ? (showRawSource ? 'Скрыть исходник' : 'Показать исходник') : (showRawSource ? 'Hide source' : 'Show source')}
                   </button>
                   <div className="h-px bg-zinc-800 my-1" />
                   <div className="relative">
@@ -326,6 +422,14 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
         <div className="max-w-3xl mx-auto">
+          {/* External sender warning */}
+          {isExternalSender && (
+            <div className="mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-yellow-500/5 border border-yellow-500/20 text-yellow-500 text-xs">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              {lang === 'ru' ? `Внешний отправитель (${senderDomain})` : `External sender (${senderDomain})`}
+            </div>
+          )}
+
           <div className="flex items-center gap-3 mb-6">
             {email.importance === 'high' && (
               <div className="flex items-center justify-center w-8 h-8 rounded-full bg-red-500/10 border border-red-500/30 text-red-400" title="High Importance">
@@ -345,7 +449,13 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-zinc-100">{email.from.name}</span>
-                  <span className="text-sm text-zinc-500">&lt;{email.from.email}&gt;</span>
+                  <button
+                    onClick={() => copyToClipboard(email.from.email, 'Email')}
+                    className="text-sm text-zinc-500 hover:text-emerald-400 transition-colors cursor-pointer"
+                    title={lang === 'ru' ? 'Копировать адрес' : 'Copy address'}
+                  >
+                    &lt;{email.from.email}&gt;
+                  </button>
                   <span className="hidden md:inline text-sm text-zinc-500">
                     {format(new Date(email.date), 'MMM d, yyyy, h:mm a')}
                   </span>
@@ -401,8 +511,69 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
                   </div>
                   <div className="grid grid-cols-[100px_1fr] gap-2">
                     <span className="text-zinc-500">Message-ID:</span>
-                    <span>{email.headers.messageId}</span>
+                    <span className="flex items-center gap-1">
+                      <span className="break-all">{email.headers.messageId}</span>
+                      <button onClick={() => copyToClipboard(email.headers.messageId, 'Message-ID')} className="p-0.5 hover:text-emerald-400 shrink-0">
+                        <ClipboardCopy className="w-3 h-3" />
+                      </button>
+                    </span>
                   </div>
+                  {email.headers.inReplyTo && (
+                    <div className="grid grid-cols-[100px_1fr] gap-2">
+                      <span className="text-zinc-500">In-Reply-To:</span>
+                      <span className="break-all">{email.headers.inReplyTo}</span>
+                    </div>
+                  )}
+                  {email.headers.references && (
+                    <div className="grid grid-cols-[100px_1fr] gap-2">
+                      <span className="text-zinc-500">References:</span>
+                      <span className="break-all">{email.headers.references}</span>
+                    </div>
+                  )}
+                  {email.headers.returnPath && (
+                    <div className="grid grid-cols-[100px_1fr] gap-2">
+                      <span className="text-zinc-500">Return-Path:</span>
+                      <span>{email.headers.returnPath}</span>
+                    </div>
+                  )}
+                  {email.headers.received && email.headers.received.length > 0 && (
+                    <div className="grid grid-cols-[100px_1fr] gap-2">
+                      <span className="text-zinc-500">Received:</span>
+                      <div className="space-y-1">
+                        {email.headers.received.map((r, i) => (
+                          <div key={i} className="text-[11px] break-all">{r}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Raw source view */}
+          <AnimatePresence>
+            {showRawSource && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="mb-8 overflow-hidden"
+              >
+                <div className="p-4 bg-zinc-900/80 border border-zinc-800 rounded-xl">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-zinc-400">{lang === 'ru' ? 'Исходный HTML' : 'Raw HTML Source'}</span>
+                    <button
+                      onClick={() => copyToClipboard(email.body, 'Source')}
+                      className="text-xs text-zinc-500 hover:text-emerald-400 flex items-center gap-1 transition-colors"
+                    >
+                      <ClipboardCopy className="w-3 h-3" />
+                      {lang === 'ru' ? 'Копировать' : 'Copy'}
+                    </button>
+                  </div>
+                  <pre className="text-xs text-zinc-400 font-mono whitespace-pre-wrap break-all max-h-96 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+                    {email.body}
+                  </pre>
                 </div>
               </motion.div>
             )}
@@ -498,30 +669,57 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
           )}
 
           {/* AI Quick Replies */}
-          <div className="mt-12 pt-8 border-t border-zinc-800/50">
-            <h3 className="text-sm font-medium text-emerald-400 mb-4 flex items-center gap-2">
-              <Sparkles className="w-4 h-4" />
-              {t('emailDetail.aiReplies', lang)}
-              {isGeneratingReplies && <Loader2 className="w-3 h-3 animate-spin text-emerald-500/50" />}
-            </h3>
-            <div className="flex flex-wrap gap-3">
-              {quickReplies.map((reply, index) => (
-                <button
-                  key={index}
-                  onClick={() => {
-                    onReply('reply', email, reply);
-                  }}
-                  className="px-4 py-2 bg-zinc-900/50 border border-zinc-800 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-zinc-300 hover:text-emerald-400 rounded-xl text-sm font-medium transition-all shadow-sm hover:shadow-[0_0_15px_rgba(16,185,129,0.15)]"
-                >
-                  {reply}
-                </button>
-              ))}
-              {!isGeneratingReplies && quickReplies.length === 0 && (
-                <span className="text-sm text-zinc-500">{t('emailDetail.generating', lang)}</span>
-              )}
+          {settings.aiEnabled && email.folderId !== 'drafts' && email.folderId !== 'sent' && (
+            <div className="mt-12 pt-8 border-t border-zinc-800/50">
+              <h3 className="text-sm font-medium text-emerald-400 mb-4 flex items-center gap-2">
+                <Sparkles className="w-4 h-4" />
+                {t('emailDetail.aiReplies', lang)}
+                {isGeneratingReplies && <Loader2 className="w-3 h-3 animate-spin text-emerald-500/50" />}
+              </h3>
+              <div className="flex flex-wrap gap-3">
+                {quickReplies.map((reply, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      onReply('reply', email, reply);
+                    }}
+                    className="px-4 py-2 bg-zinc-900/50 border border-zinc-800 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-zinc-300 hover:text-emerald-400 rounded-xl text-sm font-medium transition-all shadow-sm hover:shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+                  >
+                    {reply}
+                  </button>
+                ))}
+                {!isGeneratingReplies && quickReplies.length === 0 && (
+                  <span className="text-sm text-zinc-500">{t('emailDetail.generating', lang)}</span>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
+      </div>
+
+      {/* Mobile next/prev bar */}
+      <div className="sm:hidden h-12 border-t border-zinc-800/50 flex items-center justify-between px-4 bg-zinc-950 shrink-0">
+        <button
+          onClick={onPrev}
+          disabled={!hasPrev}
+          className="flex items-center gap-1 text-sm text-zinc-400 disabled:opacity-30"
+        >
+          <ChevronUp className="w-4 h-4" />
+          {lang === 'ru' ? 'Пред.' : 'Prev'}
+        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => onReply('replyAll', email)} className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400">
+            <ReplyAll className="w-4 h-4" />
+          </button>
+        </div>
+        <button
+          onClick={onNext}
+          disabled={!hasNext}
+          className="flex items-center gap-1 text-sm text-zinc-400 disabled:opacity-30"
+        >
+          {lang === 'ru' ? 'След.' : 'Next'}
+          <ChevronDown className="w-4 h-4" />
+        </button>
       </div>
     </motion.div>
   );

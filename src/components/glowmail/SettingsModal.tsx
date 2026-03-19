@@ -7,11 +7,12 @@ import toast from 'react-hot-toast';
 import { t } from '@/lib/i18n';
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { settings, updateSettings } = useMail();
+  const { settings, updateSettings, addFolder } = useMail();
   const [activeTab, setActiveTab] = useState<'account' | 'server' | 'appearance' | 'signature' | 'tags'>('account');
   const [localSettings, setLocalSettings] = useState(settings);
   const [newTag, setNewTag] = useState('');
   const [newTagColor, setNewTagColor] = useState('#10b981');
+  const [isFetchingFolders, setIsFetchingFolders] = useState(false);
   const lang = localSettings.language;
 
   const handleSave = () => {

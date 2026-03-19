@@ -26,6 +26,8 @@ export function Compose({
   const [attachments, setAttachments] = useState<Attachment[]>(initialData?.attachments || []);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [showAiMenu, setShowAiMenu] = useState(false);
+  const [emailTags, setEmailTags] = useState<string[]>(initialData?.tags || []);
+  const [showTagPicker, setShowTagPicker] = useState(false);
   const [selectedSignatureId, setSelectedSignatureId] = useState<string | undefined>(settings.defaultSignatureId || (settings.signatures?.length > 0 ? settings.signatures[0].id : undefined));
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

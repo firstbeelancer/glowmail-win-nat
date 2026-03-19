@@ -117,7 +117,7 @@ export function Compose({
       cc: ccContacts,
       bcc: bccContacts,
       subject,
-      body: bodyWithSignature,
+      body: finalBody,
       importance,
       attachments,
     });

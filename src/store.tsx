@@ -326,6 +326,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       updateSettings,
       fetchEmails,
       addFolder,
+      updateEmailTags,
     }),
     [folders, emails, contacts, settings, currentFolder, searchQuery]
   );

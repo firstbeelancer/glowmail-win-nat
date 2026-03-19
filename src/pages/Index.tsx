@@ -8,11 +8,12 @@ import { Email } from '../types';
 import { Toaster } from 'react-hot-toast';
 import { AnimatePresence } from 'framer-motion';
 import Login from './Login';
+import * as mailApi from '../lib/mail-api';
 
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [composeData, setComposeData] = useState<Partial<Email> | null>(null);
-  const { markAsRead, settings, sendEmail } = useMail();
+  const { markAsRead, settings, sendEmail, isLoading, connectionError, fetchEmails, currentFolder } = useMail();
 
   // Listen for messages from detached composer window
   useEffect(() => {
@@ -66,13 +67,28 @@ function MailApp() {
     styleEl.innerHTML = fontFaces;
   }, [settings.customFonts]);
 
-  const handleSelectEmail = (email: Email) => {
+  const handleSelectEmail = async (email: Email) => {
     setSelectedEmail(email);
     const delay = settings.markAsReadDelay ?? 0;
     if (delay > 0) {
       setTimeout(() => markAsRead(email.id), delay * 1000);
     } else {
       markAsRead(email.id);
+    }
+
+    // Fetch full body from IMAP if not already loaded
+    if (!email.body) {
+      try {
+        const full = await mailApi.fetchEmailBody(currentFolder, Number(email.id));
+        const enriched = {
+          ...email,
+          body: full.bodyHtml || full.bodyText || '',
+          read: true,
+        };
+        setSelectedEmail(enriched);
+      } catch (e) {
+        console.error('Failed to fetch email body:', e);
+      }
     }
   };
 

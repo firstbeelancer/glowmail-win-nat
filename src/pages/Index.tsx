@@ -12,7 +12,24 @@ import { useEffect } from 'react';
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [composeData, setComposeData] = useState<Partial<Email> | null>(null);
-  const { markAsRead, settings } = useMail();
+  const { markAsRead, settings, sendEmail } = useMail();
+
+  // Listen for messages from detached composer window
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'glowmail-compose') {
+        const { to, subject, body } = event.data;
+        const toContacts = to.split(',').map((email: string) => ({
+          id: email.trim(),
+          name: email.trim(),
+          email: email.trim(),
+        })).filter((c: any) => c.email);
+        sendEmail({ to: toContacts, subject, body });
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [sendEmail]);
 
   useEffect(() => {
     if (settings.theme === 'light') {

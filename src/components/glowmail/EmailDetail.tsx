@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Email } from '../../types';
 import { useMail } from '../../store';
 import { format } from 'date-fns';
-import { ArrowLeft, Reply, ReplyAll, Forward, MoreVertical, Star, Paperclip, Download, Trash2, Tag, File, Image as ImageIcon, FileText, AlertTriangle, Sparkles, Loader2, Edit3, Printer } from 'lucide-react';
+import { ArrowLeft, Reply, ReplyAll, Forward, MoreVertical, Star, Paperclip, Download, Trash2, Tag, File, Image as ImageIcon, FileText, AlertTriangle, Sparkles, Loader2, Edit3, Printer, FolderInput, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { t } from '@/lib/i18n';
+import { t, translateFolderName } from '@/lib/i18n';
 
 export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: (type: 'reply' | 'replyAll' | 'forward', email: Email, quickReplyText?: string) => void; onEditDraft?: (email: Email) => void }> = ({ email, onBack, onReply, onEditDraft }) => {
   const { toggleStar, deleteEmail, settings, updateEmailTags } = useMail();

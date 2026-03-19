@@ -605,6 +605,22 @@ export function Compose({
             }}
           />
           <button onClick={() => imageInputRef.current?.click()} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors" title={t('compose.insertImage', lang)}><ImageIcon className="w-4 h-4" /></button>
+          <div className="w-px h-4 bg-zinc-800 mx-1" />
+          <button
+            onClick={() => {
+              if (!editorRef.current) return;
+              const sel = window.getSelection();
+              const selectedText = sel?.toString() || '';
+              const codeHtml = `<pre style="background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:12px 16px;font-family:'JetBrains Mono','Fira Code',Consolas,monospace;font-size:13px;overflow-x:auto;margin:8px 0;border:1px solid #313244;white-space:pre-wrap;word-break:break-all;"><code>${selectedText || (lang === 'ru' ? '// ваш код здесь' : '// your code here')}</code></pre><p><br></p>`;
+              editorRef.current.focus();
+              document.execCommand('insertHTML', false, codeHtml);
+              setBody(editorRef.current.innerHTML);
+            }}
+            className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"
+            title={lang === 'ru' ? 'Вставить блок кода' : 'Insert code block'}
+          >
+            <Code className="w-4 h-4" />
+          </button>
           
           <div className="flex-1" />
           

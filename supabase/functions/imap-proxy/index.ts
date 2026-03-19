@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
         if (pageUids.length === 0) {
           await client.disconnect();
           client = null;
-          return ok({ emails: [], total, page, pageSize });
+          return ok({ emails: [], total, page: safePage, pageSize: safePageSize });
         }
 
         const sequence = pageUids.join(",");

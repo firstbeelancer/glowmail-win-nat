@@ -290,7 +290,15 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
         </div>
       </div>
 
-      {isLoading && emails.length === 0 ? (
+      {isSearching ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full">
+          <svg className="w-8 h-8 animate-spin text-primary mb-3" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          </svg>
+          <p>{lang === 'ru' ? 'Поиск писем...' : 'Searching emails...'}</p>
+        </div>
+      ) : isLoading && emails.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full">
           <svg className="w-8 h-8 animate-spin text-primary mb-3" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -309,10 +317,18 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
       ) : sortedEmails.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full">
           <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(255,255,255,0.02)]">
-            <Inbox className="w-8 h-8 opacity-50" />
+            {isSearchActive ? <Search className="w-8 h-8 opacity-50" /> : <Inbox className="w-8 h-8 opacity-50" />}
           </div>
-          <p>{t('emailList.noEmails', lang)}</p>
-          {filterMode !== 'all' && (
+          <p>{isSearchActive
+            ? (lang === 'ru' ? 'Ничего не найдено' : 'No results found')
+            : t('emailList.noEmails', lang)
+          }</p>
+          {isSearchActive && (
+            <button onClick={() => setSearchQuery('')} className="text-xs text-emerald-400 hover:underline mt-2">
+              {lang === 'ru' ? 'Сбросить поиск' : 'Clear search'}
+            </button>
+          )}
+          {filterMode !== 'all' && !isSearchActive && (
             <button onClick={() => setFilterMode('all')} className="text-xs text-emerald-400 hover:underline mt-2">
               {lang === 'ru' ? 'Сбросить фильтр' : 'Clear filter'}
             </button>
@@ -320,6 +336,17 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
         </div>
       ) : (
         <div ref={listRef} className="flex-1 overflow-y-auto" onScroll={handleScroll}>
+          {isSearchActive && (
+            <div className="px-4 py-2 bg-zinc-900/50 border-b border-zinc-800/50 flex items-center gap-2">
+              <Search className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-xs text-zinc-400">
+                {lang === 'ru'
+                  ? `Найдено ${searchResultCount} ${searchResultCount === 1 ? 'письмо' : searchResultCount < 5 ? 'письма' : 'писем'}`
+                  : `Found ${searchResultCount} ${searchResultCount === 1 ? 'email' : 'emails'}`
+                }
+              </span>
+            </div>
+          )}
           {groupedEmails.map((group, gi) => (
             <div key={gi}>
               {group.label && (

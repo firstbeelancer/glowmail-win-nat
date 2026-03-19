@@ -67,11 +67,17 @@ Deno.serve(async (req) => {
         const { folder = "INBOX", page = 1, pageSize = 50 } = body;
         await client.selectMailbox(folder);
 
-        const uids = await client.search({ all: true }, true);
+        const uidResults = await client.search({ all: true }, true);
+        const uids = (Array.isArray(uidResults) ? uidResults : [uidResults])
+          .map((value: unknown) => Number(value))
+          .filter((value) => Number.isFinite(value) && value > 0);
+
         const total = uids.length;
         const sortedUids = [...uids].sort((a, b) => b - a);
-        const start = (page - 1) * pageSize;
-        const pageUids = sortedUids.slice(start, start + pageSize);
+        const safePage = Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 1;
+        const safePageSize = Number.isFinite(Number(pageSize)) && Number(pageSize) > 0 ? Number(pageSize) : 50;
+        const start = (safePage - 1) * safePageSize;
+        const pageUids = sortedUids.slice(start, start + safePageSize);
 
         if (pageUids.length === 0) {
           await client.disconnect();

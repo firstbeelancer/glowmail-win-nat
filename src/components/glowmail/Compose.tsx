@@ -633,7 +633,7 @@ export function Compose({
                 </div>
               </div>
             )}
-          </div>
+          </div>}
         </div>
 
         {/* Editor */}

@@ -1,5 +1,5 @@
 import React, { useState, ReactNode } from 'react';
-import { Menu, Search, Edit3, Settings, Inbox, Send, File, AlertCircle, Trash2, Briefcase, Plus, RefreshCw, X, Clock, BookUser, ChevronDown, ChevronRight } from 'lucide-react';
+import { Menu, Search, Edit3, Settings, Inbox, Send, File, AlertCircle, Trash2, Briefcase, Plus, RefreshCw, X, Clock, BookUser, ChevronDown, ChevronRight, Mail } from 'lucide-react';
 import { useMail } from '../../store';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,7 +16,7 @@ const iconMap: Record<string, any> = {
   briefcase: Briefcase,
 };
 
-export function Layout({ children, onCompose }: { children: ReactNode; onCompose: () => void }) {
+export function Layout({ children, onCompose }: { children: ReactNode; onCompose: (prefill?: { to?: string }) => void }) {
   const { folders, currentFolder, setCurrentFolder, searchQuery, setSearchQuery, settings } = useMail();
   const lang = settings.language;
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -105,7 +105,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
 
         {/* Floating Action Button (Mobile) */}
         <button
-          onClick={onCompose}
+          onClick={() => onCompose()}
           className="md:hidden absolute bottom-6 right-6 w-14 h-14 bg-emerald-500 rounded-full flex items-center justify-center text-zinc-950 shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] hover:scale-105 transition-all active:scale-95 z-30"
         >
           <Edit3 className="w-6 h-6" />
@@ -130,7 +130,7 @@ function SidebarContent({
   folders: any[];
   currentFolder: string;
   setCurrentFolder: (id: string) => void;
-  onCompose?: () => void;
+  onCompose?: (prefill?: { to?: string }) => void;
   lang: 'en' | 'ru';
 }) {
   const { fetchEmails, addFolder, emails, contacts, addContact } = useMail();
@@ -184,7 +184,7 @@ function SidebarContent({
             {t('layout.getMail', lang)}
           </button>
           <button
-            onClick={onCompose}
+            onClick={() => onCompose?.()}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500 text-zinc-950 rounded-xl font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_25px_rgba(16,185,129,0.4)] hover:-translate-y-0.5 transition-all"
           >
             <Edit3 className="w-4 h-4" />
@@ -246,7 +246,7 @@ function SidebarContent({
               <p className="px-3 py-2 text-xs text-zinc-600">{t('layout.noContacts', lang)}</p>
             )}
             {contacts.map(c => (
-              <div key={c.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-zinc-800/50 transition-colors">
+              <div key={c.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-zinc-800/50 transition-colors group/contact">
                 <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-400 shrink-0">
                   {c.name.charAt(0).toUpperCase()}
                 </div>
@@ -254,6 +254,13 @@ function SidebarContent({
                   <div className="text-xs font-medium text-zinc-300 truncate">{c.name}</div>
                   <div className="text-[10px] text-zinc-500 truncate">{c.email}</div>
                 </div>
+                <button
+                  onClick={() => onCompose?.({ to: c.email })}
+                  className="p-1 rounded hover:bg-zinc-700 text-zinc-500 hover:text-emerald-400 transition-colors opacity-0 group-hover/contact:opacity-100"
+                  title={lang === 'ru' ? 'Написать письмо' : 'Compose email'}
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
             <button

@@ -184,7 +184,7 @@ function SidebarContent({
             {t('layout.getMail', lang)}
           </button>
           <button
-            onClick={onCompose}
+            onClick={() => onCompose?.()}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500 text-zinc-950 rounded-xl font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_25px_rgba(16,185,129,0.4)] hover:-translate-y-0.5 transition-all"
           >
             <Edit3 className="w-4 h-4" />

@@ -146,6 +146,65 @@ function MailApp() {
     return hexEscapes >= 3 || (softBreaks > 0 && hexEscapes > 0);
   };
 
+  const looksLikeMimeBlob = (value: string) => {
+    const lower = value.toLowerCase();
+    return lower.includes('content-type: multipart/') ||
+      lower.includes('content-transfer-encoding:') ||
+      /(?:^|\r?\n)--[^\r\n]{8,}/.test(value);
+  };
+
+  const parseMultipartBlob = (source: string): { text: string; html: string } => {
+    const normalized = source.replace(/\r\n/g, '\n');
+    const boundaryFromHeader = normalized.match(/boundary="?([^"\n;]+)"?/i)?.[1]?.trim();
+    const boundaryFromBody = normalized.match(/(?:^|\n)--([^\n-][^\n]*)/)?.[1]?.trim();
+    const boundary = boundaryFromHeader || boundaryFromBody;
+
+    if (!boundary) return { text: '', html: '' };
+
+    const parts = normalized.split(`--${boundary}`);
+    let text = '';
+    let html = '';
+
+    for (const partRaw of parts) {
+      const part = partRaw.trim();
+      if (!part || part === '--') continue;
+
+      const splitIdx = part.indexOf('\n\n');
+      if (splitIdx === -1) continue;
+
+      const headersRaw = part.slice(0, splitIdx);
+      const headers = headersRaw.toLowerCase();
+      const bodyRaw = part.slice(splitIdx + 2).replace(/\n--$/, '').trim();
+
+      if (headers.includes('content-type: multipart/')) {
+        const nested = parseMultipartBlob(bodyRaw);
+        if (!text && nested.text) text = nested.text;
+        if (!html && nested.html) html = nested.html;
+        continue;
+      }
+
+      const charset = headers.match(/charset=["']?([^"'\s;]+)/i)?.[1] || 'utf-8';
+      const isHtml = headers.includes('content-type: text/html');
+      const isPlain = headers.includes('content-type: text/plain');
+      if (!isHtml && !isPlain) continue;
+
+      let decoded = bodyRaw;
+      if (headers.includes('content-transfer-encoding: quoted-printable')) {
+        decoded = decodeQuotedPrintable(bodyRaw, charset);
+      } else if (headers.includes('content-transfer-encoding: base64') || isLikelyBase64(bodyRaw)) {
+        decoded = decodeBase64(bodyRaw, charset);
+      }
+
+      if (isHtml && !html) {
+        html = decoded;
+      } else if (isPlain && !text) {
+        text = decoded;
+      }
+    }
+
+    return { text: text.trim(), html: html.trim() };
+  };
+
   const decodeStandaloneBlob = (value: string): string => {
     if (!value) return value;
 

@@ -139,12 +139,61 @@ Deno.serve(async (req) => {
         const targetUid = Number(uid);
         if (!Number.isFinite(targetUid)) return err("Invalid uid", 400);
 
-        // Fetch raw RFC822 source
         let rawSource: Uint8Array | null = null;
         let envelope: any = null;
         let flags: string[] = [];
 
-        // Try fetching with source (full RFC822)
+        let msgSourceType = "undefined";
+        let msgSourceConstructor = "undefined";
+        let rawSourceOrigin = "none";
+
+        const toUint8Array = (value: unknown): Uint8Array | null => {
+          if (value instanceof Uint8Array) return value;
+          if (typeof value === "string") return new TextEncoder().encode(value);
+          if (value instanceof ArrayBuffer) return new Uint8Array(value);
+          if (value && typeof value === "object") {
+            const maybe = value as { buffer?: unknown; byteOffset?: unknown; byteLength?: unknown };
+            if (maybe.buffer instanceof ArrayBuffer) {
+              const byteOffset = typeof maybe.byteOffset === "number" ? maybe.byteOffset : 0;
+              const byteLength = typeof maybe.byteLength === "number" ? maybe.byteLength : undefined;
+              return new Uint8Array(maybe.buffer, byteOffset, byteLength);
+            }
+          }
+          return null;
+        };
+
+        const describe = (value: unknown) => ({
+          type: typeof value,
+          constructorName: value && typeof value === "object"
+            ? ((value as any).constructor?.name || "Unknown")
+            : "n/a",
+          keys: value && typeof value === "object"
+            ? Object.keys(value as Record<string, unknown>)
+            : [],
+        });
+
+        const readRawCandidate = (label: string, value: unknown) => {
+          if (value == null) return;
+          const converted = toUint8Array(value);
+          if (converted && converted.length > 0) {
+            rawSource = converted;
+            rawSourceOrigin = label;
+            return;
+          }
+
+          const unsupported = describe(value);
+          console.warn(
+            "Unsupported raw source candidate:",
+            label,
+            "type:",
+            unsupported.type,
+            "constructor:",
+            unsupported.constructorName,
+            "keys:",
+            unsupported.keys.join(","),
+          );
+        };
+
         try {
           const messages = await (client as any).fetch(String(targetUid), {
             byUid: true,
@@ -153,26 +202,36 @@ Deno.serve(async (req) => {
             flags: true,
             source: true,
           });
+
           const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
           const msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || fetched[0];
 
           if (msg) {
             envelope = msg.envelope;
             flags = msg.flags || [];
+            msgSourceType = typeof msg.source;
+            msgSourceConstructor = msg.source?.constructor?.name || "undefined";
 
-            if (msg.source instanceof Uint8Array) {
-              rawSource = msg.source;
-            } else if (typeof msg.source === "string") {
-              rawSource = new TextEncoder().encode(msg.source);
-            }
+            readRawCandidate("msg.source", msg.source);
+            if (!rawSource) readRawCandidate("msg.raw", msg.raw);
 
-            console.log("fetch source attempt - hasSource:", !!rawSource, "sourceType:", typeof msg.source, "keys:", Object.keys(msg).join(","));
+            console.log(
+              "fetch source attempt - hasSource:",
+              !!rawSource,
+              "origin:",
+              rawSourceOrigin,
+              "msg.source type:",
+              msgSourceType,
+              "msg.source constructor:",
+              msgSourceConstructor,
+              "keys:",
+              Object.keys(msg).join(","),
+            );
           }
         } catch (e) {
           console.error("fetch source failed:", e);
         }
 
-        // Fallback: try BODY[] if source didn't work
         if (!rawSource) {
           try {
             const messages2 = await (client as any).fetch(String(targetUid), {
@@ -182,6 +241,7 @@ Deno.serve(async (req) => {
               flags: true,
               bodyParts: [""],
             });
+
             const fetched2 = (Array.isArray(messages2) ? messages2 : [messages2]).filter(Boolean);
             const msg2 = fetched2.find((item: any) => Number(item?.uid) === targetUid) || fetched2[0];
 
@@ -189,15 +249,20 @@ Deno.serve(async (req) => {
               if (!envelope) envelope = msg2.envelope;
               if (!flags.length) flags = msg2.flags || [];
 
-              // Try various body part keys
-              const bodyContent = msg2.bodyParts?.get?.("") || msg2.body?.get?.("") || msg2["body[]"];
-              console.log("fallback bodyParts - hasContent:", !!bodyContent, "type:", typeof bodyContent, "keys:", Object.keys(msg2).join(","));
+              if (!rawSource) readRawCandidate("msg2.source", msg2.source);
+              if (!rawSource) readRawCandidate("msg2.raw", msg2.raw);
 
-              if (bodyContent instanceof Uint8Array) {
-                rawSource = bodyContent;
-              } else if (typeof bodyContent === "string") {
-                rawSource = new TextEncoder().encode(bodyContent);
-              }
+              const bodyContent = msg2.bodyParts?.get?.("") || msg2.body?.get?.("") || msg2["body[]"];
+              console.log(
+                "fallback bodyParts - hasContent:",
+                !!bodyContent,
+                "type:",
+                typeof bodyContent,
+                "keys:",
+                Object.keys(msg2).join(","),
+              );
+
+              if (!rawSource) readRawCandidate("msg2.body[]", bodyContent);
             }
           } catch (e2) {
             console.error("fetch bodyParts fallback failed:", e2);
@@ -219,38 +284,51 @@ Deno.serve(async (req) => {
             messageId: "",
             bodyText: "",
             bodyHtml: "",
+            text: "",
+            html: "",
+            hasBody: false,
             notFound: true,
           });
         }
 
-        console.log("rawSource length:", rawSource.length, "first 200 chars:", new TextDecoder().decode(rawSource.slice(0, 200)));
+        const rawPreview = (() => {
+          try {
+            return new TextDecoder().decode(rawSource.slice(0, 300));
+          } catch {
+            return "[raw preview unavailable]";
+          }
+        })();
 
-        // Parse with postal-mime
         const parsed = await PostalMime.parse(rawSource);
 
-        const bodyText = parsed.text || "";
-        const bodyHtml = parsed.html || "";
+        const bodyText = typeof parsed.text === "string" ? parsed.text.trim() : "";
+        const bodyHtml = typeof parsed.html === "string" ? parsed.html.trim() : "";
 
-        // Check attachments for HTML fallback
         let finalHtml = bodyHtml;
         if (!finalHtml && parsed.attachments?.length) {
-          const htmlAttachment = parsed.attachments.find(
-            (a: any) => a.mimeType === "text/html"
-          );
+          const htmlAttachment = parsed.attachments.find((a: any) => a.mimeType === "text/html");
           if (htmlAttachment?.content) {
             finalHtml = new TextDecoder().decode(
               htmlAttachment.content instanceof Uint8Array
                 ? htmlAttachment.content
-                : new Uint8Array(htmlAttachment.content)
-            );
+                : new Uint8Array(htmlAttachment.content),
+            ).trim();
           }
         }
 
-        console.log(
-          "postal-mime result - text:", bodyText.length,
-          "html:", finalHtml.length,
-          "attachments:", (parsed.attachments || []).length,
-        );
+        const hasBody = Boolean(bodyText || finalHtml);
+
+        console.log("--- Email Body Diagnostics ---");
+        console.log("RAW SOURCE ORIGIN:", rawSourceOrigin);
+        console.log("RAW SOURCE LENGTH:", rawSource.length);
+        console.log("RAW EMAIL (first 300 chars):", rawPreview);
+        console.log("PARSED TEXT LENGTH:", parsed.text?.length ?? 0);
+        console.log("PARSED HTML LENGTH:", parsed.html?.length ?? 0);
+        console.log("ATTACHMENTS COUNT:", parsed.attachments?.length ?? 0);
+        console.log("PARSED KEYS:", Object.keys(parsed || {}));
+        console.log("MSG SOURCE TYPE:", msgSourceType);
+        console.log("MSG SOURCE CONSTRUCTOR:", msgSourceConstructor);
+        console.log("------------------------------");
 
         const env = envelope || {};
         const resolvedUid = targetUid;
@@ -279,6 +357,9 @@ Deno.serve(async (req) => {
           messageId: parsed.messageId || env.messageId || "",
           bodyText,
           bodyHtml: finalHtml,
+          text: bodyText,
+          html: finalHtml,
+          hasBody,
         });
       }
 

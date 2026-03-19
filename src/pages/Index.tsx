@@ -77,13 +77,17 @@ function MailApp() {
 
   const buildRenderableEmailBody = (full: any) => {
     const bodyHtml = typeof full?.bodyHtml === 'string' ? full.bodyHtml.trim() : '';
+    const html = typeof full?.html === 'string' ? full.html.trim() : '';
     const bodyText = typeof full?.bodyText === 'string' ? full.bodyText.trim() : '';
+    const text = typeof full?.text === 'string' ? full.text.trim() : '';
 
-    const htmlHasTags = /<\/?[a-z][\s\S]*>/i.test(bodyHtml);
+    const resolvedHtml = bodyHtml || html;
+    const resolvedText = bodyText || text;
+    const htmlHasTags = /<\/?[a-z][\s\S]*>/i.test(resolvedHtml);
 
-    if (bodyHtml && htmlHasTags) return bodyHtml;
-    if (bodyText) {
-      return `<div style="white-space: pre-wrap; line-height: 1.55;">${escapeHtml(bodyText)}</div>`;
+    if (resolvedHtml && htmlHasTags) return resolvedHtml;
+    if (resolvedText) {
+      return `<div style="white-space: pre-wrap; line-height: 1.55;">${escapeHtml(resolvedText)}</div>`;
     }
 
     return settings.language === 'ru'

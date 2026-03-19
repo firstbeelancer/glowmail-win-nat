@@ -243,11 +243,21 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const loadFolders = useCallback(async () => {
     try {
       const remoteFolders = await mailApi.fetchFolders();
-      const mapped: Folder[] = remoteFolders.map((f: any) => ({
-        id: f.path || f.name,
-        name: decodeModifiedUtf7(f.name.split('/').pop() || f.name),
-        icon: folderIcon(f.name),
-      }));
+      const mapped: Folder[] = remoteFolders.map((f: any) => {
+        const flags = (f.flags || []).join(' ').toLowerCase();
+        let icon = 'folder';
+        if (f.name === 'INBOX') icon = 'inbox';
+        else if (flags.includes('sent')) icon = 'send';
+        else if (flags.includes('drafts')) icon = 'file';
+        else if (flags.includes('junk')) icon = 'alert-circle';
+        else if (flags.includes('trash')) icon = 'trash-2';
+        else icon = folderIcon(f.name);
+        return {
+          id: f.path || f.name,
+          name: decodeModifiedUtf7(f.name.split('/').pop() || f.name),
+          icon,
+        };
+      });
       if (mapped.length > 0) {
         setFolders(mapped);
       }

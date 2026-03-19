@@ -428,9 +428,53 @@ export function MailProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const hasCreds = !!localStorage.getItem('glowmail_credentials');
     if (hasCreds) {
+      // Clear search when folder changes
+      setSearchQuery('');
+      setIsSearchActive(false);
       fetchEmails();
     }
   }, [currentFolder]);
+
+  // Server-side search with debounce
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    if (!searchQuery.trim()) {
+      // Restore regular emails when search is cleared
+      if (isSearchActive) {
+        setIsSearchActive(false);
+        setSearchResultCount(0);
+        setEmails(regularEmails);
+      }
+      return;
+    }
+
+    searchTimerRef.current = setTimeout(async () => {
+      const hasCreds = !!localStorage.getItem('glowmail_credentials');
+      if (!hasCreds) return;
+
+      setIsSearching(true);
+      try {
+        // Save current emails before search if not already saved
+        if (!isSearchActive) {
+          setRegularEmails(emails);
+        }
+        const data = await mailApi.searchEmails(currentFolder, searchQuery.trim());
+        const mapped = mapMessages(data, currentFolder);
+        setEmails(mapped);
+        setIsSearchActive(true);
+        setSearchResultCount(data.total || mapped.length);
+      } catch (e: any) {
+        console.error('Search error:', e);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500);
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery]);
 
   // Auto-sync interval
   useEffect(() => {
@@ -438,10 +482,10 @@ export function MailProvider({ children }: { children: ReactNode }) {
     if (interval <= 0) return;
     const timer = setInterval(() => {
       const hasCreds = !!localStorage.getItem('glowmail_credentials');
-      if (hasCreds) fetchEmails();
+      if (hasCreds && !isSearchActive) fetchEmails();
     }, interval * 60 * 1000);
     return () => clearInterval(timer);
-  }, [settings.syncInterval, fetchEmails]);
+  }, [settings.syncInterval, fetchEmails, isSearchActive]);
 
   const markAsRead = (id: string) => {
     const uid = Number(id);

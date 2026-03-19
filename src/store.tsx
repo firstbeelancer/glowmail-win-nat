@@ -154,9 +154,13 @@ type MailContextType = {
   addContact: (contact: Contact) => void;
   updateSettings: (settings: Partial<UserSettings>) => void;
   fetchEmails: () => Promise<void>;
+  loadMoreEmails: () => Promise<void>;
   addFolder: (name: string) => void;
   updateEmailTags: (id: string, tags: string[]) => void;
   isLoading: boolean;
+  isLoadingMore: boolean;
+  hasMoreEmails: boolean;
+  totalEmails: number;
   isConnected: boolean;
   connectionError: string | null;
   allFoldersFlat: Folder[];
@@ -171,8 +175,12 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const [currentFolder, setCurrentFolder] = useState<string>('INBOX');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalEmails, setTotalEmails] = useState(0);
+  const [hasMoreEmails, setHasMoreEmails] = useState(false);
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('glowmail_settings');
     let parsedSettings: Partial<UserSettings> = {};
@@ -309,58 +317,96 @@ export function MailProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const mapMessages = useCallback((data: any, folder: string): Email[] => {
+    return (data.emails || [])
+      .filter((msg: any) => msg.uid)
+      .map((msg: any) => ({
+        id: String(msg.uid),
+        folderId: folder,
+        from: { id: msg.from?.email || '', name: decodeMime(msg.from?.name || ''), email: msg.from?.email || '' },
+        to: (msg.to || []).map((a: any) => ({ id: a.email, name: decodeMime(a.name), email: a.email })),
+        cc: (msg.cc || []).map((a: any) => ({ id: a.email, name: decodeMime(a.name), email: a.email })),
+        subject: decodeMime(msg.subject || '(No Subject)'),
+        snippet: decodeMime(msg.subject || ''),
+        body: '',
+        date: msg.date || new Date().toISOString(),
+        read: (msg.flags || []).includes('\\Seen'),
+        starred: (msg.flags || []).includes('\\Flagged'),
+        tags: [],
+        attachments: [],
+        headers: { messageId: msg.messageId || '', inReplyTo: msg.inReplyTo || '' },
+      }));
+  }, []);
+
+  const collectContacts = useCallback((mapped: Email[]) => {
+    const newContacts: Contact[] = [];
+    mapped.forEach(e => {
+      [e.from, ...(e.to || []), ...(e.cc || [])].forEach(c => {
+        if (c.email && !newContacts.find(x => x.email === c.email) && c.email !== settings.account.email) {
+          newContacts.push(c);
+        }
+      });
+    });
+    setContacts(prev => {
+      const merged = [...prev];
+      newContacts.forEach(c => {
+        if (!merged.find(x => x.email === c.email)) merged.push(c);
+      });
+      return merged;
+    });
+  }, [settings.account.email]);
+
+  const PAGE_SIZE = 50;
+
   const fetchEmails = useCallback(async () => {
     setIsLoading(true);
     setConnectionError(null);
     try {
       await loadFolders();
       
-      const data = await mailApi.fetchEmailList(currentFolder, 1, 50);
-      const mapped: Email[] = (data.emails || [])
-        .filter((msg: any) => msg.uid) // Skip messages without UID
-        .map((msg: any) => ({
-          id: String(msg.uid),
-          folderId: currentFolder,
-          from: { id: msg.from?.email || '', name: decodeMime(msg.from?.name || ''), email: msg.from?.email || '' },
-          to: (msg.to || []).map((a: any) => ({ id: a.email, name: decodeMime(a.name), email: a.email })),
-          cc: (msg.cc || []).map((a: any) => ({ id: a.email, name: decodeMime(a.name), email: a.email })),
-          subject: decodeMime(msg.subject || '(No Subject)'),
-          snippet: decodeMime(msg.subject || ''),
-          body: '',
-          date: msg.date || new Date().toISOString(),
-          read: (msg.flags || []).includes('\\Seen'),
-          starred: (msg.flags || []).includes('\\Flagged'),
-          tags: [],
-          attachments: [],
-          headers: { messageId: msg.messageId || '', inReplyTo: msg.inReplyTo || '' },
-        }));
+      const data = await mailApi.fetchEmailList(currentFolder, 1, PAGE_SIZE);
+      const mapped = mapMessages(data, currentFolder);
       
+      const total = data.total || 0;
       setEmails(mapped);
+      setCurrentPage(1);
+      setTotalEmails(total);
+      setHasMoreEmails(mapped.length < total);
       setIsConnected(true);
       
-      // Collect contacts
-      const newContacts: Contact[] = [];
-      mapped.forEach(e => {
-        [e.from, ...(e.to || []), ...(e.cc || [])].forEach(c => {
-          if (c.email && !newContacts.find(x => x.email === c.email) && c.email !== settings.account.email) {
-            newContacts.push(c);
-          }
-        });
-      });
-      setContacts(prev => {
-        const merged = [...prev];
-        newContacts.forEach(c => {
-          if (!merged.find(x => x.email === c.email)) merged.push(c);
-        });
-        return merged;
-      });
+      collectContacts(mapped);
     } catch (e: any) {
       console.error('fetchEmails error:', e);
       setConnectionError(e.message || 'Connection failed');
     } finally {
       setIsLoading(false);
     }
-  }, [currentFolder, settings.account.email, loadFolders]);
+  }, [currentFolder, loadFolders, mapMessages, collectContacts]);
+
+  const loadMoreEmails = useCallback(async () => {
+    if (isLoadingMore || !hasMoreEmails) return;
+    setIsLoadingMore(true);
+    try {
+      const nextPage = currentPage + 1;
+      const data = await mailApi.fetchEmailList(currentFolder, nextPage, PAGE_SIZE);
+      const mapped = mapMessages(data, currentFolder);
+      
+      setEmails(prev => {
+        const existingIds = new Set(prev.map(e => e.id));
+        const newEmails = mapped.filter(e => !existingIds.has(e.id));
+        return [...prev, ...newEmails];
+      });
+      setCurrentPage(nextPage);
+      const totalLoaded = currentPage * PAGE_SIZE + mapped.length;
+      setHasMoreEmails(totalLoaded < (data.total || totalEmails));
+      
+      collectContacts(mapped);
+    } catch (e: any) {
+      console.error('loadMoreEmails error:', e);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [currentFolder, currentPage, isLoadingMore, hasMoreEmails, totalEmails, mapMessages, collectContacts]);
 
   // Auto-fetch on mount and folder change
   useEffect(() => {
@@ -568,14 +614,18 @@ export function MailProvider({ children }: { children: ReactNode }) {
       addContact,
       updateSettings,
       fetchEmails,
+      loadMoreEmails,
       addFolder,
       updateEmailTags,
       isLoading,
+      isLoadingMore,
+      hasMoreEmails,
+      totalEmails,
       isConnected,
       connectionError,
       allFoldersFlat,
     }),
-    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isConnected, connectionError, fetchEmails, allFoldersFlat]
+    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isLoadingMore, hasMoreEmails, totalEmails, isConnected, connectionError, fetchEmails, loadMoreEmails, allFoldersFlat]
   );
 
   return <MailContext.Provider value={value}>{children}</MailContext.Provider>;

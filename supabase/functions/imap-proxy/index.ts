@@ -575,7 +575,7 @@ Deno.serve(async (req) => {
         const { folder = "INBOX", query: searchQuery, page = 1, pageSize = 30 } = body;
         if (!searchQuery || typeof searchQuery !== "string") return err("Missing query", 400);
 
-        await client.selectMailbox(folder);
+        const mailboxStatus = await client.selectMailbox(folder);
 
         const term = searchQuery.trim();
         const safePage = Math.max(1, Number(page) || 1);

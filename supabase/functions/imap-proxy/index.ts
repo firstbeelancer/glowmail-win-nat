@@ -175,7 +175,7 @@ Deno.serve(async (req) => {
 
         if (!msg) {
           try {
-            const allUidResults = await client.search({ all: true }, true);
+            const allUidResults = await client.search({ all: true });
             const allUids = (Array.isArray(allUidResults) ? allUidResults : [allUidResults])
               .map((value: unknown) => Number(value))
               .filter((value) => Number.isFinite(value) && value > 0);

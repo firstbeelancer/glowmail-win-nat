@@ -572,46 +572,66 @@ Deno.serve(async (req) => {
       }
 
       case "search": {
-        const { folder = "INBOX", query: searchQuery } = body;
+        const { folder = "INBOX", query: searchQuery, page = 1, pageSize = 30 } = body;
         if (!searchQuery || typeof searchQuery !== "string") return err("Missing query", 400);
 
         await client.selectMailbox(folder);
 
-        // Build IMAP SEARCH criteria — search across subject, from, to, cc, body
         const term = searchQuery.trim();
-        // Use OR chains: SUBJECT, FROM, TO, CC, BODY, TEXT
-        // deno-imap search accepts criteria objects
-        // We'll use the TEXT criterion which searches entire message (headers + body)
-        // and also OR with specific fields for better coverage
+        const safePage = Math.max(1, Number(page) || 1);
+        const safePageSize = Math.min(50, Math.max(1, Number(pageSize) || 30));
+
+        // Search by metadata only (subject + from + to + cc) — no heavy body/TEXT scan
         let uids: number[] = [];
         try {
-          // Try TEXT search first (searches entire message including headers and body)
-          const searchResult = await (client as any).search({ text: term }, { byUid: true });
-          uids = Array.isArray(searchResult) ? searchResult.map(Number).filter(Number.isFinite) : [];
-        } catch (e) {
-          console.error("IMAP TEXT search failed, trying OR approach:", e);
-          // Fallback: search by subject only
+          const subjectResult = await (client as any).search({ subject: term }, { byUid: true });
+          const subjectUids = Array.isArray(subjectResult) ? subjectResult.map(Number).filter(Number.isFinite) : [];
+          
+          let fromUids: number[] = [];
           try {
-            const searchResult = await (client as any).search({ subject: term }, { byUid: true });
-            uids = Array.isArray(searchResult) ? searchResult.map(Number).filter(Number.isFinite) : [];
-          } catch (e2) {
-            console.error("IMAP SUBJECT search also failed:", e2);
-          }
+            const fromResult = await (client as any).search({ from: term }, { byUid: true });
+            fromUids = Array.isArray(fromResult) ? fromResult.map(Number).filter(Number.isFinite) : [];
+          } catch { /* skip */ }
+
+          let toUids: number[] = [];
+          try {
+            const toResult = await (client as any).search({ to: term }, { byUid: true });
+            toUids = Array.isArray(toResult) ? toResult.map(Number).filter(Number.isFinite) : [];
+          } catch { /* skip */ }
+
+          let ccUids: number[] = [];
+          try {
+            const ccResult = await (client as any).search({ cc: term }, { byUid: true });
+            ccUids = Array.isArray(ccResult) ? ccResult.map(Number).filter(Number.isFinite) : [];
+          } catch { /* skip */ }
+
+          const uidSet = new Set([...subjectUids, ...fromUids, ...toUids, ...ccUids]);
+          uids = Array.from(uidSet);
+        } catch (e) {
+          console.error("IMAP metadata search failed:", e);
         }
 
         if (uids.length === 0) {
           await client.disconnect();
           client = null;
-          return ok({ emails: [], total: 0 });
+          return ok({ emails: [], total: 0, page: safePage, pageSize: safePageSize, hasMore: false });
         }
 
-        // Sort UIDs descending (newest first) and limit to reasonable amount
         uids.sort((a, b) => b - a);
-        const limitedUids = uids.slice(0, 30);
+        const totalFound = uids.length;
 
-        // Fetch envelope data for found UIDs
-        const uidSet = limitedUids.join(",");
-        const messages = await (client as any).fetch(uidSet, {
+        const startIdx = (safePage - 1) * safePageSize;
+        const paginatedUids = uids.slice(startIdx, startIdx + safePageSize);
+        const hasMore = startIdx + safePageSize < totalFound;
+
+        if (paginatedUids.length === 0) {
+          await client.disconnect();
+          client = null;
+          return ok({ emails: [], total: totalFound, page: safePage, pageSize: safePageSize, hasMore: false });
+        }
+
+        const uidSetStr = paginatedUids.join(",");
+        const messages = await (client as any).fetch(uidSetStr, {
           byUid: true,
           uid: true,
           envelope: true,
@@ -622,13 +642,13 @@ Deno.serve(async (req) => {
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
 
-        // Reuse extractAttachments helper from list action
         const extractSearchAttachments = (bs: any): { name: string; size: number; type: string }[] => {
           if (!bs) return [];
           const atts: { name: string; size: number; type: string }[] = [];
           const walk = (node: any) => {
             if (!node) return;
-            const disposition = (node.disposition || node.contentDisposition || '').toLowerCase();
+            const rawDisp = node.disposition || node.contentDisposition || '';
+            const disposition = (typeof rawDisp === 'string' ? rawDisp : rawDisp?.type || '').toString().toLowerCase();
             const nodeType = node.type || node.mediaType || '';
             const nodeSubtype = node.subtype || node.mediaSubtype || '';
             const mimeType = `${nodeType}/${nodeSubtype}`.toLowerCase();
@@ -636,12 +656,14 @@ Deno.serve(async (req) => {
               || node.parameters?.name
               || node.contentDispositionParameters?.filename
               || node.attrs?.name
+              || (typeof rawDisp === 'object' && rawDisp?.params?.filename)
               || '';
             const isTextBody = ['text/plain', 'text/html'].includes(mimeType);
+            const isMultipart = mimeType.startsWith('multipart/') || mimeType.startsWith('message/');
             const isAttachment = disposition === 'attachment' ||
               (disposition === 'inline' && node.id && mimeType.startsWith('image/')) ||
               (filename && !isTextBody) ||
-              (!isTextBody && !mimeType.startsWith('multipart/') && !mimeType.startsWith('message/') && mimeType !== '/' && disposition !== '' && disposition !== 'inline');
+              (!isTextBody && !isMultipart && mimeType !== '/' && nodeType !== '' && disposition !== '' && disposition !== 'inline');
             if (isAttachment) {
               atts.push({ name: filename || 'unnamed', size: node.size || 0, type: mimeType });
             }
@@ -677,7 +699,7 @@ Deno.serve(async (req) => {
 
         await client.disconnect();
         client = null;
-        return ok({ emails, total: uids.length });
+        return ok({ emails, total: totalFound, page: safePage, pageSize: safePageSize, hasMore });
       }
 
       case "delete": {

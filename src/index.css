@@ -135,6 +135,15 @@ select option {
   padding: 8px;
 }
 
+/* Settings modal dropdown overrides — ensure all selects match the unified style */
+select {
+  background-color: hsl(var(--zinc-900) / 0.5);
+  border: 1px solid hsl(var(--zinc-800));
+  border-radius: 12px;
+  color: hsl(var(--zinc-100));
+  font-size: 14px;
+}
+
 /* Unified dropdown menus */
 .glow-dropdown {
   background: hsl(var(--zinc-900));

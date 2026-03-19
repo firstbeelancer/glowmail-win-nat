@@ -168,6 +168,8 @@ type MailContextType = {
   isSearching: boolean;
   isSearchActive: boolean;
   searchResultCount: number;
+  hasMoreSearchResults: boolean;
+  searchError: string | null;
 };
 
 const MailContext = createContext<MailContextType | undefined>(undefined);

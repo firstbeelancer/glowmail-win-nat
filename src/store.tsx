@@ -381,6 +381,12 @@ export function MailProvider({ children }: { children: ReactNode }) {
     });
   }, [settings.account.email]);
 
+  // Helper: update both folderEmails and searchResults for mutations (read/star/delete/tags)
+  const updateBothEmailStates = useCallback((updater: (prev: Email[]) => Email[]) => {
+    setFolderEmails(updater);
+    setSearchResults(updater);
+  }, []);
+
   const PAGE_SIZE = 50;
   const SEARCH_PAGE_SIZE = 30;
 

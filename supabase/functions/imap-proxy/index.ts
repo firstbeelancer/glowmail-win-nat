@@ -150,16 +150,13 @@ Deno.serve(async (req) => {
           return atts;
         };
 
-        // Debug: log structure for first 3 messages
-        normalized.slice(0, 3).forEach((msg: any) => {
+        // Debug: log structure for first 5 messages to understand attachment detection
+        normalized.slice(0, 5).forEach((msg: any) => {
           const bs = msg?.bodyStructure;
-          console.log(`MSG uid=${msg?.uid} hasBS=${!!bs} bsType=${typeof bs} hasParts=${!!msg?.parts} partsLen=${Array.isArray(msg?.parts) ? msg.parts.length : 'n/a'}`);
-          if (bs) {
-            try { console.log(`BS uid=${msg.uid}:`, JSON.stringify(bs).slice(0, 3000)); } catch {}
-          }
-          if (Array.isArray(msg?.parts) && msg.parts.length > 0) {
-            try { console.log(`PARTS uid=${msg.uid}:`, JSON.stringify(msg.parts.map((p: any) => ({ type: p.type, subtype: p.subtype, disposition: p.disposition, filename: p.filename, size: p.size, encoding: p.encoding, keys: Object.keys(p) }))).slice(0, 3000)); } catch {}
-          }
+          const bsStr = bs ? JSON.stringify(bs) : 'null';
+          const hdrs = msg?.headers;
+          const contentType = hdrs?.get?.('content-type') || hdrs?.['content-type'] || (typeof hdrs === 'object' && hdrs !== null ? JSON.stringify(Object.keys(hdrs)).slice(0,200) : typeof hdrs);
+          console.log(`DIAG uid=${msg?.uid} size=${msg?.size} bsLen=${bsStr.length} bs=${bsStr.slice(0,300)} hdrsType=${typeof hdrs} ct=${contentType}`);
         });
 
         const emails = normalized

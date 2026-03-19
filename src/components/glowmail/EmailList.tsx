@@ -12,6 +12,7 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
   const lang = settings.language;
   const [sortBy, setSortBy] = useState<'date' | 'sender' | 'subject' | 'tags' | 'unread'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [starredOnly, setStarredOnly] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [tagPickerOpenId, setTagPickerOpenId] = useState<string | null>(null);
   const prevFolderRef = useRef(currentFolder);

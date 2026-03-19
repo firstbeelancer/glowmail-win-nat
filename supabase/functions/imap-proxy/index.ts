@@ -148,8 +148,8 @@ Deno.serve(async (req) => {
             uid: true,
             envelope: true,
             flags: true,
-            bodyParts: ["HEADER", "TEXT"],
-            full: true,
+            size: true,
+            bodyParts: ["HEADER", "TEXT", "1", "1.1", "1.2", "2", "2.1"],
           });
         } catch (fetchErr) {
           console.error("fetch with bodyParts failed, retrying with full only:", fetchErr);

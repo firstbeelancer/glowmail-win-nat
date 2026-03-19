@@ -339,12 +339,11 @@ Deno.serve(async (req) => {
               if (!envelope) envelope = msg2.envelope;
               if (!flags.length) flags = msg2.flags || [];
 
-              if (!rawSource) readRawCandidate("msg2.raw", msg2.raw);
-              if (!rawSource) readRawCandidate("msg2.source", msg2.source);
+              if (!rawSource) await readRawCandidate("msg2.raw", msg2.raw);
+              if (!rawSource) await readRawCandidate("msg2.source", msg2.source);
               if (!rawSource && msg2.parts) {
-                // deno-imap may put raw content in parts
                 const textPart = msg2.parts?.find?.((p: any) => p.body);
-                if (textPart?.body) readRawCandidate("msg2.parts[].body", textPart.body);
+                if (textPart?.body) await readRawCandidate("msg2.parts[].body", textPart.body);
               }
 
               const bodyContent = msg2.bodyParts?.get?.("") || msg2.body?.get?.("") || msg2["body[]"];

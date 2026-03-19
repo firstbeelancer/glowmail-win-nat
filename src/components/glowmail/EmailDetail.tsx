@@ -343,9 +343,12 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
                 {email.from.name.charAt(0).toUpperCase()}
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-zinc-100">{email.from.name}</span>
                   <span className="text-sm text-zinc-500">&lt;{email.from.email}&gt;</span>
+                  <span className="hidden md:inline text-sm text-zinc-500">
+                    {format(new Date(email.date), 'MMM d, yyyy, h:mm a')}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-zinc-500 mt-0.5">
                   <span>to {email.to.map((t) => t.name).join(', ')}</span>
@@ -356,11 +359,11 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
                     {showHeaders ? t('emailDetail.hideDetails', lang) : t('emailDetail.showDetails', lang)}
                   </button>
                 </div>
+                <span className="md:hidden text-xs text-zinc-500 mt-1 block">
+                  {format(new Date(email.date), 'MMM d, yyyy, h:mm a')}
+                </span>
               </div>
             </div>
-            <span className="text-sm text-zinc-500">
-              {format(new Date(email.date), 'MMM d, yyyy, h:mm a')}
-            </span>
           </div>
 
           <AnimatePresence>

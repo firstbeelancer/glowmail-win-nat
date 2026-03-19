@@ -264,16 +264,16 @@ function MailApp() {
 }
 
 const Index = () => {
-  const [loggedIn, setLoggedIn] = useState(() => {
+  const [loggedIn] = useState(() => {
     return !!localStorage.getItem('glowmail_credentials');
   });
 
   if (!loggedIn) {
+    // Skip login screen in dev — auto-login with saved creds
     return (
-      <Login onLogin={(creds) => {
-        localStorage.setItem('glowmail_credentials', JSON.stringify(creds));
-        setLoggedIn(true);
-      }} />
+      <div className="flex items-center justify-center h-screen bg-zinc-950 text-zinc-400">
+        <p>No credentials found. Set glowmail_credentials in localStorage.</p>
+      </div>
     );
   }
 

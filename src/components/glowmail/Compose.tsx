@@ -364,9 +364,52 @@ export function Compose({
               </select>
             </div>
           </div>
-        </div>
 
-        {/* Toolbar */}
+          {/* Tags Row */}
+          <div className="flex items-center px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/10 shrink-0">
+            <span className="text-zinc-500 text-sm w-16">{t('compose.tagsLabel', lang)}</span>
+            <div className="flex items-center gap-2 flex-wrap flex-1">
+              {emailTags.map(tag => {
+                const tagDef = settings.availableTags.find(t => t.name === tag);
+                return (
+                  <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-zinc-800/80 text-zinc-300 border border-zinc-700/50">
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tagDef?.color || '#10b981' }} />
+                    {tag}
+                    <button onClick={() => setEmailTags(prev => prev.filter(t => t !== tag))} className="ml-0.5 text-zinc-500 hover:text-red-400">×</button>
+                  </span>
+                );
+              })}
+              <div className="relative">
+                <button
+                  onClick={() => setShowTagPicker(!showTagPicker)}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                >
+                  <Tag className="w-3 h-3" />
+                  +
+                </button>
+                {showTagPicker && (
+                  <div className="absolute left-0 top-full mt-1 w-40 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
+                    <div className="p-1.5 flex flex-col max-h-48 overflow-y-auto">
+                      {settings.availableTags.filter(t => !emailTags.includes(t.name)).map(tag => (
+                        <button
+                          key={tag.id}
+                          onClick={() => {
+                            setEmailTags(prev => [...prev, tag.name]);
+                            setShowTagPicker(false);
+                          }}
+                          className="flex items-center gap-2 text-left px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 rounded-lg transition-colors"
+                        >
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                          {tag.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
         <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/30 shrink-0 overflow-visible relative">
           <select 
             onChange={(e) => execCommand('fontName', e.target.value)}

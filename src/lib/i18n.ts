@@ -160,6 +160,8 @@ const translations = {
     'settings.syncDesc': 'How often to automatically check for new mail.',
     'settings.keepFilters': 'Keep filters across folders',
     'settings.keepFiltersDesc': 'Preserve sort order and filters when switching between folders.',
+    'settings.aiEnabled': 'Enable AI features',
+    'settings.aiEnabledDesc': 'AI-powered quick replies, text rewriting, spell check and translation.',
     'settings.groupBy': 'Group Emails By',
     'settings.groupNone': 'No grouping',
     'settings.groupDate': 'Date',

@@ -557,6 +557,8 @@ export function MailProvider({ children }: { children: ReactNode }) {
       markAsRead,
       toggleStar,
       deleteEmail: handleDeleteEmail,
+      moveEmailToFolder,
+      copyEmailToFolder,
       sendEmail: handleSendEmail,
       saveDraft,
       addContact,
@@ -567,8 +569,9 @@ export function MailProvider({ children }: { children: ReactNode }) {
       isLoading,
       isConnected,
       connectionError,
+      allFoldersFlat,
     }),
-    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isConnected, connectionError, fetchEmails]
+    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isConnected, connectionError, fetchEmails, allFoldersFlat]
   );
 
   return <MailContext.Provider value={value}>{children}</MailContext.Provider>;

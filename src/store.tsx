@@ -335,7 +335,13 @@ export function MailProvider({ children }: { children: ReactNode }) {
         read: (msg.flags || []).includes('\\Seen'),
         starred: (msg.flags || []).includes('\\Flagged'),
         tags: [],
-        attachments: [],
+        attachments: (msg.attachments || []).map((att: any, i: number) => ({
+          id: `att-${msg.uid}-${i}`,
+          name: decodeMime(att.name || 'unnamed'),
+          size: att.size || 0,
+          type: att.type || 'application/octet-stream',
+          url: '',
+        })),
         headers: { messageId: msg.messageId || '', inReplyTo: msg.inReplyTo || '' },
       }));
   }, []);

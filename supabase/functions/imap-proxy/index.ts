@@ -104,20 +104,34 @@ Deno.serve(async (req) => {
           const atts: { name: string; size: number; type: string }[] = [];
           const walk = (node: any) => {
             if (!node) return;
-            const disposition = (node.disposition || '').toLowerCase();
-            const mimeType = `${node.type || ''}/${node.subtype || ''}`.toLowerCase();
+            // Handle both possible field names from different IMAP libs
+            const disposition = (node.disposition || node.contentDisposition || '').toLowerCase();
+            const nodeType = node.type || node.mediaType || '';
+            const nodeSubtype = node.subtype || node.mediaSubtype || '';
+            const mimeType = `${nodeType}/${nodeSubtype}`.toLowerCase();
+            const filename = node.dispositionParameters?.filename 
+              || node.parameters?.name 
+              || node.contentDispositionParameters?.filename
+              || node.attrs?.name
+              || '';
+
+            const isTextBody = ['text/plain', 'text/html'].includes(mimeType);
             const isAttachment = disposition === 'attachment' ||
               (disposition === 'inline' && node.id && mimeType.startsWith('image/')) ||
-              (node.parameters?.name && !['text/plain', 'text/html'].includes(mimeType));
+              (filename && !isTextBody) ||
+              (!isTextBody && !mimeType.startsWith('multipart/') && !mimeType.startsWith('message/') && mimeType !== '/' && disposition !== '' && disposition !== 'inline');
+
             if (isAttachment) {
               atts.push({
-                name: node.dispositionParameters?.filename || node.parameters?.name || 'unnamed',
+                name: filename || 'unnamed',
                 size: node.size || 0,
                 type: mimeType,
               });
             }
-            if (node.childNodes) {
-              node.childNodes.forEach(walk);
+            // Walk children in various structures
+            const children = node.childNodes || node.parts || node.body;
+            if (Array.isArray(children)) {
+              children.forEach(walk);
             }
           };
           walk(bs);

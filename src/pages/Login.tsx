@@ -63,7 +63,7 @@ export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) 
   const detectedProvider = preset ? (email.split('@')[1]) : null;
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center relative overflow-hidden">
+    <div className="min-h-screen w-full flex flex-col items-end justify-end pb-12 relative overflow-hidden">
       {/* Background */}
       <img
         src={loginBg}

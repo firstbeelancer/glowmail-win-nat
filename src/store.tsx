@@ -526,7 +526,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [searchQuery, currentFolder, mapMessages, isSearchActive, emails, regularEmails]);
+  }, [searchQuery, currentFolder, mapMessages, isSearchActive, emails]);
 
   // Auto-sync interval
   useEffect(() => {

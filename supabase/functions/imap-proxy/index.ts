@@ -559,6 +559,21 @@ Deno.serve(async (req) => {
           };
         };
 
+        const headersToString = (input: unknown): string => {
+          if (!input) return "";
+          if (typeof input === "string") return input;
+          if (Array.isArray(input)) return input.map((line) => String(line)).join("\n");
+          if (typeof input === "object") {
+            return Object.entries(input as Record<string, unknown>)
+              .map(([key, value]) => {
+                if (Array.isArray(value)) return `${key}: ${value.map((v) => String(v)).join(", ")}`;
+                return `${key}: ${String(value ?? "")}`;
+              })
+              .join("\n");
+          }
+          return String(input);
+        };
+
         const extractFromParts = (parts: unknown): { text: string; html: string } => {
           if (!parts || typeof parts !== "object") return { text: "", html: "" };
           let text = "";
@@ -570,15 +585,16 @@ Deno.serve(async (req) => {
             if (!rawField) continue;
 
             const meta = findPartMeta(partKey);
-            const headersRaw = String(value?.headers || value?.header || "");
+            const headersRaw = headersToString(value?.headers || value?.header || "");
             const headers = headersRaw.toLowerCase();
 
-            const charset = meta?.charset || extractCharset(headers) || "utf-8";
-            const encoding = meta?.encoding || extractEncoding(headers) || "7bit";
+            const headerCharset = extractCharset(headersRaw);
+            const charset = normalizeCharset(meta?.charset || headerCharset || "utf-8");
+            const encoding = (meta?.encoding || extractEncoding(headers) || "7bit").toLowerCase();
             const isHtmlPart = meta ? (meta.subtype === "html") : headers.includes("text/html");
             const isPlainPart = meta ? (meta.subtype === "plain") : headers.includes("text/plain");
 
-            let rawBytes: Uint8Array | null = null;
+            let rawBytes: Uint8Array;
             let rawSource = "";
 
             if (rawField instanceof Uint8Array) {
@@ -586,38 +602,42 @@ Deno.serve(async (req) => {
               rawSource = new TextDecoder("latin1").decode(rawField);
             } else if (typeof rawField === "string") {
               rawSource = rawField;
+              rawBytes = Uint8Array.from(rawSource, (ch) => ch.charCodeAt(0) & 0xff);
             } else {
               continue;
             }
 
+            const metaCharset = extractCharsetFromHtmlMeta(rawSource) || undefined;
+            const charsetHints = [headerCharset, metaCharset].filter(Boolean) as string[];
+
             let decoded = rawSource;
-            if (encoding === "base64") {
-              decoded = decodeContent(rawSource, "base64", charset);
-            } else if (encoding === "quoted-printable") {
-              decoded = decodeContent(rawSource, "quoted-printable", charset);
-            } else if (rawBytes) {
-              try {
-                decoded = new TextDecoder(charset).decode(rawBytes);
-              } catch {
-                try { decoded = new TextDecoder("utf-8").decode(rawBytes); } catch { decoded = rawSource; }
-              }
+            if (encoding === "base64" || isLikelyBase64(rawSource)) {
+              decoded = decodeContent(rawSource, "base64", charset, charsetHints);
+            } else if (encoding === "quoted-printable" || looksLikeQuotedPrintable(rawSource)) {
+              decoded = decodeContent(rawSource, "quoted-printable", charset, charsetHints);
+            } else {
+              decoded = decodeWithBestCharset(rawBytes, charset, charsetHints);
             }
 
-            decoded = decodeHeuristically(decoded, charset);
+            decoded = decodeHeuristically(decoded, charset, charsetHints);
 
             const recovered = extractMimeFromBlob(decoded);
-            if (recovered.html && !html) html = recovered.html;
-            if (recovered.text && !text) text = recovered.text;
+            if (recovered.html) {
+              if (!html || scoreDecodedText(recovered.html) > scoreDecodedText(html)) html = recovered.html;
+            }
+            if (recovered.text) {
+              if (!text || scoreDecodedText(recovered.text) > scoreDecodedText(text)) text = recovered.text;
+            }
             if (recovered.html || recovered.text) continue;
 
             const candidate = decoded;
             const looksHtml = /<\/?[a-z][\s\S]*>/i.test(candidate);
             const hasMimeMarkers = looksLikeMimeBlob(candidate);
 
-            if (!hasMimeMarkers && (isHtmlPart || (!isPlainPart && looksHtml)) && !html) {
-              html = candidate;
-            } else if (!text) {
-              text = candidate;
+            if (!hasMimeMarkers && (isHtmlPart || (!isPlainPart && looksHtml))) {
+              if (!html || scoreDecodedText(candidate) > scoreDecodedText(html)) html = candidate;
+            } else {
+              if (!text || scoreDecodedText(candidate) > scoreDecodedText(text)) text = candidate;
             }
           }
 

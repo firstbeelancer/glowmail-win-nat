@@ -8,7 +8,7 @@ import { motion } from 'framer-motion';
 import { t } from '@/lib/i18n';
 
 export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) => void, onEditDraft?: (email: Email) => void }) {
-  const { emails, currentFolder, searchQuery, toggleStar, deleteEmail, settings, updateEmailTags } = useMail();
+  const { emails, currentFolder, searchQuery, toggleStar, deleteEmail, settings, updateEmailTags, isLoading, connectionError, fetchEmails } = useMail();
   const lang = settings.language;
   const [sortBy, setSortBy] = useState<'date' | 'sender' | 'subject' | 'tags' | 'unread'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');

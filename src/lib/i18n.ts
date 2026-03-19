@@ -341,6 +341,7 @@ const translations = {
     'settings.ldapLoading': 'Загрузка...',
     'settings.ldapSection': 'Адресная книга LDAP',
     'layout.openInWindow': 'Открыть в новом окне',
+    'compose.tagsLabel': 'Теги:',
   },
 } as const;
 

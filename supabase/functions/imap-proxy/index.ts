@@ -270,6 +270,7 @@ Deno.serve(async (req) => {
             uid: true,
             envelope: true,
             flags: true,
+            size: true,
             source: true,
           });
 

@@ -13,6 +13,11 @@ const translations = {
     'layout.folderPlaceholder': 'e.g., Work, Personal, Receipts',
     'layout.cancel': 'Cancel',
     'layout.create': 'Create',
+    'layout.addressBook': 'Address Book',
+    'layout.noContacts': 'No contacts yet.',
+    'layout.addContact': 'Add Contact',
+    'layout.contactName': 'Name',
+    'layout.contactEmail': 'Email',
 
     // Folder names
     'folder.inbox': 'Inbox',

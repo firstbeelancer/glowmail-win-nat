@@ -474,7 +474,10 @@ export function Compose({
             <input type="color" onChange={(e) => execCommand('hiliteColor', e.target.value)} className="w-6 h-6 p-0 border-0 rounded cursor-pointer bg-transparent" title={t('compose.highlightColor', lang)} />
           </div>
           <div className="w-px h-4 bg-zinc-800 mx-1" />
-          <button onClick={() => {}} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"><Link className="w-4 h-4" /></button>
+          <button onClick={() => {
+            const url = prompt(lang === 'ru' ? 'Введите URL:' : 'Enter URL:');
+            if (url) execCommand('createLink', url);
+          }} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"><Link className="w-4 h-4" /></button>
           <input
             type="file"
             accept="image/*"

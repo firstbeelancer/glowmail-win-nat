@@ -13,6 +13,11 @@ const translations = {
     'layout.folderPlaceholder': 'e.g., Work, Personal, Receipts',
     'layout.cancel': 'Cancel',
     'layout.create': 'Create',
+    'layout.addressBook': 'Address Book',
+    'layout.noContacts': 'No contacts yet.',
+    'layout.addContact': 'Add Contact',
+    'layout.contactName': 'Name',
+    'layout.contactEmail': 'Email',
 
     // Folder names
     'folder.inbox': 'Inbox',
@@ -38,6 +43,7 @@ const translations = {
     'emailList.print': 'Print',
     'emailList.addTag': 'Add Tag',
     'emailList.assignTags': 'Assign Tags',
+    'emailList.starredOnly': 'Starred Only',
 
     // Email Detail
     'emailDetail.showDetails': 'Show Details',
@@ -184,6 +190,11 @@ const translations = {
     'layout.folderPlaceholder': 'напр., Работа, Личное, Чеки',
     'layout.cancel': 'Отмена',
     'layout.create': 'Создать',
+    'layout.addressBook': 'Адресная книга',
+    'layout.noContacts': 'Контактов пока нет.',
+    'layout.addContact': 'Добавить контакт',
+    'layout.contactName': 'Имя',
+    'layout.contactEmail': 'Email',
 
     // Folder names
     'folder.inbox': 'Входящие',
@@ -209,6 +220,7 @@ const translations = {
     'emailList.print': 'Печать',
     'emailList.addTag': 'Добавить тег',
     'emailList.assignTags': 'Назначить теги',
+    'emailList.starredOnly': 'Только избранные',
 
     // Email Detail
     'emailDetail.showDetails': 'Показать детали',

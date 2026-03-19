@@ -12,6 +12,7 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
   const lang = settings.language;
   const [sortBy, setSortBy] = useState<'date' | 'sender' | 'subject' | 'tags' | 'unread'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [starredOnly, setStarredOnly] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [tagPickerOpenId, setTagPickerOpenId] = useState<string | null>(null);
   const prevFolderRef = useRef(currentFolder);
@@ -120,7 +121,7 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
       email.attachments.some((att) => att.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return matchesFolder && matchesSearch;
-  });
+  }).filter(email => !starredOnly || email.starred);
 
   const sortedEmails = [...filteredEmails].sort((a, b) => {
     let comparison = 0;
@@ -203,9 +204,16 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
               className={cn("p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors", sortBy === 'tags' && "bg-zinc-800 text-zinc-100")}
               title={t('emailList.tags', lang)}
             >
-              <Tag className="w-3.5 h-3.5" />
+            <Tag className="w-3.5 h-3.5" />
             </button>
           </div>
+          <button
+            onClick={() => setStarredOnly(prev => !prev)}
+            className={cn("p-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors", starredOnly && "bg-yellow-500/10 text-yellow-500 border-yellow-500/30")}
+            title={t('emailList.starredOnly', lang)}
+          >
+            <Star className={cn("w-3.5 h-3.5", starredOnly && "fill-yellow-500")} />
+          </button>
           <button
             onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
             className="p-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"

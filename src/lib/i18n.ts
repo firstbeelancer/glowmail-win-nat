@@ -153,6 +153,13 @@ const translations = {
     'settings.groupDesc': 'Group emails in the list for easier navigation.',
     'settings.fetchFolders': 'Load Folders from Server',
     'settings.fetchingFolders': 'Loading...',
+    'settings.markAsReadDelay': 'Mark as Read Delay (seconds)',
+    'settings.markAsReadDelayDesc': 'How many seconds after opening before an email is marked as read. 0 = immediately.',
+    'settings.ldapServer': 'LDAP Server',
+    'settings.ldapBaseDn': 'LDAP Base DN',
+    'settings.ldapLoad': 'Load Contacts from LDAP',
+    'settings.ldapLoading': 'Loading...',
+    'settings.ldapSection': 'LDAP Address Book',
     'layout.openInWindow': 'Open in new window',
   },
   ru: {

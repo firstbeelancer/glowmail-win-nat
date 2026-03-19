@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
               date: env.date || new Date().toISOString(),
               messageId: env.messageId || "",
               inReplyTo: env.inReplyTo || "",
-              hasAttachments,
+              hasAttachments: hasAtt,
               attachments: [],
             };
           })

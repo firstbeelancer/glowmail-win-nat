@@ -339,11 +339,13 @@ export function MailProvider({ children }: { children: ReactNode }) {
   }, [settings.syncInterval, fetchEmails]);
 
   const markAsRead = (id: string) => {
+    const uid = Number(id);
     setEmails((prev) =>
       prev.map((e) => {
         if (e.id === id && !e.read) {
-          // Fire and forget IMAP flag update
-          mailApi.setEmailFlags(currentFolder, Number(id), ['\\Seen']).catch(console.error);
+          if (!isNaN(uid) && uid > 0) {
+            mailApi.setEmailFlags(currentFolder, uid, ['\\Seen']).catch(console.error);
+          }
           return { ...e, read: true };
         }
         return e;

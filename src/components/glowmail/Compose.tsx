@@ -122,6 +122,7 @@ export function Compose({
       body: finalBody,
       importance,
       attachments,
+      tags: emailTags,
     });
     if (settings.delayedSending && settings.delayedSending > 0) {
       toast.success(t('compose.emailScheduled', lang, { minutes: String(settings.delayedSending) }));

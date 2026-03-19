@@ -343,17 +343,31 @@ Deno.serve(async (req) => {
         let bodyText = "";
         let bodyHtml = "";
         
-        // Method 1: parts.TEXT (from bodyParts)
-        if (msg.parts?.TEXT?.data) {
-          bodyText = decodeData(msg.parts.TEXT.data);
-          const parsed = parseMultipartBlob(bodyText);
-          if (parsed.text || parsed.html) {
-            bodyText = parsed.text || bodyText;
-            bodyHtml = parsed.html;
+        // Method 1: body parts (from BODY[...] fetch)
+        if (msg.parts && typeof msg.parts === "object") {
+          const partsEntries = Object.entries(msg.parts as Record<string, unknown>);
+
+          for (const [partKey, partValue] of partsEntries) {
+            const dataCandidate = (partValue as any)?.data ?? partValue;
+            const decodedPart = decodeData(dataCandidate);
+            if (!decodedPart) continue;
+
+            const parsed = parseMultipartBlob(decodedPart);
+            if (!bodyText && parsed.text) bodyText = parsed.text;
+            if (!bodyHtml && parsed.html) bodyHtml = parsed.html;
+
+            const keyLower = partKey.toLowerCase();
+            const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(decodedPart);
+            if (!bodyHtml && (keyLower.includes("html") || looksLikeHtml)) {
+              bodyHtml = decodedPart;
+            }
+            if (!bodyText && !looksLikeHtml) {
+              bodyText = decodedPart;
+            }
           }
         }
         // Method 2: raw message - parse MIME
-        else if (msg.raw) {
+        if ((!bodyText && !bodyHtml) && msg.raw) {
           const rawText = decodeData(msg.raw);
           const headerBodySplit = rawText.indexOf("\r\n\r\n");
           if (headerBodySplit > -1) {

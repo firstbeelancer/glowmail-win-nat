@@ -99,42 +99,24 @@ Deno.serve(async (req) => {
           envelope: true,
           flags: true,
           size: true,
-          headers: ['Content-Type'],
+          bodyStructure: true,
         });
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
 
-        // Extract Content-Type from fetched headers
-        const getContentType = (msg: any): string => {
-          const hdrs = msg?.headers;
-          if (!hdrs) return '';
-          let raw = '';
-          if (hdrs instanceof Uint8Array) raw = new TextDecoder().decode(hdrs);
-          else if (typeof hdrs === 'string') raw = hdrs;
-          else if (hdrs instanceof Map) raw = hdrs.get('content-type') || '';
-          else if (typeof hdrs === 'object') raw = hdrs['content-type'] || '';
-          const m = raw.match(/Content-Type:\s*([^\r\n;]+)/i);
-          return m ? m[1].trim().toLowerCase() : raw.toLowerCase();
-        };
-
-        // Debug first 3
+        // Debug first 3 bodyStructures
         normalized.slice(0, 3).forEach((msg: any) => {
-          const ct = getContentType(msg);
-          const hdrs = msg?.headers;
-          let hdrsInfo = 'null';
-          if (hdrs instanceof Uint8Array) hdrsInfo = `Uint8Array(${hdrs.length})`;
-          else if (hdrs instanceof Map) hdrsInfo = `Map(${[...hdrs.keys()].join(',')})`;
-          else if (typeof hdrs === 'string') hdrsInfo = `str(${hdrs.length})`;
-          else if (hdrs) hdrsInfo = `obj(${Object.keys(hdrs).join(',')})`;
-          console.log(`CT uid=${msg?.uid} size=${msg?.size} ct="${ct}" hdrs=${hdrsInfo}`);
+          const bs = msg?.bodyStructure;
+          console.log(`BS2 uid=${msg?.uid} size=${msg?.size} hasBS=${!!bs} bs=${bs ? JSON.stringify(bs).slice(0, 500) : 'null'}`);
         });
 
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
           .map((msg: any) => {
             const env = msg.envelope || {};
-            const contentType = getContentType(msg);
-            const hasAttachments = contentType.includes("multipart/mixed") || contentType.includes("multipart/signed");
+            let hasAtt = false;
+            try { hasAtt = msg.bodyStructure ? imapHasAttachments(msg.bodyStructure) : false; } catch {}
+
             return {
               uid: msg.uid,
               flags: msg.flags || [],

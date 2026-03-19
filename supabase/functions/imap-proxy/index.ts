@@ -603,10 +603,10 @@ Deno.serve(async (req) => {
 
         // Metadata-only search (no TEXT/body search): subject, from, to, cc
         const [subjectMatches, fromMatches, toMatches, ccMatches] = await Promise.all([
-          runCriteriaSearch("subject", { subject: term }),
-          runCriteriaSearch("from", { from: term }),
-          runCriteriaSearch("to", { to: term }),
-          runCriteriaSearch("cc", { cc: term }),
+          runCriteriaSearch("subject", { header: [{ field: "SUBJECT", value: term }] }),
+          runCriteriaSearch("from", { header: [{ field: "FROM", value: term }] }),
+          runCriteriaSearch("to", { header: [{ field: "TO", value: term }] }),
+          runCriteriaSearch("cc", { header: [{ field: "CC", value: term }] }),
         ]);
 
         const sequenceSet = new Set([...subjectMatches, ...fromMatches, ...toMatches, ...ccMatches]);

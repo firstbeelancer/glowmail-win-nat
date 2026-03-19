@@ -66,29 +66,35 @@ Deno.serve(async (req) => {
 
       case "list": {
         const { folder = "INBOX", page = 1, pageSize = 50 } = body;
-        await client.selectMailbox(folder);
+        const mailboxStatus = await client.selectMailbox(folder);
 
-        const uidResults = await client.search({ all: true });
-        const uids = (Array.isArray(uidResults) ? uidResults : [uidResults])
-          .map((value: unknown) => Number(value))
-          .filter((value) => Number.isFinite(value) && value > 0);
-
-        const total = uids.length;
-        const sortedUids = [...uids].sort((a, b) => b - a);
+        // Use EXISTS count from mailbox status for reliable pagination
+        const total = (mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0;
         const safePage = Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 1;
         const safePageSize = Number.isFinite(Number(pageSize)) && Number(pageSize) > 0 ? Number(pageSize) : 50;
-        const start = (safePage - 1) * safePageSize;
-        const pageUids = sortedUids.slice(start, start + safePageSize);
 
-        if (pageUids.length === 0) {
+        if (total === 0) {
+          await client.disconnect();
+          client = null;
+          return ok({ emails: [], total: 0, page: safePage, pageSize: safePageSize });
+        }
+
+        // Calculate sequence range (newest first)
+        // Page 1: sequences (total-pageSize+1) to total
+        // Page 2: sequences (total-2*pageSize+1) to (total-pageSize)
+        const seqEnd = total - (safePage - 1) * safePageSize;
+        const seqStart = Math.max(1, seqEnd - safePageSize + 1);
+
+        if (seqEnd < 1) {
           await client.disconnect();
           client = null;
           return ok({ emails: [], total, page: safePage, pageSize: safePageSize });
         }
 
-        const sequence = pageUids.join(",");
+        const sequence = `${seqStart}:${seqEnd}`;
+        console.log("list fetch - total:", total, "seqRange:", sequence, "page:", safePage);
+
         const messages = await (client as any).fetch(sequence, {
-          byUid: true,
           uid: true,
           envelope: true,
           flags: true,
@@ -167,7 +173,8 @@ Deno.serve(async (req) => {
               inReplyTo: env.inReplyTo || "",
               attachments,
             };
-          });
+          })
+          .sort((a: any, b: any) => b.uid - a.uid); // newest first
 
         await client.disconnect();
         client = null;
@@ -256,8 +263,9 @@ Deno.serve(async (req) => {
             msgSourceType = typeof msg.source;
             msgSourceConstructor = msg.source?.constructor?.name || "undefined";
 
-            readRawCandidate("msg.source", msg.source);
-            if (!rawSource) readRawCandidate("msg.raw", msg.raw);
+            // Try 'raw' first (deno-imap returns raw, not source)
+            readRawCandidate("msg.raw", msg.raw);
+            if (!rawSource) readRawCandidate("msg.source", msg.source);
 
             console.log(
               "fetch source attempt - hasSource:",
@@ -293,8 +301,13 @@ Deno.serve(async (req) => {
               if (!envelope) envelope = msg2.envelope;
               if (!flags.length) flags = msg2.flags || [];
 
-              if (!rawSource) readRawCandidate("msg2.source", msg2.source);
               if (!rawSource) readRawCandidate("msg2.raw", msg2.raw);
+              if (!rawSource) readRawCandidate("msg2.source", msg2.source);
+              if (!rawSource && msg2.parts) {
+                // deno-imap may put raw content in parts
+                const textPart = msg2.parts?.find?.((p: any) => p.body);
+                if (textPart?.body) readRawCandidate("msg2.parts[].body", textPart.body);
+              }
 
               const bodyContent = msg2.bodyParts?.get?.("") || msg2.body?.get?.("") || msg2["body[]"];
               console.log(

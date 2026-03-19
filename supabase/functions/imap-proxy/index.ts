@@ -187,8 +187,8 @@ Deno.serve(async (req) => {
                 uid: true,
                 envelope: true,
                 flags: true,
-                bodyParts: ["HEADER", "TEXT"],
-                full: true,
+                allHeaders: true,
+                bodyParts: ["TEXT", "1", "1.1", "2", "2.1"],
               });
               const fallbackList = (Array.isArray(fallbackMessages) ? fallbackMessages : [fallbackMessages]).filter(Boolean);
               msg = fallbackList.find((item: any) => Number(item?.uid) === targetUid) || fallbackList[0] || null;

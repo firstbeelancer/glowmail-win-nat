@@ -115,6 +115,7 @@ type MailContextType = {
   updateSettings: (settings: Partial<UserSettings>) => void;
   fetchEmails: () => Promise<void>;
   addFolder: (name: string) => void;
+  updateEmailTags: (id: string, tags: string[]) => void;
 };
 
 const MailContext = createContext<MailContextType | undefined>(undefined);

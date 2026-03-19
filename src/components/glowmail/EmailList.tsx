@@ -121,7 +121,7 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
       email.attachments.some((att) => att.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return matchesFolder && matchesSearch;
-  });
+  }).filter(email => !starredOnly || email.starred);
 
   const sortedEmails = [...filteredEmails].sort((a, b) => {
     let comparison = 0;

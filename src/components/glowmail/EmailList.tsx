@@ -276,7 +276,8 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
               className={cn(
                 "group flex flex-col p-4 border-b border-zinc-800/50 cursor-grab transition-all hover:bg-zinc-900/50 relative active:cursor-grabbing",
                 !email.read && "bg-zinc-900/20",
-                email.starred && "bg-emerald-500/[0.03] shadow-[inset_0_0_25px_rgba(16,185,129,0.06)]"
+                email.starred && "bg-emerald-500/[0.03] shadow-[inset_0_0_25px_rgba(16,185,129,0.06)]",
+                selectedEmailId === email.id && "ring-1 ring-emerald-500/50 bg-emerald-500/[0.06] border-l-2 border-l-emerald-500"
               )}
             >
               <div className="flex items-center justify-between mb-1">

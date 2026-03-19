@@ -176,12 +176,59 @@ Deno.serve(async (req) => {
         }
 
         // Helper to decode Uint8Array
-        function decodeData(data: unknown): string {
+        function decodeData(data: unknown, charset = "utf-8"): string {
           if (data instanceof Uint8Array) {
-            return new TextDecoder().decode(data);
+            try {
+              return new TextDecoder(charset).decode(data);
+            } catch {
+              return new TextDecoder("utf-8").decode(data);
+            }
           }
           if (typeof data === "string") return data;
           return "";
+        }
+
+        // Extract charset from Content-Type header
+        function extractCharset(header: string): string {
+          const match = header.match(/charset=["']?([^"';\s]+)/i);
+          return match ? match[1].trim() : "utf-8";
+        }
+
+        // Decode content based on encoding and charset
+        function decodeContent(body: string, encoding: string, charset: string): string {
+          let decoded = body;
+          if (encoding === "base64") {
+            try {
+              const clean = body.replace(/\s/g, "");
+              const binary = atob(clean);
+              const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+              try {
+                decoded = new TextDecoder(charset).decode(bytes);
+              } catch {
+                decoded = new TextDecoder("utf-8").decode(bytes);
+              }
+            } catch { decoded = body; }
+          } else if (encoding === "quoted-printable") {
+            decoded = body
+              .replace(/=\r?\n/g, "")
+              .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+            try {
+              const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
+              try {
+                decoded = new TextDecoder(charset).decode(bytes);
+              } catch {
+                decoded = new TextDecoder("utf-8").decode(bytes);
+              }
+            } catch { /* keep as is */ }
+          }
+          return decoded;
+        }
+
+        // Detect encoding from header
+        function extractEncoding(header: string): string {
+          if (header.includes("base64")) return "base64";
+          if (header.includes("quoted-printable")) return "quoted-printable";
+          return "7bit";
         }
 
         // Try to extract body text from different sources
@@ -209,52 +256,50 @@ Deno.serve(async (req) => {
                 if (part.trim() === "--" || part.trim() === "") continue;
                 const partSplit = part.indexOf("\r\n\r\n");
                 if (partSplit === -1) continue;
-                const partHeader = part.substring(0, partSplit).toLowerCase();
+                const partHeaderRaw = part.substring(0, partSplit);
+                const partHeaderLower = partHeaderRaw.toLowerCase();
                 const partBody = part.substring(partSplit + 4).replace(/--$/, "").trim();
                 
-                // Decode quoted-printable or base64
-                let decoded = partBody;
-                if (partHeader.includes("base64")) {
-                  try { decoded = atob(partBody.replace(/\s/g, "")); } catch { decoded = partBody; }
-                  // Handle UTF-8 from base64
-                  try {
-                    const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
-                    decoded = new TextDecoder("utf-8").decode(bytes);
-                  } catch { /* keep as is */ }
-                } else if (partHeader.includes("quoted-printable")) {
-                  decoded = partBody
-                    .replace(/=\r?\n/g, "")
-                    .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-                  try {
-                    const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
-                    decoded = new TextDecoder("utf-8").decode(bytes);
-                  } catch { /* keep as is */ }
+                // Check for nested multipart (e.g. multipart/alternative inside multipart/mixed)
+                const nestedBoundaryMatch = partHeaderRaw.match(/boundary="?([^";\s]+)"?/i);
+                if (nestedBoundaryMatch) {
+                  const nestedBoundary = nestedBoundaryMatch[1];
+                  const nestedParts = partBody.split("--" + nestedBoundary);
+                  for (const np of nestedParts) {
+                    if (np.trim() === "--" || np.trim() === "") continue;
+                    const npSplit = np.indexOf("\r\n\r\n");
+                    if (npSplit === -1) continue;
+                    const npHeaderRaw = np.substring(0, npSplit);
+                    const npHeaderLower = npHeaderRaw.toLowerCase();
+                    const npBody = np.substring(npSplit + 4).replace(/--$/, "").trim();
+                    const npCharset = extractCharset(npHeaderLower);
+                    const npEncoding = extractEncoding(npHeaderLower);
+                    const npDecoded = decodeContent(npBody, npEncoding, npCharset);
+                    
+                    if (npHeaderLower.includes("text/html")) {
+                      bodyHtml = npDecoded;
+                    } else if (npHeaderLower.includes("text/plain") && !bodyText) {
+                      bodyText = npDecoded;
+                    }
+                  }
+                  continue;
                 }
                 
-                if (partHeader.includes("text/html")) {
+                const charset = extractCharset(partHeaderLower);
+                const encoding = extractEncoding(partHeaderLower);
+                const decoded = decodeContent(partBody, encoding, charset);
+                
+                if (partHeaderLower.includes("text/html")) {
                   bodyHtml = decoded;
-                } else if (partHeader.includes("text/plain") && !bodyText) {
+                } else if (partHeaderLower.includes("text/plain") && !bodyText) {
                   bodyText = decoded;
                 }
               }
             } else {
               // Single part message
-              let decoded = bodyPart;
-              if (headerPart.toLowerCase().includes("base64")) {
-                try { decoded = atob(bodyPart.replace(/\s/g, "")); } catch { decoded = bodyPart; }
-                try {
-                  const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
-                  decoded = new TextDecoder("utf-8").decode(bytes);
-                } catch { /* keep as is */ }
-              } else if (headerPart.toLowerCase().includes("quoted-printable")) {
-                decoded = bodyPart
-                  .replace(/=\r?\n/g, "")
-                  .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-                try {
-                  const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
-                  decoded = new TextDecoder("utf-8").decode(bytes);
-                } catch { /* keep as is */ }
-              }
+              const charset = extractCharset(headerPart.toLowerCase());
+              const encoding = extractEncoding(headerPart.toLowerCase());
+              const decoded = decodeContent(bodyPart, encoding, charset);
               bodyText = decoded;
             }
           }

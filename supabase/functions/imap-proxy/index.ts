@@ -28,19 +28,22 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { action, host, port, username, password } = body;
+    const { action, host, port, secure, username, password } = body;
 
     if (!host || !username || !password) {
       return err("Missing credentials", 400);
     }
 
+    const numericPort = Number(port) || 993;
+    const tls = typeof secure === "boolean" ? secure : numericPort === 993;
+
     client = new ImapClient({
       host,
-      port: port || 993,
-      tls: true,
+      port: numericPort,
+      tls,
       username,
       password,
-      socketTimeout: 15000,
+      autoConnect: false,
     });
 
     await client.connect();

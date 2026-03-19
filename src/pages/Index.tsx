@@ -189,21 +189,35 @@ function MailApp() {
 }
 
 const Index = () => {
+  const [loggedIn, setLoggedIn] = useState(() => {
+    return !!localStorage.getItem('glowmail_credentials');
+  });
+
+  if (!loggedIn) {
+    return (
+      <Login onLogin={(creds) => {
+        // Save credentials and update settings via store after mount
+        localStorage.setItem('glowmail_credentials', JSON.stringify(creds));
+        setLoggedIn(true);
+      }} />
+    );
+  }
+
   return (
     <MailProvider>
-      <MailApp />
+      <MailAppWithCreds />
       <Toaster 
         position="bottom-center"
         toastOptions={{
           style: {
-            background: '#18181b',
-            color: '#f4f4f5',
-            border: '1px solid #27272a',
+            background: 'hsl(var(--zinc-900))',
+            color: 'hsl(var(--zinc-100))',
+            border: '1px solid hsl(var(--zinc-800))',
           },
           success: {
             iconTheme: {
-              primary: '#10b981',
-              secondary: '#18181b',
+              primary: 'hsl(var(--primary))',
+              secondary: 'hsl(var(--zinc-900))',
             },
           },
         }}
@@ -211,5 +225,32 @@ const Index = () => {
     </MailProvider>
   );
 };
+
+/** Wrapper that applies saved credentials to the store on mount */
+function MailAppWithCreds() {
+  const { updateSettings } = useMail();
+
+  useEffect(() => {
+    const raw = localStorage.getItem('glowmail_credentials');
+    if (raw) {
+      try {
+        const creds = JSON.parse(raw);
+        updateSettings({
+          account: { name: creds.name, email: creds.email },
+          server: {
+            imapHost: creds.imapHost,
+            imapPort: creds.imapPort,
+            smtpHost: creds.smtpHost,
+            smtpPort: creds.smtpPort,
+            secure: true,
+            authMethod: 'app-password',
+          },
+        });
+      } catch {}
+    }
+  }, []);
+
+  return <MailApp />;
+}
 
 export default Index;

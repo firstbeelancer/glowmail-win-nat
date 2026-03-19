@@ -556,7 +556,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
 
   const markAsRead = (id: string) => {
     const uid = Number(id);
-    setEmails((prev) =>
+    updateBothEmailStates((prev) =>
       prev.map((e) => {
         if (e.id === id && !e.read) {
           if (!isNaN(uid) && uid > 0) {
@@ -571,7 +571,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
 
   const markAsUnread = (id: string) => {
     const uid = Number(id);
-    setEmails((prev) =>
+    updateBothEmailStates((prev) =>
       prev.map((e) => {
         if (e.id === id && e.read) {
           if (!isNaN(uid) && uid > 0) {
@@ -585,7 +585,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
   };
 
   const toggleStar = (id: string) => {
-    setEmails((prev) =>
+    updateBothEmailStates((prev) =>
       prev.map((e) => {
         if (e.id === id) {
           const newStarred = !e.starred;
@@ -609,7 +609,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     } else {
       mailApi.moveEmail(currentFolder, Number(id), trashFolder).catch(console.error);
     }
-    setEmails((prev) => prev.filter((e) => e.id !== id));
+    updateBothEmailStates((prev) => prev.filter((e) => e.id !== id));
   };
 
   const moveEmailToFolder = (id: string, targetFolder: string) => {
@@ -617,7 +617,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     if (!isNaN(uid) && uid > 0) {
       mailApi.moveEmail(currentFolder, uid, targetFolder).catch(console.error);
     }
-    setEmails((prev) => prev.filter((e) => e.id !== id));
+    updateBothEmailStates((prev) => prev.filter((e) => e.id !== id));
   };
 
   const copyEmailToFolder = (id: string, targetFolder: string) => {
@@ -670,7 +670,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
         attachments: email.attachments || [],
         headers: { messageId: `<${Date.now()}@local>` },
       };
-      setEmails((prev) => {
+      updateBothEmailStates((prev) => {
         const updated = email.id ? prev.filter(e => e.id !== email.id) : prev;
         return [newEmail, ...updated];
       });
@@ -702,7 +702,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       attachments: email.attachments || [],
       headers: { messageId: `<${Date.now()}@local>` },
     };
-    setEmails((prev) => {
+    updateBothEmailStates((prev) => {
       const updated = email.id ? prev.filter(e => e.id !== email.id) : prev;
       return [newEmail, ...updated];
     });
@@ -731,7 +731,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
   };
 
   const updateEmailTags = (id: string, tags: string[]) => {
-    setEmails((prev) =>
+    updateBothEmailStates((prev) =>
       prev.map((e) => (e.id === id ? { ...e, tags } : e))
     );
   };

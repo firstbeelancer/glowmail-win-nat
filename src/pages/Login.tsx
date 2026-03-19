@@ -84,26 +84,26 @@ export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Name */}
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Имя</label>
+              <label className="block text-xs font-medium text-neutral-400 mb-1.5">Имя</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Как вас зовут?"
-                className="w-full h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition"
+                className="w-full h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition"
               />
             </div>
 
             {/* Email */}
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Email</label>
+              <label className="block text-xs font-medium text-neutral-400 mb-1.5">Email</label>
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com"
-                className="w-full h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition"
+                className="w-full h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition"
               />
               {detectedProvider && (
                 <p className="text-xs text-primary/80 mt-1.5 flex items-center gap-1">
@@ -115,16 +115,16 @@ export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) 
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Пароль приложения</label>
+              <label className="block text-xs font-medium text-neutral-400 mb-1.5">Пароль приложения</label>
               <input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
-                className="w-full h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition"
+                className="w-full h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition"
               />
-              <p className="text-xs text-zinc-500 mt-1">
+              <p className="text-xs text-neutral-500 mt-1">
                 Используйте пароль приложения, а не основной пароль
               </p>
             </div>
@@ -133,7 +133,7 @@ export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) 
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="text-xs text-zinc-400 hover:text-zinc-200 transition flex items-center gap-1"
+              className="text-xs text-neutral-400 hover:text-neutral-200 transition flex items-center gap-1"
             >
               <svg className={`w-3.5 h-3.5 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -150,22 +150,22 @@ export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) 
               >
                 <div className="grid grid-cols-3 gap-2">
                   <div className="col-span-2">
-                    <label className="block text-xs text-zinc-500 mb-1">IMAP сервер</label>
+                    <label className="block text-xs text-neutral-500 mb-1">IMAP сервер</label>
                     <input
                       type="text"
                       value={imapHost}
                       onChange={(e) => setImapHost(e.target.value)}
                       placeholder={preset?.imapHost || 'imap.example.com'}
-                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-primary/50 transition"
+                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary/50 transition"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Порт</label>
+                    <label className="block text-xs text-neutral-500 mb-1">Порт</label>
                     <input
                       type="number"
                       value={imapHost ? imapPort : (preset?.imapPort || 993)}
                       onChange={(e) => setImapPort(Number(e.target.value))}
-                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-zinc-100 focus:outline-none focus:border-primary/50 transition"
+                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white focus:outline-none focus:border-primary/50 transition"
                     />
                   </div>
                 </div>
@@ -177,16 +177,16 @@ export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) 
                       value={smtpHost}
                       onChange={(e) => setSmtpHost(e.target.value)}
                       placeholder={preset?.smtpHost || 'smtp.example.com'}
-                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-primary/50 transition"
+                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary/50 transition"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Порт</label>
+                    <label className="block text-xs text-neutral-500 mb-1">Порт</label>
                     <input
                       type="number"
                       value={smtpHost ? smtpPort : (preset?.smtpPort || 465)}
                       onChange={(e) => setSmtpPort(Number(e.target.value))}
-                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-zinc-100 focus:outline-none focus:border-primary/50 transition"
+                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white focus:outline-none focus:border-primary/50 transition"
                     />
                   </div>
                 </div>

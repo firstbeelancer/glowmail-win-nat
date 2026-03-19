@@ -316,6 +316,7 @@ function SidebarContent({
                     const ChildIcon = iconMap[child.icon] || FolderIcon;
                     const isChildActive = currentFolder === child.id;
                     const childCount = getFolderCount(child.id);
+                    const childColor = folderColors[child.id];
                     return (
                       <button
                         key={child.id}

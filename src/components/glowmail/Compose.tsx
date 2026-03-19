@@ -250,10 +250,18 @@ export function Compose({
                   const tagOptions = (settings.availableTags || []).map(t => `<option value="${t.name}">${t.name}</option>`).join('');
                   const edgeFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/email-ai`;
                   const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+                  const isLight = settings.theme === 'light';
+                  const bg = isLight ? '#fafafa' : '#09090b';
+                  const fg = isLight ? '#09090b' : '#f4f4f5';
+                  const inputBg = isLight ? '#f4f4f5' : '#18181b';
+                  const borderColor = isLight ? '#e4e4e7' : '#27272a';
+                  const borderColorHover = isLight ? '#3f3f46' : '#3f3f46';
+                  const mutedText = isLight ? '#52525b' : '#71717a';
+                  const subtleBg = isLight ? '#e4e4e7' : '#27272a';
                   w.document.write(`<!DOCTYPE html><html><head><title>${t('compose.newMessage', lang)}</title>
                     <style>
                       * { margin: 0; padding: 0; box-sizing: border-box; }
-                      body { font-family: 'Involve', system-ui, sans-serif; background: #09090b; color: #f4f4f5; padding: 24px; }
+                      body { font-family: 'Involve', system-ui, sans-serif; background: ${bg}; color: ${fg}; padding: 24px; }
                       .field { margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
                       .field label { color: #71717a; font-size: 14px; min-width: 60px; }
                       .field input, .field select { flex: 1; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 8px 12px; color: #f4f4f5; font-size: 14px; outline: none; appearance: none; background-image: none; }

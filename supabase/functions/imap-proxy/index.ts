@@ -152,6 +152,27 @@ Deno.serve(async (req) => {
           return match ? match[1].trim() : "utf-8";
         }
 
+        function normalizeBase64Input(value: string): string {
+          let compact = value.replace(/\s/g, "").replace(/-/g, "+").replace(/_/g, "/");
+          if (!compact) return compact;
+          const remainder = compact.length % 4;
+          if (remainder) compact += "=".repeat(4 - remainder);
+          return compact;
+        }
+
+        function isLikelyBase64(value: string): boolean {
+          const compact = normalizeBase64Input(value);
+          if (compact.length < 24 || compact.length % 4 !== 0) return false;
+          return /^[A-Za-z0-9+/=]+$/.test(compact);
+        }
+
+        function looksLikeQuotedPrintable(value: string): boolean {
+          if (!value) return false;
+          const softBreaks = (value.match(/=\r?\n/g) || []).length;
+          const hexEscapes = (value.match(/=[0-9A-Fa-f]{2}/g) || []).length;
+          return hexEscapes >= 3 || (softBreaks > 0 && hexEscapes > 0);
+        }
+
         function extractEncoding(header: string): string {
           if (header.includes("base64")) return "base64";
           if (header.includes("quoted-printable")) return "quoted-printable";
@@ -161,12 +182,14 @@ Deno.serve(async (req) => {
         function decodeContent(body: string, encoding: string, charset: string): string {
           if (encoding === "base64") {
             try {
-              const clean = body.replace(/\s/g, "");
+              const clean = normalizeBase64Input(body);
               const binary = atob(clean);
               const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
               try { return new TextDecoder(charset).decode(bytes); } catch { return new TextDecoder("utf-8").decode(bytes); }
             } catch { return body; }
-          } else if (encoding === "quoted-printable") {
+          }
+
+          if (encoding === "quoted-printable") {
             const clean = body.replace(/=\r?\n/g, "");
             const bytes: number[] = [];
             for (let i = 0; i < clean.length; i++) {
@@ -182,28 +205,61 @@ Deno.serve(async (req) => {
               try { return new TextDecoder(charset).decode(byteArray); } catch { return new TextDecoder("utf-8").decode(byteArray); }
             } catch { return clean; }
           }
+
           return body;
+        }
+
+        function decodeHeuristically(value: string, charset = "utf-8"): string {
+          let current = value;
+          for (let i = 0; i < 3; i++) {
+            let changed = false;
+
+            if (looksLikeQuotedPrintable(current)) {
+              const qpDecoded = decodeContent(current, "quoted-printable", charset);
+              if (qpDecoded && qpDecoded !== current) {
+                current = qpDecoded;
+                changed = true;
+              }
+            }
+
+            if (isLikelyBase64(current)) {
+              const b64Decoded = decodeContent(current, "base64", charset);
+              if (b64Decoded && b64Decoded !== current) {
+                current = b64Decoded;
+                changed = true;
+              }
+            }
+
+            if (!changed) break;
+          }
+
+          return current;
         }
 
         // Recursively parse MIME parts from raw RFC822 message
         function parseMimeParts(rawMessage: string): { text: string; html: string } {
-          let text = "";
-          let html = "";
+          const normalized = rawMessage.replace(/\r\n/g, "\n");
+          const trimmed = normalized.trim();
 
-          // Split header from body
-          const headerEnd = rawMessage.indexOf("\r\n\r\n");
-          if (headerEnd === -1) {
-            const headerEnd2 = rawMessage.indexOf("\n\n");
-            if (headerEnd2 === -1) return { text: rawMessage, html: "" };
-            return parseMimeBody(rawMessage.substring(0, headerEnd2), rawMessage.substring(headerEnd2 + 2));
+          const boundaryAtStart = trimmed.match(/^--([^\n]+)/);
+          if (boundaryAtStart) {
+            const directBoundary = boundaryAtStart[1].replace(/--\s*$/, "").trim();
+            if (directBoundary) {
+              return parseMultipartBody(trimmed, directBoundary);
+            }
           }
-          return parseMimeBody(rawMessage.substring(0, headerEnd), rawMessage.substring(headerEnd + 4));
+
+          const headerEnd = normalized.indexOf("\n\n");
+          if (headerEnd === -1) {
+            return { text: rawMessage, html: "" };
+          }
+
+          return parseMimeBody(normalized.substring(0, headerEnd), normalized.substring(headerEnd + 2));
         }
 
         function parseMimeBody(headers: string, body: string): { text: string; html: string } {
-          const headersLower = headers.toLowerCase();
           // Unfold headers (continuation lines)
-          const unfoldedHeaders = headers.replace(/\r?\n[ \t]+/g, " ");
+          const unfoldedHeaders = headers.replace(/\n[ \t]+/g, " ");
           const unfoldedLower = unfoldedHeaders.toLowerCase();
 
           // Check for multipart
@@ -218,7 +274,7 @@ Deno.serve(async (req) => {
           // Single part
           const charset = extractCharset(unfoldedLower);
           const encoding = extractEncoding(unfoldedLower);
-          const decoded = decodeContent(body, encoding, charset);
+          const decoded = decodeHeuristically(decodeContent(body, encoding, charset), charset);
 
           if (unfoldedLower.includes("content-type: text/html") || unfoldedLower.includes("content-type:text/html")) {
             return { text: "", html: decoded };
@@ -233,18 +289,18 @@ Deno.serve(async (req) => {
         function parseMultipartBody(body: string, boundary: string): { text: string; html: string } {
           let text = "";
           let html = "";
-          const parts = body.split("--" + boundary);
+          const parts = body.split(`--${boundary}`);
 
           for (const rawPart of parts) {
             const part = rawPart.replace(/^\r?\n/, "");
             if (!part || part.startsWith("--")) continue;
 
             // Find header/body split
-            let splitIdx = part.indexOf("\r\n\r\n");
-            let splitLen = 4;
+            let splitIdx = part.indexOf("\n\n");
+            let splitLen = 2;
             if (splitIdx === -1) {
-              splitIdx = part.indexOf("\n\n");
-              splitLen = 2;
+              splitIdx = part.indexOf("\r\n\r\n");
+              splitLen = 4;
             }
             if (splitIdx === -1) continue;
 
@@ -267,7 +323,7 @@ Deno.serve(async (req) => {
 
             const charset = extractCharset(partHeadersLower);
             const encoding = extractEncoding(partHeadersLower);
-            const decoded = decodeContent(partBody, encoding, charset);
+            const decoded = decodeHeuristically(decodeContent(partBody, encoding, charset), charset);
 
             if (isHtml && !html) html = decoded;
             if (isPlain && !text) text = decoded;
@@ -346,12 +402,6 @@ Deno.serve(async (req) => {
           return structParts.find(p => p.partId === partKey);
         }
 
-        const isLikelyBase64 = (value: string): boolean => {
-          const compact = value.replace(/\s/g, "");
-          if (compact.length < 24 || compact.length % 4 !== 0) return false;
-          return /^[A-Za-z0-9+/=]+$/.test(compact);
-        };
-
         const looksLikeMimeBlob = (value: string): boolean => {
           if (!value) return false;
           const lower = value.toLowerCase();
@@ -360,15 +410,9 @@ Deno.serve(async (req) => {
             /(?:^|\r?\n)--[^\r\n]{8,}/.test(value);
         };
 
-        const decodeByHeuristic = (value: string, charset = "utf-8") => {
-          if (!isLikelyBase64(value)) return value;
-          const decoded = decodeContent(value, "base64", charset);
-          return decoded && decoded !== value ? decoded : value;
-        };
-
         const extractMimeFromBlob = (value: string): { text: string; html: string } => {
           if (!value) return { text: "", html: "" };
-          const maybeDecoded = decodeByHeuristic(value, "utf-8");
+          const maybeDecoded = decodeHeuristically(value, "utf-8");
           if (!looksLikeMimeBlob(maybeDecoded)) return { text: "", html: "" };
           const parsed = parseMimeParts(maybeDecoded);
           return {
@@ -384,14 +428,8 @@ Deno.serve(async (req) => {
 
           for (const [partKey, partValue] of Object.entries(parts as Record<string, unknown>)) {
             const value = partValue as any;
-            let rawBytes: Uint8Array | null = null;
             const rawField = value?.data ?? value?.body ?? value;
-            if (rawField instanceof Uint8Array) {
-              rawBytes = rawField;
-            } else if (typeof rawField === "string") {
-              rawBytes = Uint8Array.from(rawField, (c: string) => c.charCodeAt(0) & 0xff);
-            }
-            if (!rawBytes || rawBytes.length === 0) continue;
+            if (!rawField) continue;
 
             const meta = findPartMeta(partKey);
             const headersRaw = String(value?.headers || value?.header || "");
@@ -402,33 +440,39 @@ Deno.serve(async (req) => {
             const isHtmlPart = meta ? (meta.subtype === "html") : headers.includes("text/html");
             const isPlainPart = meta ? (meta.subtype === "plain") : headers.includes("text/plain");
 
-            const rawStr = new TextDecoder("latin1").decode(rawBytes);
+            let rawBytes: Uint8Array | null = null;
+            let rawSource = "";
 
-            let decoded = rawStr;
-            if (encoding === "base64") {
-              decoded = decodeContent(rawStr, "base64", charset);
-            } else if (encoding === "quoted-printable") {
-              decoded = decodeContent(rawStr, "quoted-printable", charset);
+            if (rawField instanceof Uint8Array) {
+              rawBytes = rawField;
+              rawSource = new TextDecoder("latin1").decode(rawField);
+            } else if (typeof rawField === "string") {
+              rawSource = rawField;
             } else {
+              continue;
+            }
+
+            let decoded = rawSource;
+            if (encoding === "base64") {
+              decoded = decodeContent(rawSource, "base64", charset);
+            } else if (encoding === "quoted-printable") {
+              decoded = decodeContent(rawSource, "quoted-printable", charset);
+            } else if (rawBytes) {
               try {
                 decoded = new TextDecoder(charset).decode(rawBytes);
               } catch {
-                try { decoded = new TextDecoder("utf-8").decode(rawBytes); } catch { /* keep rawStr */ }
+                try { decoded = new TextDecoder("utf-8").decode(rawBytes); } catch { decoded = rawSource; }
               }
             }
+
+            decoded = decodeHeuristically(decoded, charset);
 
             const recovered = extractMimeFromBlob(decoded);
             if (recovered.html && !html) html = recovered.html;
             if (recovered.text && !text) text = recovered.text;
             if (recovered.html || recovered.text) continue;
 
-            const decodedBase64 = decodeByHeuristic(decoded, charset);
-            const nestedRecovered = decodedBase64 !== decoded ? extractMimeFromBlob(decodedBase64) : { text: "", html: "" };
-            if (nestedRecovered.html && !html) html = nestedRecovered.html;
-            if (nestedRecovered.text && !text) text = nestedRecovered.text;
-            if (nestedRecovered.html || nestedRecovered.text) continue;
-
-            const candidate = decodedBase64;
+            const candidate = decoded;
             const looksHtml = /<\/?[a-z][\s\S]*>/i.test(candidate);
             const hasMimeMarkers = looksLikeMimeBlob(candidate);
 
@@ -443,6 +487,9 @@ Deno.serve(async (req) => {
         };
 
         const normalizeBodies = () => {
+          bodyText = decodeHeuristically(bodyText || "", "utf-8").trim();
+          bodyHtml = decodeHeuristically(bodyHtml || "", "utf-8").trim();
+
           const fromHtmlBlob = extractMimeFromBlob(bodyHtml);
           if (fromHtmlBlob.html) bodyHtml = fromHtmlBlob.html;
           if (fromHtmlBlob.text && !bodyText) bodyText = fromHtmlBlob.text;
@@ -463,6 +510,11 @@ Deno.serve(async (req) => {
           if (bodyHtml && isLikelyBase64(bodyHtml)) {
             const decodedHtml = decodeContent(bodyHtml, "base64", "utf-8");
             if (/<\/?[a-z][\s\S]*>/i.test(decodedHtml)) bodyHtml = decodedHtml;
+          }
+
+          if (bodyHtml && !/<\/?[a-z][\s\S]*>/i.test(bodyHtml) && !bodyText) {
+            bodyText = bodyHtml;
+            bodyHtml = "";
           }
         };
 

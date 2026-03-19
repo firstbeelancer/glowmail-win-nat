@@ -112,9 +112,17 @@ function MailApp() {
     }
   };
 
+  const normalizeBase64Input = (value: string) => {
+    let compact = value.replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
+    if (!compact) return compact;
+    const remainder = compact.length % 4;
+    if (remainder) compact += '='.repeat(4 - remainder);
+    return compact;
+  };
+
   const decodeBase64 = (input: string, charset = 'utf-8') => {
     try {
-      const binary = atob(input.replace(/\s/g, ''));
+      const binary = atob(normalizeBase64Input(input));
       const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
       try {
         return new TextDecoder(charset).decode(bytes);
@@ -127,9 +135,15 @@ function MailApp() {
   };
 
   const isLikelyBase64 = (value: string) => {
-    const compact = value.replace(/\s/g, '');
+    const compact = normalizeBase64Input(value);
     if (compact.length < 24 || compact.length % 4 !== 0) return false;
     return /^[A-Za-z0-9+/=]+$/.test(compact);
+  };
+
+  const looksLikeQuotedPrintable = (value: string) => {
+    const softBreaks = (value.match(/=\r?\n/g) || []).length;
+    const hexEscapes = (value.match(/=[0-9A-Fa-f]{2}/g) || []).length;
+    return hexEscapes >= 3 || (softBreaks > 0 && hexEscapes > 0);
   };
 
   const looksLikeMimeBlob = (value: string) => {
@@ -193,13 +207,31 @@ function MailApp() {
 
   const decodeStandaloneBlob = (value: string): string => {
     if (!value) return value;
-    if (/=\r?\n|=[0-9A-Fa-f]{2}/.test(value)) {
-      return decodeQuotedPrintable(value, 'utf-8');
+
+    let current = value;
+    for (let i = 0; i < 3; i++) {
+      let changed = false;
+
+      if (looksLikeQuotedPrintable(current)) {
+        const qpDecoded = decodeQuotedPrintable(current, 'utf-8');
+        if (qpDecoded !== current) {
+          current = qpDecoded;
+          changed = true;
+        }
+      }
+
+      if (isLikelyBase64(current)) {
+        const b64Decoded = decodeBase64(current, 'utf-8');
+        if (b64Decoded !== current) {
+          current = b64Decoded;
+          changed = true;
+        }
+      }
+
+      if (!changed) break;
     }
-    if (isLikelyBase64(value)) {
-      return decodeBase64(value, 'utf-8');
-    }
-    return value;
+
+    return current;
   };
 
   const buildRenderableEmailBody = (full: any) => {
@@ -225,6 +257,12 @@ function MailApp() {
       if (reparsed.text && !bodyText) bodyText = reparsed.text;
     }
 
+    if (looksLikeMimeBlob(bodyText)) {
+      const reparsed = parseMultipartBlob(bodyText);
+      if (reparsed.html && !bodyHtml) bodyHtml = reparsed.html;
+      if (reparsed.text) bodyText = reparsed.text;
+    }
+
     if (!bodyHtml && isLikelyBase64(bodyText)) {
       const decodedText = decodeBase64(bodyText, 'utf-8');
       if (/<\/?[a-z][\s\S]*>/i.test(decodedText)) {
@@ -234,7 +272,7 @@ function MailApp() {
       }
     }
 
-    const compactHtml = bodyHtml.replace(/\s/g, '');
+    const compactHtml = normalizeBase64Input(bodyHtml);
     const looksLikeBase64Html =
       compactHtml.length > 256 &&
       compactHtml.length % 4 === 0 &&
@@ -248,9 +286,15 @@ function MailApp() {
       }
     }
 
+    const htmlHasTags = /<\/?[a-z][\s\S]*>/i.test(bodyHtml);
     bodyText = stripInvisible(bodyText);
 
-    if (hasVisibleText(bodyHtml) && !looksLikeMimeBlob(bodyHtml)) return bodyHtml;
+    if (!htmlHasTags && hasVisibleText(bodyHtml) && !bodyText) {
+      bodyText = stripInvisible(bodyHtml);
+      bodyHtml = '';
+    }
+
+    if (hasVisibleText(bodyHtml) && htmlHasTags && !looksLikeMimeBlob(bodyHtml)) return bodyHtml;
     if (hasVisibleText(bodyText)) {
       return `<div style="white-space: pre-wrap; line-height: 1.55;">${escapeHtml(bodyText)}</div>`;
     }

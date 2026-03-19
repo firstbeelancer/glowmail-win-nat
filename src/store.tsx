@@ -165,6 +165,9 @@ type MailContextType = {
   isConnected: boolean;
   connectionError: string | null;
   allFoldersFlat: Folder[];
+  isSearching: boolean;
+  isSearchActive: boolean;
+  searchResultCount: number;
 };
 
 const MailContext = createContext<MailContextType | undefined>(undefined);

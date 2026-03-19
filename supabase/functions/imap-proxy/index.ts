@@ -1,4 +1,4 @@
-import { ImapClient } from "deno-imap";
+import { ImapClient, hasAttachments as imapHasAttachments } from "deno-imap";
 import PostalMime from "postal-mime";
 
 const corsHeaders = {

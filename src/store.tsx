@@ -168,6 +168,8 @@ type MailContextType = {
   isSearching: boolean;
   isSearchActive: boolean;
   searchResultCount: number;
+  hasMoreSearchResults: boolean;
+  searchError: string | null;
 };
 
 const MailContext = createContext<MailContextType | undefined>(undefined);
@@ -188,7 +190,10 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const [isSearching, setIsSearching] = useState(false);
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchResultCount, setSearchResultCount] = useState(0);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [regularEmails, setRegularEmails] = useState<Email[]>([]);
+  const [searchPage, setSearchPage] = useState(1);
+  const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('glowmail_settings');
@@ -373,23 +378,24 @@ export function MailProvider({ children }: { children: ReactNode }) {
   }, [settings.account.email]);
 
   const PAGE_SIZE = 50;
+  const SEARCH_PAGE_SIZE = 30;
 
   const fetchEmails = useCallback(async () => {
     setIsLoading(true);
     setConnectionError(null);
     try {
       await loadFolders();
-      
+
       const data = await mailApi.fetchEmailList(currentFolder, 1, PAGE_SIZE);
       const mapped = mapMessages(data, currentFolder);
-      
+
       const total = data.total || 0;
       setEmails(mapped);
       setCurrentPage(1);
       setTotalEmails(total);
       setHasMoreEmails(mapped.length < total);
       setIsConnected(true);
-      
+
       collectContacts(mapped);
     } catch (e: any) {
       console.error('fetchEmails error:', e);
@@ -400,13 +406,44 @@ export function MailProvider({ children }: { children: ReactNode }) {
   }, [currentFolder, loadFolders, mapMessages, collectContacts]);
 
   const loadMoreEmails = useCallback(async () => {
+    if (isSearchActive) {
+      if (isLoadingMore || !hasMoreSearchResults || !searchQuery.trim()) return;
+
+      setIsLoadingMore(true);
+      setSearchError(null);
+      try {
+        const nextPage = searchPage + 1;
+        const data = await mailApi.searchEmails(currentFolder, searchQuery.trim(), nextPage, SEARCH_PAGE_SIZE);
+        const mapped = mapMessages(data, currentFolder);
+
+        setEmails(prev => {
+          const existingIds = new Set(prev.map(e => e.id));
+          const newEmails = mapped.filter(e => !existingIds.has(e.id));
+          return [...prev, ...newEmails];
+        });
+        setSearchPage(nextPage);
+        if (Number.isFinite(Number(data.total)) && Number(data.total) > 0) {
+          setSearchResultCount(Number(data.total));
+        }
+        setHasMoreSearchResults(!!data.hasMore);
+
+        collectContacts(mapped);
+      } catch (e: any) {
+        console.error('Search load more error:', e);
+        setSearchError(e.message || 'Search failed');
+      } finally {
+        setIsLoadingMore(false);
+      }
+      return;
+    }
+
     if (isLoadingMore || !hasMoreEmails) return;
     setIsLoadingMore(true);
     try {
       const nextPage = currentPage + 1;
       const data = await mailApi.fetchEmailList(currentFolder, nextPage, PAGE_SIZE);
       const mapped = mapMessages(data, currentFolder);
-      
+
       setEmails(prev => {
         const existingIds = new Set(prev.map(e => e.id));
         const newEmails = mapped.filter(e => !existingIds.has(e.id));
@@ -415,14 +452,14 @@ export function MailProvider({ children }: { children: ReactNode }) {
       setCurrentPage(nextPage);
       const totalLoaded = currentPage * PAGE_SIZE + mapped.length;
       setHasMoreEmails(totalLoaded < (data.total || totalEmails));
-      
+
       collectContacts(mapped);
     } catch (e: any) {
       console.error('loadMoreEmails error:', e);
     } finally {
       setIsLoadingMore(false);
     }
-  }, [currentFolder, currentPage, isLoadingMore, hasMoreEmails, totalEmails, mapMessages, collectContacts]);
+  }, [currentFolder, currentPage, isLoadingMore, hasMoreEmails, totalEmails, mapMessages, collectContacts, isSearchActive, hasMoreSearchResults, searchQuery, searchPage]);
 
   // Auto-fetch on mount and folder change
   useEffect(() => {
@@ -431,18 +468,21 @@ export function MailProvider({ children }: { children: ReactNode }) {
       // Clear search when folder changes
       setSearchQuery('');
       setIsSearchActive(false);
+      setSearchError(null);
+      setSearchResultCount(0);
+      setSearchPage(1);
+      setHasMoreSearchResults(false);
       fetchEmails();
     }
-  }, [currentFolder]);
+  }, [currentFolder, fetchEmails]);
 
   // Server-side search with debounce (metadata-only: subject, from, to, cc)
-  const [searchPage, setSearchPage] = useState(1);
-  const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
-
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
-    if (!searchQuery.trim()) {
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery) {
+      setSearchError(null);
       if (isSearchActive) {
         setIsSearchActive(false);
         setSearchResultCount(0);
@@ -458,19 +498,26 @@ export function MailProvider({ children }: { children: ReactNode }) {
       if (!hasCreds) return;
 
       setIsSearching(true);
+      setSearchError(null);
       try {
         if (!isSearchActive) {
-          setRegularEmails(emails);
+          setRegularEmails(emails.filter((email) => email.folderId === currentFolder));
         }
-        const data = await mailApi.searchEmails(currentFolder, searchQuery.trim(), 1, 30);
+        const data = await mailApi.searchEmails(currentFolder, trimmedQuery, 1, SEARCH_PAGE_SIZE);
         const mapped = mapMessages(data, currentFolder);
         setEmails(mapped);
         setIsSearchActive(true);
         setSearchPage(1);
-        setSearchResultCount(data.total || mapped.length);
+        setSearchResultCount(Number.isFinite(Number(data.total)) ? Number(data.total) : mapped.length);
         setHasMoreSearchResults(!!data.hasMore);
       } catch (e: any) {
         console.error('Search error:', e);
+        setIsSearchActive(true);
+        setEmails([]);
+        setSearchPage(1);
+        setSearchResultCount(0);
+        setHasMoreSearchResults(false);
+        setSearchError(e.message || 'Search failed');
       } finally {
         setIsSearching(false);
       }
@@ -479,7 +526,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [searchQuery]);
+  }, [searchQuery, currentFolder, mapMessages, isSearchActive, emails]);
 
   // Auto-sync interval
   useEffect(() => {
@@ -708,8 +755,10 @@ export function MailProvider({ children }: { children: ReactNode }) {
       isSearching,
       isSearchActive,
       searchResultCount,
+      hasMoreSearchResults,
+      searchError,
     }),
-    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isLoadingMore, hasMoreEmails, totalEmails, isConnected, connectionError, fetchEmails, loadMoreEmails, allFoldersFlat, isSearching, isSearchActive, searchResultCount]
+    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isLoadingMore, hasMoreEmails, totalEmails, isConnected, connectionError, fetchEmails, loadMoreEmails, allFoldersFlat, isSearching, isSearchActive, searchResultCount, hasMoreSearchResults, searchError]
   );
 
   return <MailContext.Provider value={value}>{children}</MailContext.Provider>;

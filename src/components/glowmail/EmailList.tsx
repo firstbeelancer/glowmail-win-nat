@@ -11,7 +11,7 @@ import { t } from '@/lib/i18n';
 type FilterMode = 'all' | 'unread' | 'attachments' | 'to_me' | 'from_me';
 
 export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect: (email: Email) => void, onEditDraft?: (email: Email) => void, selectedEmailId?: string }) {
-  const { emails, currentFolder, searchQuery, setSearchQuery, toggleStar, deleteEmail, settings, updateEmailTags, isLoading, isLoadingMore, hasMoreEmails, totalEmails, connectionError, fetchEmails, loadMoreEmails, markAsRead, markAsUnread, isSearching, isSearchActive, searchResultCount } = useMail();
+  const { emails, currentFolder, searchQuery, setSearchQuery, toggleStar, deleteEmail, settings, updateEmailTags, isLoading, isLoadingMore, hasMoreEmails, totalEmails, connectionError, fetchEmails, loadMoreEmails, markAsRead, markAsUnread, isSearching, isSearchActive, searchResultCount, hasMoreSearchResults, searchError } = useMail();
   const lang = settings.language;
   const [sortBy, setSortBy] = useState<'date' | 'sender' | 'subject' | 'tags' | 'unread'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -173,14 +173,18 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
     Object.entries(groups).forEach(([label, emails]) => groupedEmails.push({ label, emails }));
   }
 
+  const canLoadMore = isSearchActive ? hasMoreSearchResults : hasMoreEmails;
+  const shownCount = isSearchActive ? emails.length : emails.filter(e => e.folderId === currentFolder).length;
+  const totalCount = isSearchActive ? searchResultCount : totalEmails;
+
   // Infinite scroll handler
   const handleScroll = useCallback(() => {
-    if (!listRef.current || isLoadingMore || !hasMoreEmails) return;
+    if (!listRef.current || isLoadingMore || !canLoadMore) return;
     const { scrollTop, scrollHeight, clientHeight } = listRef.current;
     if (scrollHeight - scrollTop - clientHeight < 200) {
       loadMoreEmails();
     }
-  }, [isLoadingMore, hasMoreEmails, loadMoreEmails]);
+  }, [isLoadingMore, canLoadMore, loadMoreEmails]);
 
   const filterLabel = filterMode === 'all' ? '' :
     filterMode === 'unread' ? (lang === 'ru' ? 'Непрочитанные' : 'Unread') :
@@ -305,6 +309,15 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
           </svg>
           <p>{lang === 'ru' ? 'Загрузка писем...' : 'Loading emails...'}</p>
+        </div>
+      ) : isSearchActive && searchError ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full px-6">
+          <AlertTriangle className="w-8 h-8 text-yellow-500 mb-3" />
+          <p className="text-sm text-center mb-1">{lang === 'ru' ? 'Ошибка поиска' : 'Search failed'}</p>
+          <p className="text-xs text-zinc-600 text-center mb-3">{searchError}</p>
+          <button onClick={() => setSearchQuery('')} className="text-xs text-emerald-400 hover:underline">
+            {lang === 'ru' ? 'Сбросить поиск' : 'Clear search'}
+          </button>
         </div>
       ) : connectionError ? (
         <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full px-6">
@@ -573,7 +586,7 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
             </div>
           ))}
           {/* Load more / infinite scroll indicator */}
-          {hasMoreEmails && (
+          {canLoadMore && (
             <div className="p-4 flex flex-col items-center gap-1">
               {isLoadingMore ? (
                 <div className="flex items-center gap-2 text-zinc-500 text-sm py-2">
@@ -589,7 +602,10 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
                   className="w-full py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm font-medium hover:bg-zinc-800 hover:text-zinc-100 transition-colors flex items-center justify-center gap-2"
                 >
                   <ChevronDownIcon className="w-4 h-4" />
-                  {lang === 'ru' ? `Загрузить ещё (${emails.filter(e => e.folderId === currentFolder).length} из ${totalEmails})` : `Load more (${emails.filter(e => e.folderId === currentFolder).length} of ${totalEmails})`}
+                  {isSearchActive
+                    ? (lang === 'ru' ? `Показать ещё результаты (${shownCount} из ${totalCount})` : `Show more results (${shownCount} of ${totalCount})`)
+                    : (lang === 'ru' ? `Загрузить ещё (${shownCount} из ${totalCount})` : `Load more (${shownCount} of ${totalCount})`)
+                  }
                 </button>
               )}
             </div>

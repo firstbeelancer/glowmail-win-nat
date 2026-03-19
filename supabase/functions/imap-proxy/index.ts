@@ -575,72 +575,90 @@ Deno.serve(async (req) => {
         const { folder = "INBOX", query: searchQuery, page = 1, pageSize = 30 } = body;
         if (!searchQuery || typeof searchQuery !== "string") return err("Missing query", 400);
 
-        await client.selectMailbox(folder);
+        const mailboxStatus = await client.selectMailbox(folder);
 
         const term = searchQuery.trim();
         const safePage = Math.max(1, Number(page) || 1);
         const safePageSize = Math.min(50, Math.max(1, Number(pageSize) || 30));
 
-        // Search by metadata only (subject + from + to + cc) — no heavy body/TEXT scan
-        let uids: number[] = [];
-        try {
-          const subjectResult = await (client as any).search({ subject: term }, { byUid: true });
-          const subjectUids = Array.isArray(subjectResult) ? subjectResult.map(Number).filter(Number.isFinite) : [];
-          
-          let fromUids: number[] = [];
-          try {
-            const fromResult = await (client as any).search({ from: term }, { byUid: true });
-            fromUids = Array.isArray(fromResult) ? fromResult.map(Number).filter(Number.isFinite) : [];
-          } catch { /* skip */ }
-
-          let toUids: number[] = [];
-          try {
-            const toResult = await (client as any).search({ to: term }, { byUid: true });
-            toUids = Array.isArray(toResult) ? toResult.map(Number).filter(Number.isFinite) : [];
-          } catch { /* skip */ }
-
-          let ccUids: number[] = [];
-          try {
-            const ccResult = await (client as any).search({ cc: term }, { byUid: true });
-            ccUids = Array.isArray(ccResult) ? ccResult.map(Number).filter(Number.isFinite) : [];
-          } catch { /* skip */ }
-
-          const uidSet = new Set([...subjectUids, ...fromUids, ...toUids, ...ccUids]);
-          uids = Array.from(uidSet);
-        } catch (e) {
-          console.error("IMAP metadata search failed:", e);
-        }
-
-        if (uids.length === 0) {
+        if (!term) {
           await client.disconnect();
           client = null;
           return ok({ emails: [], total: 0, page: safePage, pageSize: safePageSize, hasMore: false });
         }
 
-        uids.sort((a, b) => b - a);
-        const totalFound = uids.length;
+        console.log(`[search] request folder="${folder}" query="${term}" page=${safePage} pageSize=${safePageSize}`);
 
-        const startIdx = (safePage - 1) * safePageSize;
-        const paginatedUids = uids.slice(startIdx, startIdx + safePageSize);
-        const hasMore = startIdx + safePageSize < totalFound;
+        const totalInMailbox = Number((mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0);
+        const termLower = term.toLowerCase();
+        const SCAN_BATCH_SIZE = 150;
 
-        if (paginatedUids.length === 0) {
-          await client.disconnect();
-          client = null;
-          return ok({ emails: [], total: totalFound, page: safePage, pageSize: safePageSize, hasMore: false });
+        const toAddressString = (list: any[] = []) =>
+          list
+            .map((a: any) => `${a?.name || ""} ${a?.mailbox || ""}@${a?.host || ""}`.trim())
+            .join(" ");
+
+        const matchesMetadata = (env: any) => {
+          const haystack = [
+            env?.subject || "",
+            toAddressString(env?.from || []),
+            toAddressString(env?.to || []),
+            toAddressString(env?.cc || []),
+            env?.messageId || "",
+          ]
+            .join("\n")
+            .toLowerCase();
+
+          return haystack.includes(termLower);
+        };
+
+        const matchedMessages: any[] = [];
+
+        for (let seqEnd = totalInMailbox; seqEnd >= 1; seqEnd -= SCAN_BATCH_SIZE) {
+          const seqStart = Math.max(1, seqEnd - SCAN_BATCH_SIZE + 1);
+          const sequence = `${seqStart}:${seqEnd}`;
+
+          const batch = await (client as any).fetch(sequence, {
+            uid: true,
+            envelope: true,
+            flags: true,
+            bodyStructure: true,
+            size: true,
+          });
+
+          const normalizedBatch = (Array.isArray(batch) ? batch : [batch]).filter(Boolean);
+          const batchMatches = normalizedBatch.filter((msg: any) => {
+            if (!Number.isFinite(Number(msg?.uid))) return false;
+            return matchesMetadata(msg?.envelope || {});
+          });
+
+          matchedMessages.push(...batchMatches);
         }
 
-        const uidSetStr = paginatedUids.join(",");
-        const messages = await (client as any).fetch(uidSetStr, {
-          byUid: true,
-          uid: true,
-          envelope: true,
-          flags: true,
-          bodyStructure: true,
-          size: true,
-        });
+        matchedMessages.sort((a: any, b: any) => Number(b.uid) - Number(a.uid));
+        const totalFound = matchedMessages.length;
 
-        const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+        console.log(`[search] mailboxTotal=${totalInMailbox} matched=${totalFound}`);
+
+        if (totalFound === 0) {
+          await client.disconnect();
+          client = null;
+          console.log(`[search] response emails=0 totalFound=0`);
+          return ok({ emails: [], total: 0, page: safePage, pageSize: safePageSize, hasMore: false });
+        }
+
+        const startIdx = (safePage - 1) * safePageSize;
+        const hasMore = startIdx + safePageSize < totalFound;
+        const normalized = matchedMessages.slice(startIdx, startIdx + safePageSize);
+
+        console.log(`[search] page slice start=${startIdx} returned=${normalized.length} hasMore=${hasMore}`);
+
+        if (normalized.length === 0) {
+          await client.disconnect();
+          client = null;
+          console.log(`[search] response emails=0 totalFound=${totalFound}`);
+          return ok({ emails: [], total: totalFound, page: safePage, pageSize: safePageSize, hasMore: false });
+        }
 
         const extractSearchAttachments = (bs: any): { name: string; size: number; type: string }[] => {
           if (!bs) return [];
@@ -696,6 +714,8 @@ Deno.serve(async (req) => {
             };
           })
           .sort((a: any, b: any) => b.uid - a.uid);
+
+        console.log(`[search] fetched messages=${normalized.length} mapped=${emails.length} totalFound=${totalFound}`);
 
         await client.disconnect();
         client = null;

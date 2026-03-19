@@ -173,14 +173,18 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
     Object.entries(groups).forEach(([label, emails]) => groupedEmails.push({ label, emails }));
   }
 
+  const canLoadMore = isSearchActive ? hasMoreSearchResults : hasMoreEmails;
+  const shownCount = isSearchActive ? emails.length : emails.filter(e => e.folderId === currentFolder).length;
+  const totalCount = isSearchActive ? searchResultCount : totalEmails;
+
   // Infinite scroll handler
   const handleScroll = useCallback(() => {
-    if (!listRef.current || isLoadingMore || !hasMoreEmails) return;
+    if (!listRef.current || isLoadingMore || !canLoadMore) return;
     const { scrollTop, scrollHeight, clientHeight } = listRef.current;
     if (scrollHeight - scrollTop - clientHeight < 200) {
       loadMoreEmails();
     }
-  }, [isLoadingMore, hasMoreEmails, loadMoreEmails]);
+  }, [isLoadingMore, canLoadMore, loadMoreEmails]);
 
   const filterLabel = filterMode === 'all' ? '' :
     filterMode === 'unread' ? (lang === 'ru' ? 'Непрочитанные' : 'Unread') :

@@ -177,7 +177,7 @@ export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) 
                       value={smtpHost}
                       onChange={(e) => setSmtpHost(e.target.value)}
                       placeholder={preset?.smtpHost || 'smtp.example.com'}
-                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-primary/50 transition"
+                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-primary/50 transition"
                     />
                   </div>
                   <div>

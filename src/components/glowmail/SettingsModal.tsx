@@ -518,6 +518,25 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
 
                 <div className="space-y-4 pt-4 border-t border-zinc-800/50">
+                  <label className="text-sm font-medium text-zinc-400">{lang === 'ru' ? 'Шрифт композера' : 'Composer Font'}</label>
+                  <select
+                    value={localSettings.composerFont || 'Involve'}
+                    onChange={(e) => setLocalSettings({ ...localSettings, composerFont: e.target.value })}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-zinc-300 outline-none cursor-pointer"
+                  >
+                    <option value="Involve">Involve</option>
+                    <option value="Inter">Inter</option>
+                    <option value="Arial">Arial</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Courier New">Courier New</option>
+                    <option value="Arimo">Arimo</option>
+                    {localSettings.customFonts?.map(font => (
+                      <option key={font.name} value={font.name}>{font.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t border-zinc-800/50">
                   <label className="text-sm font-medium text-zinc-400">{t('settings.customFonts', lang)}</label>
                   <div className="space-y-2">
                     {localSettings.customFonts.map((font, idx) => (

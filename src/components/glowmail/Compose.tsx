@@ -260,8 +260,9 @@ export function Compose({
                   const subtleBg = isLight ? '#e4e4e7' : '#27272a';
                   w.document.write(`<!DOCTYPE html><html><head><title>${t('compose.newMessage', lang)}</title>
                     <style>
-                      * { margin: 0; padding: 0; box-sizing: border-box; }
-                      body { font-family: 'Involve', system-ui, sans-serif; background: ${bg}; color: ${fg}; padding: 24px; }
+                       * { margin: 0; padding: 0; box-sizing: border-box; }
+                       @font-face { font-family: 'Involve'; src: url('${window.location.origin}/fonts/Involve-VF.ttf') format('truetype'); font-weight: 100 900; font-display: swap; }
+                       body { font-family: '${settings.composerFont || 'Involve'}', 'Inter', system-ui, sans-serif; background: ${bg}; color: ${fg}; padding: 24px; }
                       .field { margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
                       .field label { color: ${mutedText}; font-size: 14px; min-width: 60px; }
                       .field input, .field select { flex: 1; background: ${inputBg}; border: 1px solid ${borderColor}; border-radius: 8px; padding: 8px 12px; color: ${fg}; font-size: 14px; outline: none; appearance: none; background-image: none; }
@@ -300,7 +301,7 @@ export function Compose({
                     <div class="field"><label>${t('compose.subjectLabel', lang)}</label><input id="subject" value="${subject}" /></div>
                     <div class="toolbar">
                       <select onchange="document.execCommand('fontName',false,this.value)">
-                        <option value="Inter">Inter</option><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Courier New">Courier New</option>
+                        <option value="Involve"${(settings.composerFont || 'Involve') === 'Involve' ? ' selected' : ''}>Involve</option><option value="Inter"${settings.composerFont === 'Inter' ? ' selected' : ''}>Inter</option><option value="Arial"${settings.composerFont === 'Arial' ? ' selected' : ''}>Arial</option><option value="Times New Roman"${settings.composerFont === 'Times New Roman' ? ' selected' : ''}>Times New Roman</option><option value="Courier New"${settings.composerFont === 'Courier New' ? ' selected' : ''}>Courier New</option>
                       </select>
                       <select onchange="document.execCommand('fontSize',false,this.value)">
                         <option value="1">${t('compose.small', lang)}</option><option value="3" selected>${t('compose.normal', lang)}</option><option value="5">${t('compose.large', lang)}</option><option value="7">${t('compose.huge', lang)}</option>
@@ -546,9 +547,10 @@ export function Compose({
         <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/30 shrink-0 overflow-visible relative">
           <select 
             onChange={(e) => execCommand('fontName', e.target.value)}
-            defaultValue="Inter"
+            defaultValue={settings.composerFont || 'Involve'}
             className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 outline-none cursor-pointer mr-1"
           >
+            <option value="Involve">Involve</option>
             <option value="Inter">Inter</option>
             <option value="Arial">Arial</option>
             <option value="Times New Roman">Times New Roman</option>
@@ -647,7 +649,7 @@ export function Compose({
             ref={editorRef}
             contentEditable
             className="min-h-full outline-none text-sm max-w-none"
-            style={{ color: settings.fontColor || 'inherit' }}
+            style={{ color: settings.fontColor || 'inherit', fontFamily: settings.composerFont || 'Involve' }}
             onInput={(e) => setBody((e.target as HTMLDivElement).innerHTML)}
           />
           {!body && (

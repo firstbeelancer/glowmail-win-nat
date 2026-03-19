@@ -216,6 +216,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       theme: parsedSettings.theme || 'dark',
       emailBackground: parsedSettings.emailBackground || '#09090b',
       fontColor: parsedSettings.fontColor || '#e4e4e7',
+      composerFont: parsedSettings.composerFont || 'Involve',
       customFonts: parsedSettings.customFonts || [],
       delayedSending: parsedSettings.delayedSending || 0,
       syncInterval: parsedSettings.syncInterval ?? 5,

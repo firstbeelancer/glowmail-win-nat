@@ -2,6 +2,43 @@ import { createContext, useContext, useState, ReactNode, useMemo, useEffect, use
 import { Email, Folder, Contact, UserSettings, TagDef } from './types';
 import * as mailApi from './lib/mail-api';
 
+/** Decode RFC 2047 MIME-encoded words (=?charset?encoding?text?=) */
+function decodeMime(str: string): string {
+  if (!str) return str;
+  return str.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (_, charset, encoding, text) => {
+    try {
+      if (encoding.toUpperCase() === 'B') {
+        const bytes = Uint8Array.from(atob(text), c => c.charCodeAt(0));
+        return new TextDecoder(charset).decode(bytes);
+      } else {
+        // Q encoding
+        const decoded = text
+          .replace(/_/g, ' ')
+          .replace(/=([0-9A-Fa-f]{2})/g, (_: string, hex: string) => String.fromCharCode(parseInt(hex, 16)));
+        const bytes = Uint8Array.from(decoded, (c: string) => c.charCodeAt(0));
+        return new TextDecoder(charset).decode(bytes);
+      }
+    } catch { return text; }
+  });
+}
+
+/** Decode IMAP modified UTF-7 folder names (e.g., &BCEEPwQwBDw- → Спам) */
+function decodeModifiedUtf7(str: string): string {
+  if (!str || !str.includes('&')) return str;
+  return str.replace(/&([^-]*)-/g, (_, encoded) => {
+    if (!encoded) return '&';
+    try {
+      const base64 = encoded.replace(/,/g, '/');
+      const bytes = atob(base64);
+      let result = '';
+      for (let i = 0; i < bytes.length; i += 2) {
+        result += String.fromCharCode((bytes.charCodeAt(i) << 8) | bytes.charCodeAt(i + 1));
+      }
+      return result;
+    } catch { return encoded; }
+  });
+}
+
 const MOCK_FOLDERS: Folder[] = [
   { id: 'inbox', name: 'Inbox', icon: 'inbox' },
   { id: 'sent', name: 'Sent', icon: 'send' },
@@ -206,11 +243,21 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const loadFolders = useCallback(async () => {
     try {
       const remoteFolders = await mailApi.fetchFolders();
-      const mapped: Folder[] = remoteFolders.map((f: any) => ({
-        id: f.path || f.name,
-        name: f.name,
-        icon: folderIcon(f.name),
-      }));
+      const mapped: Folder[] = remoteFolders.map((f: any) => {
+        const flags = (f.flags || []).join(' ').toLowerCase();
+        let icon = 'folder';
+        if (f.name === 'INBOX') icon = 'inbox';
+        else if (flags.includes('sent')) icon = 'send';
+        else if (flags.includes('drafts')) icon = 'file';
+        else if (flags.includes('junk')) icon = 'alert-circle';
+        else if (flags.includes('trash')) icon = 'trash-2';
+        else icon = folderIcon(f.name);
+        return {
+          id: f.path || f.name,
+          name: decodeModifiedUtf7(f.name.split('/').pop() || f.name),
+          icon,
+        };
+      });
       if (mapped.length > 0) {
         setFolders(mapped);
       }
@@ -226,22 +273,24 @@ export function MailProvider({ children }: { children: ReactNode }) {
       await loadFolders();
       
       const data = await mailApi.fetchEmailList(currentFolder, 1, 50);
-      const mapped: Email[] = (data.emails || []).map((msg: any) => ({
-        id: String(msg.uid),
-        folderId: currentFolder,
-        from: { id: msg.from?.email || '', name: msg.from?.name || '', email: msg.from?.email || '' },
-        to: (msg.to || []).map((a: any) => ({ id: a.email, name: a.name, email: a.email })),
-        cc: (msg.cc || []).map((a: any) => ({ id: a.email, name: a.name, email: a.email })),
-        subject: msg.subject || '(No Subject)',
-        snippet: msg.subject || '',
-        body: '',
-        date: msg.date || new Date().toISOString(),
-        read: (msg.flags || []).includes('\\Seen'),
-        starred: (msg.flags || []).includes('\\Flagged'),
-        tags: [],
-        attachments: [],
-        headers: { messageId: msg.messageId || '', inReplyTo: msg.inReplyTo || '' },
-      }));
+      const mapped: Email[] = (data.emails || [])
+        .filter((msg: any) => msg.uid) // Skip messages without UID
+        .map((msg: any) => ({
+          id: String(msg.uid),
+          folderId: currentFolder,
+          from: { id: msg.from?.email || '', name: decodeMime(msg.from?.name || ''), email: msg.from?.email || '' },
+          to: (msg.to || []).map((a: any) => ({ id: a.email, name: decodeMime(a.name), email: a.email })),
+          cc: (msg.cc || []).map((a: any) => ({ id: a.email, name: decodeMime(a.name), email: a.email })),
+          subject: decodeMime(msg.subject || '(No Subject)'),
+          snippet: decodeMime(msg.subject || ''),
+          body: '',
+          date: msg.date || new Date().toISOString(),
+          read: (msg.flags || []).includes('\\Seen'),
+          starred: (msg.flags || []).includes('\\Flagged'),
+          tags: [],
+          attachments: [],
+          headers: { messageId: msg.messageId || '', inReplyTo: msg.inReplyTo || '' },
+        }));
       
       setEmails(mapped);
       setIsConnected(true);
@@ -290,11 +339,13 @@ export function MailProvider({ children }: { children: ReactNode }) {
   }, [settings.syncInterval, fetchEmails]);
 
   const markAsRead = (id: string) => {
+    const uid = Number(id);
     setEmails((prev) =>
       prev.map((e) => {
         if (e.id === id && !e.read) {
-          // Fire and forget IMAP flag update
-          mailApi.setEmailFlags(currentFolder, Number(id), ['\\Seen']).catch(console.error);
+          if (!isNaN(uid) && uid > 0) {
+            mailApi.setEmailFlags(currentFolder, uid, ['\\Seen']).catch(console.error);
+          }
           return { ...e, read: true };
         }
         return e;

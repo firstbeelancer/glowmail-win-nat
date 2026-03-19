@@ -310,6 +310,15 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
           </svg>
           <p>{lang === 'ru' ? 'Загрузка писем...' : 'Loading emails...'}</p>
         </div>
+      ) : isSearchActive && searchError ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full px-6">
+          <AlertTriangle className="w-8 h-8 text-yellow-500 mb-3" />
+          <p className="text-sm text-center mb-1">{lang === 'ru' ? 'Ошибка поиска' : 'Search failed'}</p>
+          <p className="text-xs text-zinc-600 text-center mb-3">{searchError}</p>
+          <button onClick={() => setSearchQuery('')} className="text-xs text-emerald-400 hover:underline">
+            {lang === 'ru' ? 'Сбросить поиск' : 'Clear search'}
+          </button>
+        </div>
       ) : connectionError ? (
         <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full px-6">
           <AlertTriangle className="w-8 h-8 text-yellow-500 mb-3" />

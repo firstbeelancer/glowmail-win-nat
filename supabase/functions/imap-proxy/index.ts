@@ -263,8 +263,9 @@ Deno.serve(async (req) => {
             msgSourceType = typeof msg.source;
             msgSourceConstructor = msg.source?.constructor?.name || "undefined";
 
-            readRawCandidate("msg.source", msg.source);
-            if (!rawSource) readRawCandidate("msg.raw", msg.raw);
+            // Try 'raw' first (deno-imap returns raw, not source)
+            readRawCandidate("msg.raw", msg.raw);
+            if (!rawSource) readRawCandidate("msg.source", msg.source);
 
             console.log(
               "fetch source attempt - hasSource:",

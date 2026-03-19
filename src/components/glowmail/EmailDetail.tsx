@@ -329,7 +329,8 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
                 </button>
               ))}
               {!isGeneratingReplies && quickReplies.length === 0 && (
-                <span className="text-sm text-zinc-500">No suggestions available (API key not configured).</span>
+                <span className="text-sm text-zinc-500">Generating suggestions...</span>
+              )}
               )}
             </div>
           </div>

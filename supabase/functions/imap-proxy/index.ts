@@ -158,7 +158,8 @@ Deno.serve(async (req) => {
               uid: true,
               envelope: true,
               flags: true,
-              full: true,
+              allHeaders: true,
+              bodyParts: ["TEXT", "1", "1.1", "2", "2.1"],
             });
           } catch (fetchErr2) {
             console.error("fetch with full failed too:", fetchErr2);

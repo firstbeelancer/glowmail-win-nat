@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useMail } from '../../store';
 import { Email, Contact, Attachment } from '../../types';
-import { X, Send, Paperclip, Sparkles, Loader2, Bold, Italic, Underline, Link, Image as ImageIcon, List, ListOrdered, AlertTriangle, Trash2, ExternalLink, Tag, ChevronDown } from 'lucide-react';
+import { X, Send, Paperclip, Sparkles, Loader2, Bold, Italic, Underline, Link, Image as ImageIcon, List, ListOrdered, AlertTriangle, Trash2, ExternalLink, Tag, ChevronDown, Code } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -320,6 +320,8 @@ export function Compose({
                       <button class="icon-btn" onclick="var url=prompt('URL:');if(url)document.execCommand('createLink',false,url)" title="Link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
                       <button class="icon-btn" onclick="var input=document.createElement('input');input.type='file';input.accept='image/*';input.onchange=function(e){var r=new FileReader();r.onload=function(ev){document.execCommand('insertImage',false,ev.target.result)};r.readAsDataURL(e.target.files[0])};input.click()" title="${t('compose.insertImage', lang)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></button>
                       <span class="sep"></span>
+                      <button class="icon-btn" onclick="var sel=window.getSelection();var txt=sel?sel.toString():'';var code='<pre style=\\'background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:12px 16px;font-family:JetBrains Mono,Fira Code,Consolas,monospace;font-size:13px;overflow-x:auto;margin:8px 0;border:1px solid #313244;white-space:pre-wrap;word-break:break-all;\\'><code>'+(txt||'// code')+'</code></pre><p><br></p>';document.getElementById('body').focus();document.execCommand('insertHTML',false,code);" title="${lang === 'ru' ? 'Блок кода' : 'Code block'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
+                      <span class="sep"></span>
                       <div style="position:relative;display:inline-flex;">
                         <button class="ai-btn" onclick="var m=document.getElementById('ai-menu');m.classList.toggle('show');"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg> ${t('compose.aiMagic', lang)}</button>
                         <div class="ai-menu" id="ai-menu">
@@ -605,6 +607,22 @@ export function Compose({
             }}
           />
           <button onClick={() => imageInputRef.current?.click()} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors" title={t('compose.insertImage', lang)}><ImageIcon className="w-4 h-4" /></button>
+          <div className="w-px h-4 bg-zinc-800 mx-1" />
+          <button
+            onClick={() => {
+              if (!editorRef.current) return;
+              const sel = window.getSelection();
+              const selectedText = sel?.toString() || '';
+              const codeHtml = `<pre style="background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:12px 16px;font-family:'JetBrains Mono','Fira Code',Consolas,monospace;font-size:13px;overflow-x:auto;margin:8px 0;border:1px solid #313244;white-space:pre-wrap;word-break:break-all;"><code>${selectedText || (lang === 'ru' ? '// ваш код здесь' : '// your code here')}</code></pre><p><br></p>`;
+              editorRef.current.focus();
+              document.execCommand('insertHTML', false, codeHtml);
+              setBody(editorRef.current.innerHTML);
+            }}
+            className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"
+            title={lang === 'ru' ? 'Вставить блок кода' : 'Insert code block'}
+          >
+            <Code className="w-4 h-4" />
+          </button>
           
           <div className="flex-1" />
           

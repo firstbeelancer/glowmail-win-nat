@@ -130,7 +130,7 @@ function SidebarContent({
   folders: any[];
   currentFolder: string;
   setCurrentFolder: (id: string) => void;
-  onCompose?: () => void;
+  onCompose?: (prefill?: { to?: string }) => void;
   lang: 'en' | 'ru';
 }) {
   const { fetchEmails, addFolder, emails, contacts, addContact } = useMail();

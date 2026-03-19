@@ -133,7 +133,7 @@ export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) 
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="text-xs text-zinc-400 hover:text-zinc-200 transition flex items-center gap-1"
+              className="text-xs text-neutral-400 hover:text-neutral-200 transition flex items-center gap-1"
             >
               <svg className={`w-3.5 h-3.5 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

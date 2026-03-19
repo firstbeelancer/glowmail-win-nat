@@ -348,17 +348,32 @@ Deno.serve(async (req) => {
 
         const hasBody = Boolean(bodyText || finalHtml);
 
-        console.log("--- Email Body Diagnostics ---");
-        console.log("RAW SOURCE ORIGIN:", rawSourceOrigin);
-        console.log("RAW SOURCE LENGTH:", rawSource.length);
-        console.log("RAW EMAIL (first 300 chars):", rawPreview);
-        console.log("PARSED TEXT LENGTH:", parsed.text?.length ?? 0);
-        console.log("PARSED HTML LENGTH:", parsed.html?.length ?? 0);
-        console.log("ATTACHMENTS COUNT:", parsed.attachments?.length ?? 0);
-        console.log("PARSED KEYS:", Object.keys(parsed || {}));
-        console.log("MSG SOURCE TYPE:", msgSourceType);
-        console.log("MSG SOURCE CONSTRUCTOR:", msgSourceConstructor);
-        console.log("------------------------------");
+        // Extract attachments with base64 content for download
+        const attachments = (parsed.attachments || [])
+          .filter((a: any) => {
+            const mimeType = (a.mimeType || '').toLowerCase();
+            return mimeType !== 'text/plain' && mimeType !== 'text/html';
+          })
+          .map((a: any) => {
+            let contentBase64 = '';
+            try {
+              if (a.content) {
+                const bytes = a.content instanceof Uint8Array ? a.content : new Uint8Array(a.content);
+                // Convert to base64
+                let binary = '';
+                for (let i = 0; i < bytes.length; i++) {
+                  binary += String.fromCharCode(bytes[i]);
+                }
+                contentBase64 = btoa(binary);
+              }
+            } catch { /* skip content if encoding fails */ }
+            return {
+              name: a.filename || 'unnamed',
+              size: a.content?.length || 0,
+              type: a.mimeType || 'application/octet-stream',
+              contentBase64,
+            };
+          });
 
         const env = envelope || {};
         const resolvedUid = targetUid;
@@ -390,6 +405,7 @@ Deno.serve(async (req) => {
           text: bodyText,
           html: finalHtml,
           hasBody,
+          attachments,
         });
       }
 

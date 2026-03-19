@@ -8,11 +8,12 @@ import { Email } from '../types';
 import { Toaster } from 'react-hot-toast';
 import { AnimatePresence } from 'framer-motion';
 import Login from './Login';
+import * as mailApi from '../lib/mail-api';
 
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [composeData, setComposeData] = useState<Partial<Email> | null>(null);
-  const { markAsRead, settings, sendEmail } = useMail();
+  const { markAsRead, settings, sendEmail, isLoading, connectionError, fetchEmails, currentFolder } = useMail();
 
   // Listen for messages from detached composer window
   useEffect(() => {

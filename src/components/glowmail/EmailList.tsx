@@ -586,7 +586,7 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
             </div>
           ))}
           {/* Load more / infinite scroll indicator */}
-          {hasMoreEmails && (
+          {canLoadMore && (
             <div className="p-4 flex flex-col items-center gap-1">
               {isLoadingMore ? (
                 <div className="flex items-center gap-2 text-zinc-500 text-sm py-2">
@@ -602,7 +602,10 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
                   className="w-full py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm font-medium hover:bg-zinc-800 hover:text-zinc-100 transition-colors flex items-center justify-center gap-2"
                 >
                   <ChevronDownIcon className="w-4 h-4" />
-                  {lang === 'ru' ? `Загрузить ещё (${emails.filter(e => e.folderId === currentFolder).length} из ${totalEmails})` : `Load more (${emails.filter(e => e.folderId === currentFolder).length} of ${totalEmails})`}
+                  {isSearchActive
+                    ? (lang === 'ru' ? `Показать ещё результаты (${shownCount} из ${totalCount})` : `Show more results (${shownCount} of ${totalCount})`)
+                    : (lang === 'ru' ? `Загрузить ещё (${shownCount} из ${totalCount})` : `Load more (${shownCount} of ${totalCount})`)
+                  }
                 </button>
               )}
             </div>

@@ -1,5 +1,6 @@
 import { ImapClient, hasAttachments as imapHasAttachments } from "deno-imap";
 import PostalMime from "postal-mime";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,6 +21,181 @@ function err(msg: string, status = 500) {
   });
 }
 
+type Address = { name: string; email: string };
+
+type SearchCacheRow = {
+  account_key: string;
+  account_email: string;
+  imap_host: string;
+  folder_id: string;
+  uid: number;
+  subject: string;
+  snippet: string;
+  from_name: string;
+  from_email: string;
+  to_addresses: Address[];
+  cc_addresses: Address[];
+  attachment_names: string[];
+  has_attachments: boolean;
+  flags: string[];
+  message_id: string;
+  in_reply_to: string;
+  sent_at: string;
+  updated_at?: string;
+};
+
+function getAdminClient() {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) return null;
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+function makeAccountKey(host: string, username: string) {
+  return `${host.trim().toLowerCase()}::${username.trim().toLowerCase()}`;
+}
+
+function normalizeAddress(address: any): Address {
+  if (!address) return { name: "", email: "" };
+  const mailbox = address.mailbox || "";
+  const host = address.host || "";
+  return {
+    name: address.name || mailbox || "",
+    email: mailbox && host ? `${mailbox}@${host}` : (address.email || ""),
+  };
+}
+
+function extractAttachmentNames(bodyStructure: any): string[] {
+  if (!bodyStructure) return [];
+  const names = new Set<string>();
+  const walk = (node: any) => {
+    if (!node) return;
+    const rawDisp = node.disposition || node.contentDisposition || "";
+    const disposition = (typeof rawDisp === "string" ? rawDisp : rawDisp?.type || "").toString().toLowerCase();
+    const nodeType = node.type || node.mediaType || "";
+    const nodeSubtype = node.subtype || node.mediaSubtype || "";
+    const mimeType = `${nodeType}/${nodeSubtype}`.toLowerCase();
+    const filename = node.dispositionParameters?.filename
+      || node.parameters?.name
+      || node.contentDispositionParameters?.filename
+      || node.attrs?.name
+      || (typeof rawDisp === "object" && rawDisp?.params?.filename)
+      || "";
+    const isTextBody = ["text/plain", "text/html"].includes(mimeType);
+    const isMultipart = mimeType.startsWith("multipart/") || mimeType.startsWith("message/");
+    const isAttachment = disposition === "attachment"
+      || (disposition === "inline" && node.id && mimeType.startsWith("image/"))
+      || (filename && !isTextBody)
+      || (!isTextBody && !isMultipart && mimeType !== "/" && nodeType !== "" && disposition !== "" && disposition !== "inline");
+
+    if (isAttachment && filename) names.add(filename);
+    const children = node.childNodes || node.parts || node.body;
+    if (Array.isArray(children)) children.forEach(walk);
+  };
+  walk(bodyStructure);
+  return [...names];
+}
+
+function buildCacheRow(accountKey: string, host: string, username: string, folder: string, msg: any): SearchCacheRow | null {
+  if (!Number.isFinite(Number(msg?.uid))) return null;
+  const env = msg.envelope || {};
+  let hasAttachments = false;
+  try {
+    hasAttachments = msg.bodyStructure ? imapHasAttachments(msg.bodyStructure) : false;
+  } catch {
+    hasAttachments = false;
+  }
+  const attachmentNames = extractAttachmentNames(msg.bodyStructure);
+
+  return {
+    account_key: accountKey,
+    account_email: username.trim().toLowerCase(),
+    imap_host: host.trim().toLowerCase(),
+    folder_id: folder,
+    uid: Number(msg.uid),
+    subject: env.subject || "(No Subject)",
+    snippet: env.subject || "",
+    from_name: normalizeAddress(env.from?.[0]).name,
+    from_email: normalizeAddress(env.from?.[0]).email,
+    to_addresses: (env.to || []).map(normalizeAddress),
+    cc_addresses: (env.cc || []).map(normalizeAddress),
+    attachment_names: attachmentNames,
+    has_attachments: hasAttachments || attachmentNames.length > 0,
+    flags: msg.flags || [],
+    message_id: env.messageId || "",
+    in_reply_to: env.inReplyTo || "",
+    sent_at: env.date || new Date().toISOString(),
+  };
+}
+
+function cacheRowToEmail(row: SearchCacheRow) {
+  return {
+    uid: row.uid,
+    flags: row.flags || [],
+    size: 0,
+    subject: row.subject || "(No Subject)",
+    from: {
+      name: row.from_name || "Unknown",
+      email: row.from_email || "",
+    },
+    to: row.to_addresses || [],
+    cc: row.cc_addresses || [],
+    date: row.sent_at || new Date().toISOString(),
+    messageId: row.message_id || "",
+    inReplyTo: row.in_reply_to || "",
+    hasAttachments: !!row.has_attachments,
+    attachments: (row.attachment_names || []).map((name) => ({
+      name,
+      size: 0,
+      type: "application/octet-stream",
+    })),
+  };
+}
+
+async function upsertSearchCache(rows: SearchCacheRow[]) {
+  if (rows.length === 0) return;
+  const admin = getAdminClient();
+  if (!admin) return;
+  const { error } = await admin
+    .from("email_search_cache")
+    .upsert(rows, { onConflict: "account_key,folder_id,uid" });
+  if (error) {
+    console.error("[search-cache] upsert failed:", error);
+  }
+}
+
+async function querySearchCache(accountKey: string, folder: string, term: string, page: number, pageSize: number) {
+  const admin = getAdminClient();
+  if (!admin) return null;
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const { data, count, error } = await admin
+    .from("email_search_cache")
+    .select("*", { count: "exact" })
+    .eq("account_key", accountKey)
+    .eq("folder_id", folder)
+    .textSearch("search_document", term, {
+      config: "simple",
+      type: "websearch",
+    })
+    .order("sent_at", { ascending: false })
+    .range(from, to);
+
+  if (error) {
+    console.error("[search-cache] query failed:", error);
+    return null;
+  }
+
+  return {
+    emails: ((data || []) as SearchCacheRow[]).map(cacheRowToEmail),
+    total: count || 0,
+    hasMore: (count || 0) > to + 1,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -30,9 +206,30 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json();
     const { action, host, port, secure, username, password } = body;
+    const accountKey = makeAccountKey(host || "", username || "");
 
     if (!host || !username || !password) {
       return err("Missing credentials", 400);
+    }
+
+    if (action === "search" && typeof body.query === "string") {
+      const safePage = Math.max(1, Number(body.page) || 1);
+      const safePageSize = Math.min(50, Math.max(1, Number(body.pageSize) || 30));
+      const term = body.query.trim();
+      const folder = body.folder || "INBOX";
+      if (term) {
+        const cached = await querySearchCache(accountKey, folder, term, safePage, safePageSize);
+        if (cached && cached.total > 0) {
+          return ok({
+            emails: cached.emails,
+            total: cached.total,
+            page: safePage,
+            pageSize: safePageSize,
+            hasMore: cached.hasMore,
+            source: "cache",
+          });
+        }
+      }
     }
 
     const numericPort = Number(port) || 993;
@@ -141,6 +338,12 @@ Deno.serve(async (req) => {
             };
           })
           .sort((a: any, b: any) => b.uid - a.uid); // newest first
+
+        await upsertSearchCache(
+          normalized
+            .map((msg: any) => buildCacheRow(accountKey, host, username, folder, msg))
+            .filter(Boolean) as SearchCacheRow[],
+        );
 
         await client.disconnect();
         client = null;
@@ -513,6 +716,17 @@ Deno.serve(async (req) => {
         await client.selectMailbox(folder);
         await client.moveMessages(String(moveUid), targetFolder, true);
 
+        const admin = getAdminClient();
+        if (admin) {
+          const { error } = await admin
+            .from("email_search_cache")
+            .update({ folder_id: targetFolder })
+            .eq("account_key", accountKey)
+            .eq("folder_id", folder)
+            .eq("uid", Number(moveUid));
+          if (error) console.error("[search-cache] move update failed:", error);
+        }
+
         await client.disconnect();
         client = null;
         return ok({ success: true });
@@ -653,6 +867,12 @@ Deno.serve(async (req) => {
           })
           .sort((a: any, b: any) => b.uid - a.uid);
 
+        await upsertSearchCache(
+          normalized
+            .map((msg: any) => buildCacheRow(accountKey, host, username, folder, msg))
+            .filter(Boolean) as SearchCacheRow[],
+        );
+
         console.log(`[search] response emails=${emails.length} totalFound=${totalFound}`);
 
         await client.disconnect();
@@ -667,6 +887,17 @@ Deno.serve(async (req) => {
         await client.selectMailbox(folder);
         await client.setFlags(String(delUid), ["\\Deleted"], "add", true);
         await client.expunge();
+
+        const admin = getAdminClient();
+        if (admin) {
+          const { error } = await admin
+            .from("email_search_cache")
+            .delete()
+            .eq("account_key", accountKey)
+            .eq("folder_id", folder)
+            .eq("uid", Number(delUid));
+          if (error) console.error("[search-cache] delete failed:", error);
+        }
 
         await client.disconnect();
         client = null;

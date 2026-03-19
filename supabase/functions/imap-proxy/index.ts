@@ -99,22 +99,22 @@ Deno.serve(async (req) => {
           envelope: true,
           flags: true,
           size: true,
-          bodyParts: ["HEADER.FIELDS (CONTENT-TYPE)"],
+          headers: ['Content-Type'],
         });
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
 
-        // Extract Content-Type from fetched header to detect attachments
+        // Extract Content-Type from fetched headers
         const getContentType = (msg: any): string => {
-          // Try bodyParts Map
-          const bpKey = "HEADER.FIELDS (CONTENT-TYPE)";
-          let ct = msg.bodyParts?.get?.(bpKey) || msg["body[header.fields (content-type)]"] || "";
-          if (ct instanceof Uint8Array) ct = new TextDecoder().decode(ct);
-          if (typeof ct === "string") {
-            const match = ct.match(/Content-Type:\s*([^\r\n]+)/i);
-            return match ? match[1].trim().toLowerCase() : "";
-          }
-          return "";
+          const hdrs = msg?.headers;
+          if (!hdrs) return '';
+          let raw = '';
+          if (hdrs instanceof Uint8Array) raw = new TextDecoder().decode(hdrs);
+          else if (typeof hdrs === 'string') raw = hdrs;
+          else if (hdrs instanceof Map) raw = hdrs.get('content-type') || '';
+          else if (typeof hdrs === 'object') raw = hdrs['content-type'] || '';
+          const m = raw.match(/Content-Type:\s*([^\r\n;]+)/i);
+          return m ? m[1].trim().toLowerCase() : raw.toLowerCase();
         };
 
         // Debug first 3
@@ -122,19 +122,11 @@ Deno.serve(async (req) => {
           const ct = getContentType(msg);
           const hdrs = msg?.headers;
           let hdrsInfo = 'null';
-          if (hdrs instanceof Map) hdrsInfo = `Map(${[...hdrs.keys()].join(',')})`;
+          if (hdrs instanceof Uint8Array) hdrsInfo = `Uint8Array(${hdrs.length})`;
+          else if (hdrs instanceof Map) hdrsInfo = `Map(${[...hdrs.keys()].join(',')})`;
+          else if (typeof hdrs === 'string') hdrsInfo = `str(${hdrs.length})`;
           else if (hdrs) hdrsInfo = `obj(${Object.keys(hdrs).join(',')})`;
-          const raw = msg?.raw;
-          let rawInfo = typeof raw;
-          if (raw instanceof Uint8Array) rawInfo = `Uint8Array(${raw.length})`;
-          // Try to extract Content-Type from raw header portion (first 2KB)
-          let rawCT = '';
-          if (raw instanceof Uint8Array && raw.length > 0) {
-            const slice = new TextDecoder().decode(raw.slice(0, 2000));
-            const m = slice.match(/^Content-Type:\s*([^\r\n]+)/im);
-            if (m) rawCT = m[1].trim();
-          }
-          console.log(`CT uid=${msg?.uid} size=${msg?.size} ct="${ct}" hdrs=${hdrsInfo} raw=${rawInfo} rawCT="${rawCT}"`);
+          console.log(`CT uid=${msg?.uid} size=${msg?.size} ct="${ct}" hdrs=${hdrsInfo}`);
         });
 
         const emails = normalized
@@ -142,7 +134,6 @@ Deno.serve(async (req) => {
           .map((msg: any) => {
             const env = msg.envelope || {};
             const contentType = getContentType(msg);
-            // Detect attachments from Content-Type header
             const hasAttachments = contentType.includes("multipart/mixed") || contentType.includes("multipart/signed");
             return {
               uid: msg.uid,

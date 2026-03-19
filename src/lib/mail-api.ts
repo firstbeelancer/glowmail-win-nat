@@ -58,7 +58,7 @@ export async function fetchEmailList(folder = "INBOX", page = 1, pageSize = 50) 
 }
 
 export async function fetchEmailBody(folder: string, uid: number) {
-  const data = await callImap("fetch", { folder, uid });
+  const data = await callImap("fetch", { folder, uid, includeAttachmentContent: false });
   return data;
 }
 

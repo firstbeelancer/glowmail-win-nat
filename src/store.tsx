@@ -185,6 +185,11 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalEmails, setTotalEmails] = useState(0);
   const [hasMoreEmails, setHasMoreEmails] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const [searchResultCount, setSearchResultCount] = useState(0);
+  const [regularEmails, setRegularEmails] = useState<Email[]>([]);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('glowmail_settings');
     let parsedSettings: Partial<UserSettings> = {};

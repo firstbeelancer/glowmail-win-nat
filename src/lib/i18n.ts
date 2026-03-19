@@ -274,6 +274,12 @@ const translations = {
     'settings.languageLabel': 'Язык интерфейса',
     'settings.english': 'English',
     'settings.russian': 'Русский',
+    'settings.syncInterval': 'Период синхронизации',
+    'settings.minutes': 'мин',
+    'settings.syncManual': 'Только вручную',
+    'settings.syncDesc': 'Как часто автоматически проверять новую почту.',
+    'settings.keepFilters': 'Сохранять фильтры между папками',
+    'settings.keepFiltersDesc': 'Сохранять сортировку и фильтры при переключении между папками.',
   },
 } as const;
 

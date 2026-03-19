@@ -159,6 +159,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       fontColor: parsedSettings.fontColor || '#e4e4e7',
       customFonts: parsedSettings.customFonts || [],
       delayedSending: parsedSettings.delayedSending || 0,
+      language: parsedSettings.language || 'en',
       availableTags: parsedSettings.availableTags || [
         { id: '1', name: 'work', color: '#3b82f6' },
         { id: '2', name: 'urgent', color: '#ef4444' },

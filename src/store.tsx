@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, ReactNode, useMemo, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode, useMemo, useEffect, useCallback } from 'react';
 import { Email, Folder, Contact, UserSettings, TagDef } from './types';
+import * as mailApi from './lib/mail-api';
 
 const MOCK_FOLDERS: Folder[] = [
   { id: 'inbox', name: 'Inbox', icon: 'inbox' },

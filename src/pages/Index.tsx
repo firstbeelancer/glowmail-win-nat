@@ -79,24 +79,39 @@ function MailApp() {
   const handleReply = (type: 'reply' | 'replyAll' | 'forward', email: Email, quickReplyText?: string) => {
     let subject = email.subject;
     let to: any[] = [];
+    let cc: any[] = [];
+
+    // Build quoted header with full details
+    const dateStr = new Date(email.date).toLocaleString();
+    const fromStr = `${email.from.name} &lt;${email.from.email}&gt;`;
+    const toStr = email.to.map(c => `${c.name} &lt;${c.email}&gt;`).join(', ');
+    const ccStr = email.cc?.length ? email.cc.map(c => `${c.name} &lt;${c.email}&gt;`).join(', ') : '';
+    
+    let quoteHeader = `<p><b>${settings.language === 'ru' ? 'От' : 'From'}:</b> ${fromStr}<br>`;
+    quoteHeader += `<b>${settings.language === 'ru' ? 'Кому' : 'To'}:</b> ${toStr}<br>`;
+    if (ccStr) quoteHeader += `<b>${settings.language === 'ru' ? 'Копия' : 'Cc'}:</b> ${ccStr}<br>`;
+    quoteHeader += `<b>${settings.language === 'ru' ? 'Дата' : 'Date'}:</b> ${dateStr}<br>`;
+    quoteHeader += `<b>${settings.language === 'ru' ? 'Тема' : 'Subject'}:</b> ${email.subject}</p>`;
+
     let body = quickReplyText
-      ? `<p>${quickReplyText}</p><br><br><hr><p>On ${new Date(email.date).toLocaleString()}, ${email.from.name} wrote:</p><blockquote>${email.body}</blockquote>`
-      : `<br><br><hr><p>On ${new Date(email.date).toLocaleString()}, ${email.from.name} wrote:</p><blockquote>${email.body}</blockquote>`;
+      ? `<p>${quickReplyText}</p><br><br><hr>${quoteHeader}<blockquote>${email.body}</blockquote>`
+      : `<br><br><hr>${quoteHeader}<blockquote>${email.body}</blockquote>`;
 
     if (type === 'reply') {
       subject = subject.startsWith('Re:') ? subject : `Re: ${subject}`;
       to = [email.from];
     } else if (type === 'replyAll') {
       subject = subject.startsWith('Re:') ? subject : `Re: ${subject}`;
-      to = [email.from, ...email.to, ...(email.cc || [])].filter(
+      to = [email.from, ...email.to].filter(
         (c, index, self) => index === self.findIndex((t) => t.email === c.email) && c.email !== 'me@example.com'
       );
+      cc = (email.cc || []).filter(c => c.email !== 'me@example.com');
     } else if (type === 'forward') {
       subject = subject.startsWith('Fwd:') ? subject : `Fwd: ${subject}`;
       to = [];
     }
 
-    setComposeData({ to, subject, body });
+    setComposeData({ to, cc, subject, body });
   };
 
   const handleEditDraft = (email: Email) => {

@@ -431,6 +431,25 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     </button>
                   </div>
                 </div>
+
+                {/* Grouping */}
+                <div className="space-y-4 pt-4 border-t border-zinc-800/50">
+                  <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+                    <Layers className="w-4 h-4" />
+                    {t('settings.groupBy', lang)}
+                  </label>
+                  <select
+                    value={localSettings.groupBy}
+                    onChange={(e) => setLocalSettings({ ...localSettings, groupBy: e.target.value as any })}
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                  >
+                    <option value="none">{t('settings.groupNone', lang)}</option>
+                    <option value="date">{t('settings.groupDate', lang)}</option>
+                    <option value="sender">{t('settings.groupSender', lang)}</option>
+                    <option value="tag">{t('settings.groupTag', lang)}</option>
+                  </select>
+                  <p className="text-xs text-zinc-500">{t('settings.groupDesc', lang)}</p>
+                </div>
               </div>
             )}
 

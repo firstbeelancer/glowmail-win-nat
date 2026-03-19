@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
           return { text, html };
         }
 
-        // Fetch raw RFC822 message (source: true) for reliable parsing
+        // Fetch raw RFC822 message (source + body parts) for reliable parsing
         let msg: any = null;
         try {
           const messages = await (client as any).fetch(String(targetUid), {
@@ -285,19 +285,20 @@ Deno.serve(async (req) => {
             envelope: true,
             flags: true,
             source: true,
+            bodyParts: ["TEXT", "1", "1.1", "1.2", "2"],
           });
           const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
           msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || fetched[0] || null;
         } catch (e) {
           console.error("fetch with source failed:", e);
-          // Fallback: try without source
+          // Fallback: try a minimal body-part only request
           try {
             const messages = await (client as any).fetch(String(targetUid), {
               byUid: true,
               uid: true,
               envelope: true,
               flags: true,
-              bodyParts: ["TEXT", "1", "1.1", "1.2", "2"],
+              bodyParts: ["TEXT"],
             });
             const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
             msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || fetched[0] || null;
@@ -315,6 +316,26 @@ Deno.serve(async (req) => {
         let bodyText = "";
         let bodyHtml = "";
 
+        const extractFromParts = (parts: unknown): { text: string; html: string } => {
+          if (!parts || typeof parts !== "object") return { text: "", html: "" };
+          let text = "";
+          let html = "";
+
+          for (const [, partValue] of Object.entries(parts as Record<string, unknown>)) {
+            const value = partValue as any;
+            const raw = decodeData(value?.data ?? value?.body ?? value);
+            if (!raw) continue;
+
+            const headers = String(value?.headers || value?.header || "").toLowerCase();
+            const isHtml = headers.includes("text/html") || /<\/?[a-z][\s\S]*>/i.test(raw);
+
+            if (isHtml && !html) html = raw;
+            else if (!text) text = raw;
+          }
+
+          return { text, html };
+        };
+
         // Primary: parse from raw source (most reliable)
         if (msg.source) {
           const rawStr = decodeData(msg.source);
@@ -325,14 +346,17 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Fallback: parts object
-        if (!bodyText && !bodyHtml && msg.parts && typeof msg.parts === "object") {
-          for (const [, partValue] of Object.entries(msg.parts as Record<string, unknown>)) {
-            const raw = decodeData((partValue as any)?.data ?? partValue);
-            if (!raw) continue;
-            if (!bodyHtml && /<\/?[a-z][\s\S]*>/i.test(raw)) bodyHtml = raw;
-            else if (!bodyText) bodyText = raw;
-          }
+        // Fallback: deno-imap can return parts as either `parts` or `bodyParts`
+        if (!bodyText && !bodyHtml) {
+          const fromParts = extractFromParts(msg.parts);
+          bodyText = fromParts.text;
+          bodyHtml = fromParts.html;
+        }
+
+        if (!bodyText && !bodyHtml) {
+          const fromBodyParts = extractFromParts(msg.bodyParts);
+          bodyText = fromBodyParts.text;
+          bodyHtml = fromBodyParts.html;
         }
 
         // If bodyText looks like raw MIME, parse it
@@ -347,7 +371,18 @@ Deno.serve(async (req) => {
           bodyHtml = bodyText;
         }
 
-        console.log("fetch result - bodyText length:", bodyText.length, "bodyHtml length:", bodyHtml.length, "has source:", !!msg.source, "has parts:", !!msg.parts);
+        console.log(
+          "fetch result - bodyText length:",
+          bodyText.length,
+          "bodyHtml length:",
+          bodyHtml.length,
+          "has source:",
+          !!msg.source,
+          "has parts:",
+          !!msg.parts,
+          "has bodyParts:",
+          !!msg.bodyParts,
+        );
 
         const env = msg.envelope || {};
         const resolvedUid = Number.isFinite(Number(msg.uid)) ? Number(msg.uid) : targetUid;

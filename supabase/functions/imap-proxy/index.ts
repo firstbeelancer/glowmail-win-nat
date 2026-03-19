@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
 
         await client.disconnect();
         client = null;
-        return ok({ emails, total, page, pageSize });
+        return ok({ emails, total, page: safePage, pageSize: safePageSize });
       }
 
       case "fetch": {

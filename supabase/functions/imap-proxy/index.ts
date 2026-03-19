@@ -348,6 +348,40 @@ Deno.serve(async (req) => {
           }
         }
 
+        if (messageSize > MAX_RAW_BYTES && !rawSource) {
+          await client.disconnect();
+          client = null;
+          console.log("Skipping heavy parse for large message uid:", targetUid, "size:", messageSize);
+          return ok({
+            uid: targetUid,
+            flags,
+            subject: envelope?.subject || "",
+            from: envelope?.from?.[0]
+              ? {
+                  name: envelope.from[0].name || envelope.from[0].mailbox,
+                  email: `${envelope.from[0].mailbox}@${envelope.from[0].host}`,
+                }
+              : { name: "Unknown", email: "" },
+            to: (envelope?.to || []).map((a: any) => ({
+              name: a.name || a.mailbox,
+              email: `${a.mailbox}@${a.host}`,
+            })),
+            cc: (envelope?.cc || []).map((a: any) => ({
+              name: a.name || a.mailbox,
+              email: `${a.mailbox}@${a.host}`,
+            })),
+            date: envelope?.date || "",
+            messageId: envelope?.messageId || "",
+            bodyText: "",
+            bodyHtml: "",
+            text: "",
+            html: "",
+            hasBody: false,
+            tooLargeToParse: true,
+            attachments: [],
+          });
+        }
+
         if (!rawSource) {
           await client.disconnect();
           client = null;

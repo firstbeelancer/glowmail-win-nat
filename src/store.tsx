@@ -444,6 +444,21 @@ export function MailProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const markAsUnread = (id: string) => {
+    const uid = Number(id);
+    setEmails((prev) =>
+      prev.map((e) => {
+        if (e.id === id && e.read) {
+          if (!isNaN(uid) && uid > 0) {
+            mailApi.setEmailFlags(currentFolder, uid, undefined, ['\\Seen']).catch(console.error);
+          }
+          return { ...e, read: false };
+        }
+        return e;
+      })
+    );
+  };
+
   const toggleStar = (id: string) => {
     setEmails((prev) =>
       prev.map((e) => {

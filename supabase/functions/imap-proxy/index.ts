@@ -166,34 +166,23 @@ async function upsertSearchCache(rows: SearchCacheRow[]) {
   }
 }
 
-async function querySearchCache(accountKey: string, folder: string, term: string, page: number, pageSize: number) {
+async function querySearchCacheByUids(accountKey: string, folder: string, uids: number[]) {
   const admin = getAdminClient();
-  if (!admin) return null;
+  if (!admin || uids.length === 0) return [];
 
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-  const { data, count, error } = await admin
+  const { data, error } = await admin
     .from("email_search_cache")
-    .select("*", { count: "exact" })
+    .select("*")
     .eq("account_key", accountKey)
     .eq("folder_id", folder)
-    .textSearch("search_document", term, {
-      config: "simple",
-      type: "websearch",
-    })
-    .order("sent_at", { ascending: false })
-    .range(from, to);
+    .in("uid", uids);
 
   if (error) {
-    console.error("[search-cache] query failed:", error);
-    return null;
+    console.error("[search-cache] uid lookup failed:", error);
+    return [];
   }
 
-  return {
-    emails: ((data || []) as SearchCacheRow[]).map(cacheRowToEmail),
-    total: count || 0,
-    hasMore: (count || 0) > to + 1,
-  };
+  return (data || []) as SearchCacheRow[];
 }
 
 Deno.serve(async (req) => {
@@ -210,26 +199,6 @@ Deno.serve(async (req) => {
 
     if (!host || !username || !password) {
       return err("Missing credentials", 400);
-    }
-
-    if (action === "search" && typeof body.query === "string") {
-      const safePage = Math.max(1, Number(body.page) || 1);
-      const safePageSize = Math.min(50, Math.max(1, Number(body.pageSize) || 30));
-      const term = body.query.trim();
-      const folder = body.folder || "INBOX";
-      if (term) {
-        const cached = await querySearchCache(accountKey, folder, term, safePage, safePageSize);
-        if (cached && cached.total > 0) {
-          return ok({
-            emails: cached.emails,
-            total: cached.total,
-            page: safePage,
-            pageSize: safePageSize,
-            hasMore: cached.hasMore,
-            source: "cache",
-          });
-        }
-      }
     }
 
     const numericPort = Number(port) || 993;
@@ -799,18 +768,28 @@ Deno.serve(async (req) => {
           return ok({ emails: [], total: totalFound, page: safePage, pageSize: safePageSize, hasMore: false });
         }
 
-        // Fetch envelopes only for matched UIDs
-        const uidRange = pageUids.join(",");
-        const messages = await (client as any).fetch(uidRange, {
-          byUid: true,
-          uid: true,
-          envelope: true,
-          flags: true,
-          bodyStructure: true,
-          size: true,
-        });
+        const cachedRows = await querySearchCacheByUids(accountKey, folder, pageUids);
+        const cachedByUid = new Map<number, SearchCacheRow>(
+          cachedRows
+            .filter((row) => Number.isFinite(Number(row.uid)))
+            .map((row) => [Number(row.uid), row]),
+        );
 
-        const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+        const missingUids = pageUids.filter((uid) => !cachedByUid.has(uid));
+        let normalized: any[] = [];
+
+        if (missingUids.length > 0) {
+          const uidRange = missingUids.join(",");
+          const messages = await (client as any).fetch(uidRange, {
+            byUid: true,
+            uid: true,
+            envelope: true,
+            flags: true,
+            bodyStructure: true,
+            size: true,
+          });
+          normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+        }
 
         const extractSearchAttachments = (bs: any): { name: string; size: number; type: string }[] => {
           if (!bs) return [];
@@ -844,7 +823,7 @@ Deno.serve(async (req) => {
           return atts;
         };
 
-        const emails = normalized
+        const fetchedEmails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
           .map((msg: any) => {
             const env = msg.envelope || {};
@@ -864,14 +843,23 @@ Deno.serve(async (req) => {
               inReplyTo: env.inReplyTo || "",
               attachments,
             };
-          })
-          .sort((a: any, b: any) => b.uid - a.uid);
+          });
 
-        await upsertSearchCache(
-          normalized
-            .map((msg: any) => buildCacheRow(accountKey, host, username, folder, msg))
-            .filter(Boolean) as SearchCacheRow[],
+        const fetchedByUid = new Map<number, any>(
+          fetchedEmails.map((email: any) => [Number(email.uid), email]),
         );
+
+        const emails = pageUids
+          .map((uid) => fetchedByUid.get(uid) || cacheRowToEmail(cachedByUid.get(uid)!))
+          .filter(Boolean);
+
+        if (normalized.length > 0) {
+          await upsertSearchCache(
+            normalized
+              .map((msg: any) => buildCacheRow(accountKey, host, username, folder, msg))
+              .filter(Boolean) as SearchCacheRow[],
+          );
+        }
 
         console.log(`[search] response emails=${emails.length} totalFound=${totalFound}`);
 

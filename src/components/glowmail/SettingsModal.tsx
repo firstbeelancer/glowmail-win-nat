@@ -171,6 +171,19 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   <p className="text-xs text-zinc-500 ml-7 mt-1">{t('settings.keepFiltersDesc', lang)}</p>
                 </div>
 
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.markAsReadDelay', lang)}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="60"
+                    value={localSettings.markAsReadDelay}
+                    onChange={(e) => setLocalSettings({ ...localSettings, markAsReadDelay: parseInt(e.target.value) || 0 })}
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                  />
+                  <p className="text-xs text-zinc-500">{t('settings.markAsReadDelayDesc', lang)}</p>
+                </div>
+
                 {/* Language Setting */}
                 <div className="space-y-2 pt-4 border-t border-zinc-800/50">
                   <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">

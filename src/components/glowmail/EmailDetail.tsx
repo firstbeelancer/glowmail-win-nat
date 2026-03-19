@@ -331,7 +331,6 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
               {!isGeneratingReplies && quickReplies.length === 0 && (
                 <span className="text-sm text-zinc-500">Generating suggestions...</span>
               )}
-              )}
             </div>
           </div>
         </div>

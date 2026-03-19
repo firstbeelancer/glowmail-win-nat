@@ -198,16 +198,54 @@ Deno.serve(async (req) => {
         let msgSourceConstructor = "undefined";
         let rawSourceOrigin = "none";
 
-        const toUint8Array = (value: unknown): Uint8Array | null => {
+        const toUint8Array = async (value: unknown): Promise<Uint8Array | null> => {
           if (value instanceof Uint8Array) return value;
           if (typeof value === "string") return new TextEncoder().encode(value);
           if (value instanceof ArrayBuffer) return new Uint8Array(value);
+          // Handle ReadableStream
+          if (value && typeof (value as any).getReader === "function") {
+            try {
+              const reader = (value as ReadableStream).getReader();
+              const chunks: Uint8Array[] = [];
+              while (true) {
+                const { done, value: chunk } = await reader.read();
+                if (done) break;
+                chunks.push(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
+              }
+              const total = chunks.reduce((s, c) => s + c.length, 0);
+              const result = new Uint8Array(total);
+              let offset = 0;
+              for (const c of chunks) { result.set(c, offset); offset += c.length; }
+              return result;
+            } catch { return null; }
+          }
+          // Handle async iterables (deno-imap raw can be AsyncIterable<Uint8Array>)
+          if (value && typeof (value as any)[Symbol.asyncIterator] === "function") {
+            try {
+              const chunks: Uint8Array[] = [];
+              for await (const chunk of value as AsyncIterable<Uint8Array>) {
+                chunks.push(chunk instanceof Uint8Array ? chunk : new TextEncoder().encode(String(chunk)));
+              }
+              const total = chunks.reduce((s, c) => s + c.length, 0);
+              const result = new Uint8Array(total);
+              let offset = 0;
+              for (const c of chunks) { result.set(c, offset); offset += c.length; }
+              return result;
+            } catch { return null; }
+          }
           if (value && typeof value === "object") {
             const maybe = value as { buffer?: unknown; byteOffset?: unknown; byteLength?: unknown };
             if (maybe.buffer instanceof ArrayBuffer) {
               const byteOffset = typeof maybe.byteOffset === "number" ? maybe.byteOffset : 0;
               const byteLength = typeof maybe.byteLength === "number" ? maybe.byteLength : undefined;
               return new Uint8Array(maybe.buffer, byteOffset, byteLength);
+            }
+            // Handle plain object with numeric keys like {0: 82, 1: 101, ...}
+            const keys = Object.keys(value);
+            if (keys.length > 0 && keys.every(k => /^\d+$/.test(k))) {
+              const arr = new Uint8Array(keys.length);
+              for (let i = 0; i < keys.length; i++) arr[i] = (value as any)[i];
+              return arr;
             }
           }
           return null;

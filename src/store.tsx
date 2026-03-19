@@ -245,7 +245,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       const remoteFolders = await mailApi.fetchFolders();
       const mapped: Folder[] = remoteFolders.map((f: any) => ({
         id: f.path || f.name,
-        name: f.name,
+        name: decodeModifiedUtf7(f.name.split('/').pop() || f.name),
         icon: folderIcon(f.name),
       }));
       if (mapped.length > 0) {

@@ -190,6 +190,11 @@ const translations = {
     'layout.folderPlaceholder': 'напр., Работа, Личное, Чеки',
     'layout.cancel': 'Отмена',
     'layout.create': 'Создать',
+    'layout.addressBook': 'Адресная книга',
+    'layout.noContacts': 'Контактов пока нет.',
+    'layout.addContact': 'Добавить контакт',
+    'layout.contactName': 'Имя',
+    'layout.contactEmail': 'Email',
 
     // Folder names
     'folder.inbox': 'Входящие',

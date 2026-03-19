@@ -713,7 +713,7 @@ Deno.serve(async (req) => {
               const srcFetched = (Array.isArray(srcMessages) ? srcMessages : [srcMessages]).filter(Boolean);
               const srcMsg = srcFetched.find((item: any) => Number(item?.uid) === targetUid) || srcFetched[0];
               if (srcMsg?.source) {
-                const rawStr = decodeData(srcMsg.source);
+                const rawStr = decodeData(srcMsg.source, "latin1");
                 if (rawStr) {
                   const parsed = parseMimeParts(rawStr);
                   bodyText = parsed.text;

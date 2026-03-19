@@ -127,7 +127,9 @@ Deno.serve(async (req) => {
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
           .map((msg: any) => {
             const env = msg.envelope || {};
-            const attachments = extractAttachments(msg.bodyStructure);
+            const contentType = getContentType(msg);
+            // Detect attachments from Content-Type header
+            const hasAttachments = contentType.includes("multipart/mixed") || contentType.includes("multipart/signed");
             return {
               uid: msg.uid,
               flags: msg.flags || [],
@@ -150,7 +152,8 @@ Deno.serve(async (req) => {
               date: env.date || new Date().toISOString(),
               messageId: env.messageId || "",
               inReplyTo: env.inReplyTo || "",
-              attachments,
+              hasAttachments,
+              attachments: [],
             };
           })
           .sort((a: any, b: any) => b.uid - a.uid); // newest first

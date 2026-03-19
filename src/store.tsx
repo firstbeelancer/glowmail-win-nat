@@ -2,6 +2,43 @@ import { createContext, useContext, useState, ReactNode, useMemo, useEffect, use
 import { Email, Folder, Contact, UserSettings, TagDef } from './types';
 import * as mailApi from './lib/mail-api';
 
+/** Decode RFC 2047 MIME-encoded words (=?charset?encoding?text?=) */
+function decodeMime(str: string): string {
+  if (!str) return str;
+  return str.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (_, charset, encoding, text) => {
+    try {
+      if (encoding.toUpperCase() === 'B') {
+        const bytes = Uint8Array.from(atob(text), c => c.charCodeAt(0));
+        return new TextDecoder(charset).decode(bytes);
+      } else {
+        // Q encoding
+        const decoded = text
+          .replace(/_/g, ' ')
+          .replace(/=([0-9A-Fa-f]{2})/g, (_: string, hex: string) => String.fromCharCode(parseInt(hex, 16)));
+        const bytes = Uint8Array.from(decoded, (c: string) => c.charCodeAt(0));
+        return new TextDecoder(charset).decode(bytes);
+      }
+    } catch { return text; }
+  });
+}
+
+/** Decode IMAP modified UTF-7 folder names (e.g., &BCEEPwQwBDw- → Спам) */
+function decodeModifiedUtf7(str: string): string {
+  if (!str || !str.includes('&')) return str;
+  return str.replace(/&([^-]*)-/g, (_, encoded) => {
+    if (!encoded) return '&';
+    try {
+      const base64 = encoded.replace(/,/g, '/');
+      const bytes = atob(base64);
+      let result = '';
+      for (let i = 0; i < bytes.length; i += 2) {
+        result += String.fromCharCode((bytes.charCodeAt(i) << 8) | bytes.charCodeAt(i + 1));
+      }
+      return result;
+    } catch { return encoded; }
+  });
+}
+
 const MOCK_FOLDERS: Folder[] = [
   { id: 'inbox', name: 'Inbox', icon: 'inbox' },
   { id: 'sent', name: 'Sent', icon: 'send' },

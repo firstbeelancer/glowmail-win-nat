@@ -126,7 +126,13 @@ function MailApp() {
   };
 
   return (
-    <Layout onCompose={() => setComposeData({})}>
+    <Layout onCompose={(prefill) => {
+      if (prefill?.to) {
+        setComposeData({ to: [{ id: prefill.to, name: prefill.to.split('@')[0], email: prefill.to }] });
+      } else {
+        setComposeData({});
+      }
+    }}>
       <div className="flex h-full relative">
         <div className="flex-1 flex flex-col min-w-0 border-r border-zinc-800/50">
           <EmailList onSelect={handleSelectEmail} onEditDraft={handleEditDraft} />

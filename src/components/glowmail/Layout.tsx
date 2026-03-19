@@ -246,7 +246,7 @@ function SidebarContent({
               <p className="px-3 py-2 text-xs text-zinc-600">{t('layout.noContacts', lang)}</p>
             )}
             {contacts.map(c => (
-              <div key={c.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-zinc-800/50 transition-colors">
+              <div key={c.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-zinc-800/50 transition-colors group/contact">
                 <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-400 shrink-0">
                   {c.name.charAt(0).toUpperCase()}
                 </div>
@@ -254,6 +254,13 @@ function SidebarContent({
                   <div className="text-xs font-medium text-zinc-300 truncate">{c.name}</div>
                   <div className="text-[10px] text-zinc-500 truncate">{c.email}</div>
                 </div>
+                <button
+                  onClick={() => onCompose?.({ to: c.email })}
+                  className="p-1 rounded hover:bg-zinc-700 text-zinc-500 hover:text-emerald-400 transition-colors opacity-0 group-hover/contact:opacity-100"
+                  title={lang === 'ru' ? 'Написать письмо' : 'Compose email'}
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
             <button

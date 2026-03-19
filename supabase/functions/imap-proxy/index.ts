@@ -149,7 +149,19 @@ Deno.serve(async (req) => {
         if (!msg) {
           await client.disconnect();
           client = null;
-          return err("Message not found", 404);
+          return ok({
+            uid,
+            flags: [],
+            subject: "",
+            from: { name: "Unknown", email: "" },
+            to: [],
+            cc: [],
+            date: "",
+            messageId: "",
+            bodyText: "",
+            bodyHtml: "",
+            notFound: true,
+          });
         }
 
         // Try to extract body text

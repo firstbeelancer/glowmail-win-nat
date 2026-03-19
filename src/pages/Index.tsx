@@ -14,7 +14,26 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [composeData, setComposeData] = useState<Partial<Email> | null>(null);
-  const { markAsRead, settings, sendEmail, currentFolder } = useMail();
+  const { markAsRead, settings, sendEmail, currentFolder, emails } = useMail();
+
+  // Get sorted email list for next/prev navigation
+  const folderEmails = emails.filter(e => e.folderId === currentFolder)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const selectedIdx = selectedEmail ? folderEmails.findIndex(e => e.id === selectedEmail.id) : -1;
+  const hasPrev = selectedIdx > 0;
+  const hasNext = selectedIdx >= 0 && selectedIdx < folderEmails.length - 1;
+  const handleNextEmail = () => {
+    if (hasNext) {
+      const next = folderEmails[selectedIdx + 1];
+      handleSelectEmail(next);
+    }
+  };
+  const handlePrevEmail = () => {
+    if (hasPrev) {
+      const prev = folderEmails[selectedIdx - 1];
+      handleSelectEmail(prev);
+    }
+  };
 
   // Listen for messages from detached composer window
   useEffect(() => {
@@ -108,10 +127,21 @@ function MailApp() {
     if (!email.body) {
       try {
         const full = await mailApi.fetchEmailBody(currentFolder, Number(email.id));
+        
+        // Map attachments from fetch response
+        const fetchedAttachments = (full.attachments || []).map((att: any, i: number) => ({
+          id: `att-${email.id}-${i}`,
+          name: att.name || 'unnamed',
+          size: att.size || 0,
+          type: att.type || 'application/octet-stream',
+          url: att.contentBase64 ? `data:${att.type || 'application/octet-stream'};base64,${att.contentBase64}` : '',
+        }));
+
         const enriched = {
           ...email,
           body: buildRenderableEmailBody(full),
           read: true,
+          attachments: fetchedAttachments.length > 0 ? fetchedAttachments : email.attachments,
         };
         setSelectedEmail(enriched);
       } catch (e) {
@@ -121,6 +151,7 @@ function MailApp() {
   };
 
   const handleReply = (type: 'reply' | 'replyAll' | 'forward', email: Email, quickReplyText?: string) => {
+    const myEmail = settings.account.email;
     let subject = email.subject;
     let to: any[] = [];
     let cc: any[] = [];
@@ -146,9 +177,9 @@ function MailApp() {
     } else if (type === 'replyAll') {
       subject = subject.startsWith('Re:') ? subject : `Re: ${subject}`;
       to = [email.from, ...email.to].filter(
-        (c, index, self) => index === self.findIndex((t) => t.email === c.email) && c.email !== 'me@example.com'
+        (c, index, self) => index === self.findIndex((t) => t.email === c.email) && c.email.toLowerCase() !== myEmail.toLowerCase()
       );
-      cc = (email.cc || []).filter(c => c.email !== 'me@example.com');
+      cc = (email.cc || []).filter(c => c.email.toLowerCase() !== myEmail.toLowerCase());
     } else if (type === 'forward') {
       subject = subject.startsWith('Fwd:') ? subject : `Fwd: ${subject}`;
       to = [];
@@ -171,12 +202,16 @@ function MailApp() {
   const renderEmailDetail = () => (
     <AnimatePresence mode="wait">
       {selectedEmail ? (
-        <EmailDetail
+         <EmailDetail
           key={selectedEmail.id}
           email={selectedEmail}
           onBack={() => setSelectedEmail(null)}
           onReply={handleReply}
           onEditDraft={handleEditDraft}
+          onNext={handleNextEmail}
+          onPrev={handlePrevEmail}
+          hasNext={hasNext}
+          hasPrev={hasPrev}
         />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full">
@@ -245,6 +280,10 @@ function MailApp() {
                 onBack={() => setSelectedEmail(null)}
                 onReply={handleReply}
                 onEditDraft={handleEditDraft}
+                onNext={handleNextEmail}
+                onPrev={handlePrevEmail}
+                hasNext={hasNext}
+                hasPrev={hasPrev}
               />
             )}
           </AnimatePresence>

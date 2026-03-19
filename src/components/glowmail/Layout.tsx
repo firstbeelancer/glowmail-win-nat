@@ -275,11 +275,7 @@ function SidebarContent({
           const isExpanded = expandedFolders[folder.id] ?? false;
           return (
              <div key={folder.id}>
-              <button
-                onClick={() => setCurrentFolder(folder.id)}
-                onDragOver={(e) => handleFolderDragOver(e, folder.id)}
-                onDragLeave={handleFolderDragLeave}
-                onDrop={(e) => handleFolderDrop(e, folder.id)}
+              <div
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
                   isActive
@@ -289,16 +285,24 @@ function SidebarContent({
                 )}
               >
                 {hasChildren && (
-                  <button
+                  <span
+                    role="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setExpandedFolders(prev => ({ ...prev, [folder.id]: !isExpanded }));
                     }}
-                    className="p-0.5 -ml-1 hover:bg-zinc-700/50 rounded transition-colors"
+                    className="p-0.5 -ml-1 hover:bg-zinc-700/50 rounded transition-colors cursor-pointer"
                   >
                     {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                  </button>
+                  </span>
                 )}
+                <button
+                  onClick={() => setCurrentFolder(folder.id)}
+                  onDragOver={(e) => handleFolderDragOver(e, folder.id)}
+                  onDragLeave={handleFolderDragLeave}
+                  onDrop={(e) => handleFolderDrop(e, folder.id)}
+                  className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                >
                 <Icon className={cn("w-4 h-4", isActive ? "text-emerald-400" : "text-zinc-500")} />
                 <span className="flex-1 text-left">{translateFolderName(folder.id, folder.name, lang)}</span>
                 {count > 0 && (
@@ -309,7 +313,8 @@ function SidebarContent({
                     {count}
                   </span>
                 )}
-              </button>
+                </button>
+              </div>
               {hasChildren && isExpanded && (
                 <div className="ml-4 mt-0.5 space-y-0.5 border-l border-zinc-800/50 pl-2">
                   {folder.children!.map((child) => {

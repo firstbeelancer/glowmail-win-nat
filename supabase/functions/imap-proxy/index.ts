@@ -150,15 +150,15 @@ Deno.serve(async (req) => {
           return atts;
         };
 
-        // Debug: log bodyStructure for first 3 messages to understand structure
+        // Debug: log structure for first 3 messages
         normalized.slice(0, 3).forEach((msg: any) => {
           const bs = msg?.bodyStructure;
-          const msgKeys = Object.keys(msg || {});
-          console.log(`MSG uid=${msg?.uid} keys=[${msgKeys.join(',')}] hasBS=${!!bs} bsType=${typeof bs}`);
+          console.log(`MSG uid=${msg?.uid} hasBS=${!!bs} bsType=${typeof bs} hasParts=${!!msg?.parts} partsLen=${Array.isArray(msg?.parts) ? msg.parts.length : 'n/a'}`);
           if (bs) {
-            try {
-              console.log(`BS uid=${msg.uid}:`, JSON.stringify(bs).slice(0, 3000));
-            } catch { console.log(`BS uid=${msg.uid}: keys=`, Object.keys(bs)); }
+            try { console.log(`BS uid=${msg.uid}:`, JSON.stringify(bs).slice(0, 3000)); } catch {}
+          }
+          if (Array.isArray(msg?.parts) && msg.parts.length > 0) {
+            try { console.log(`PARTS uid=${msg.uid}:`, JSON.stringify(msg.parts.map((p: any) => ({ type: p.type, subtype: p.subtype, disposition: p.disposition, filename: p.filename, size: p.size, encoding: p.encoding, keys: Object.keys(p) }))).slice(0, 3000)); } catch {}
           }
         });
 

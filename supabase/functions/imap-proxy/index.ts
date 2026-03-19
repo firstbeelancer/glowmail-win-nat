@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
           flags: true,
           bodyStructure: true,
           size: true,
-        }, true);
+        });
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
         const emails = normalized

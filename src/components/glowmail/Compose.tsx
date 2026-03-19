@@ -1,10 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useMail } from '../../store';
 import { Email, Contact, Attachment } from '../../types';
 import { X, Send, Paperclip, Sparkles, Loader2, Bold, Italic, Underline, Link, Image as ImageIcon, List, ListOrdered, AlertTriangle, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { t } from '@/lib/i18n';
 
 export function Compose({
   onClose,
@@ -14,6 +15,7 @@ export function Compose({
   initialData?: Partial<Email>;
 }) {
   const { sendEmail, saveDraft, contacts, settings } = useMail();
+  const lang = settings.language;
   const [to, setTo] = useState(initialData?.to?.map((c) => c.email).join(', ') || '');
   const [cc, setCc] = useState(initialData?.cc?.map((c) => c.email).join(', ') || '');
   const [bcc, setBcc] = useState(initialData?.bcc?.map((c) => c.email).join(', ') || '');
@@ -29,15 +31,49 @@ export function Compose({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
+  // Resizable state
+  const [size, setSize] = useState({ width: 720, height: 600 });
+  const isResizing = useRef(false);
+  const startPos = useRef({ x: 0, y: 0, w: 0, h: 0 });
+
+  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    startPos.current = { x: e.clientX, y: e.clientY, w: size.width, h: size.height };
+    const handleMouseMove = (ev: MouseEvent) => {
+      if (!isResizing.current) return;
+      const dw = startPos.current.x - ev.clientX;
+      const dh = startPos.current.y - ev.clientY;
+      setSize({
+        width: Math.max(480, Math.min(1200, startPos.current.w + dw)),
+        height: Math.max(400, Math.min(900, startPos.current.h + dh)),
+      });
+    };
+    const handleMouseUp = () => {
+      isResizing.current = false;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [size]);
+
   useEffect(() => {
     if (editorRef.current && !editorRef.current.innerHTML && body) {
       editorRef.current.innerHTML = body;
     }
   }, [body]);
 
+  // Apply default font color to editor
+  useEffect(() => {
+    if (editorRef.current && settings.fontColor) {
+      editorRef.current.style.color = settings.fontColor;
+    }
+  }, [settings.fontColor]);
+
   const handleSend = () => {
     if (!to) {
-      toast.error('Please enter a recipient');
+      toast.error(t('compose.recipientRequired', lang));
       return;
     }
     
@@ -77,9 +113,9 @@ export function Compose({
       attachments,
     });
     if (settings.delayedSending && settings.delayedSending > 0) {
-      toast.success(`Email scheduled to be sent in ${settings.delayedSending} minute(s)`);
+      toast.success(t('compose.emailScheduled', lang, { minutes: String(settings.delayedSending) }));
     } else {
-      toast.success('Email sent successfully');
+      toast.success(t('compose.emailSent', lang));
     }
     onClose();
   };
@@ -95,7 +131,7 @@ export function Compose({
       importance,
       attachments,
     });
-    toast.success('Draft saved');
+    toast.success(t('compose.draftSaved', lang));
     onClose();
   };
 
@@ -121,7 +157,8 @@ export function Compose({
   const handleAiAction = async (action: 'rewrite' | 'spellcheck' | 'professional' | 'friendly' | 'translate') => {
     const currentText = editorRef.current?.innerText || '';
     if (!currentText.trim()) {
-      toast.error('Please write some text first');
+      toast.error(t('compose.writeFirst', lang));
+      setShowAiMenu(false);
       return;
     }
 
@@ -134,7 +171,7 @@ export function Compose({
         editorRef.current.innerHTML = `<p>${result.replace(/\n/g, '<br>')}</p>`;
         setBody(editorRef.current.innerHTML);
       }
-      toast.success('AI applied successfully');
+      toast.success(t('compose.aiApplied', lang));
     } catch (err: any) {
       toast.error(err.message || 'AI request failed');
     } finally {
@@ -152,10 +189,27 @@ export function Compose({
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto" onClick={handleSaveDraft} />
       
-      <div className="w-full h-full sm:h-auto sm:max-h-[85vh] sm:max-w-3xl bg-zinc-950 sm:rounded-2xl border border-zinc-800/50 shadow-2xl flex flex-col pointer-events-auto overflow-hidden relative">
+      <div
+        className="bg-zinc-950 sm:rounded-2xl border border-zinc-800/50 shadow-2xl flex flex-col pointer-events-auto overflow-hidden relative"
+        style={{
+          width: '100%',
+          height: '100%',
+          maxWidth: `${size.width}px`,
+          maxHeight: `${size.height}px`,
+        }}
+      >
+        {/* Resize handle (top-left corner) */}
+        <div
+          onMouseDown={handleResizeMouseDown}
+          className="absolute top-0 left-0 w-4 h-4 cursor-nw-resize z-10 group hidden sm:block"
+          title="Drag to resize"
+        >
+          <div className="absolute top-1 left-1 w-2 h-2 border-t-2 border-l-2 border-zinc-600 group-hover:border-emerald-400 transition-colors" />
+        </div>
+
         {/* Header */}
         <div className="h-14 border-b border-zinc-800/50 flex items-center justify-between px-4 bg-zinc-900/50 shrink-0">
-          <h2 className="text-sm font-semibold text-zinc-100">New Message</h2>
+          <h2 className="text-sm font-semibold text-zinc-100">{t('compose.newMessage', lang)}</h2>
           <div className="flex items-center gap-2">
             <button
               onClick={handleSaveDraft}
@@ -169,7 +223,7 @@ export function Compose({
         {/* Form Fields */}
         <div className="flex flex-col shrink-0">
           <div className="flex items-center px-4 py-3 border-b border-zinc-800/50 focus-within:bg-zinc-900/30 transition-colors relative">
-            <span className="text-zinc-500 text-sm w-12">To:</span>
+            <span className="text-zinc-500 text-sm w-16">{t('compose.to', lang)}</span>
             <input
               type="text"
               value={to}
@@ -182,14 +236,14 @@ export function Compose({
               onClick={() => setShowCcBcc(!showCcBcc)}
               className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors ml-2"
             >
-              {showCcBcc ? 'Hide CC/BCC' : 'CC/BCC'}
+              {showCcBcc ? t('compose.hideCcBcc', lang) : t('compose.showCcBcc', lang)}
             </button>
           </div>
           
           {showCcBcc && (
             <>
               <div className="flex items-center px-4 py-3 border-b border-zinc-800/50 focus-within:bg-zinc-900/30 transition-colors">
-                <span className="text-zinc-500 text-sm w-12">Cc:</span>
+                <span className="text-zinc-500 text-sm w-16">{t('compose.cc', lang)}</span>
                 <input
                   type="text"
                   value={cc}
@@ -199,7 +253,7 @@ export function Compose({
                 />
               </div>
               <div className="flex items-center px-4 py-3 border-b border-zinc-800/50 focus-within:bg-zinc-900/30 transition-colors">
-                <span className="text-zinc-500 text-sm w-12">Bcc:</span>
+                <span className="text-zinc-500 text-sm w-16">{t('compose.bcc', lang)}</span>
                 <input
                   type="text"
                   value={bcc}
@@ -212,16 +266,16 @@ export function Compose({
           )}
 
           <div className="flex items-center px-4 py-3 border-b border-zinc-800/50 focus-within:bg-zinc-900/30 transition-colors">
-            <span className="text-zinc-500 text-sm w-12">Subject:</span>
+            <span className="text-zinc-500 text-sm w-16">{t('compose.subjectLabel', lang)}</span>
             <input
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-100 font-medium placeholder:text-zinc-600"
-              placeholder="Email subject"
+              placeholder={t('compose.subjectPlaceholder', lang)}
             />
             <div className="flex items-center gap-2 ml-4">
-              <span className="text-xs text-zinc-500">Importance:</span>
+              <span className="text-xs text-zinc-500">{t('compose.importance', lang)}</span>
               <select
                 value={importance}
                 onChange={(e) => setImportance(e.target.value as 'high' | 'normal' | 'low')}
@@ -231,16 +285,16 @@ export function Compose({
                   importance === 'low' ? "text-zinc-400" : "text-emerald-400"
                 )}
               >
-                <option value="high">High</option>
-                <option value="normal">Normal</option>
-                <option value="low">Low</option>
+                <option value="high">{t('compose.high', lang)}</option>
+                <option value="normal">{t('compose.normal', lang)}</option>
+                <option value="low">{t('compose.low', lang)}</option>
               </select>
             </div>
           </div>
         </div>
 
         {/* Toolbar */}
-        <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/30 shrink-0 overflow-x-auto">
+        <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/30 shrink-0 overflow-visible relative">
           <select 
             onChange={(e) => execCommand('fontName', e.target.value)}
             defaultValue="Inter"
@@ -260,10 +314,10 @@ export function Compose({
             defaultValue="3"
             className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 outline-none cursor-pointer mr-2"
           >
-            <option value="1">Small</option>
-            <option value="3">Normal</option>
-            <option value="5">Large</option>
-            <option value="7">Huge</option>
+            <option value="1">{t('compose.small', lang)}</option>
+            <option value="3">{t('compose.normal', lang)}</option>
+            <option value="5">{t('compose.large', lang)}</option>
+            <option value="7">{t('compose.huge', lang)}</option>
           </select>
           <div className="w-px h-4 bg-zinc-800 mx-1" />
           <button onClick={() => execCommand('bold')} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"><Bold className="w-4 h-4" /></button>
@@ -274,8 +328,8 @@ export function Compose({
           <button onClick={() => execCommand('insertOrderedList')} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"><ListOrdered className="w-4 h-4" /></button>
           <div className="w-px h-4 bg-zinc-800 mx-1" />
           <div className="flex items-center gap-1">
-            <input type="color" onChange={(e) => execCommand('foreColor', e.target.value)} className="w-6 h-6 p-0 border-0 rounded cursor-pointer bg-transparent" title="Text Color" />
-            <input type="color" onChange={(e) => execCommand('hiliteColor', e.target.value)} className="w-6 h-6 p-0 border-0 rounded cursor-pointer bg-transparent" title="Highlight Color" />
+            <input type="color" onChange={(e) => execCommand('foreColor', e.target.value)} className="w-6 h-6 p-0 border-0 rounded cursor-pointer bg-transparent" title={t('compose.textColor', lang)} />
+            <input type="color" onChange={(e) => execCommand('hiliteColor', e.target.value)} className="w-6 h-6 p-0 border-0 rounded cursor-pointer bg-transparent" title={t('compose.highlightColor', lang)} />
           </div>
           <div className="w-px h-4 bg-zinc-800 mx-1" />
           <button onClick={() => {}} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"><Link className="w-4 h-4" /></button>
@@ -296,7 +350,7 @@ export function Compose({
               if (imageInputRef.current) imageInputRef.current.value = '';
             }}
           />
-          <button onClick={() => imageInputRef.current?.click()} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors" title="Insert Image"><ImageIcon className="w-4 h-4" /></button>
+          <button onClick={() => imageInputRef.current?.click()} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors" title={t('compose.insertImage', lang)}><ImageIcon className="w-4 h-4" /></button>
           
           <div className="flex-1" />
           
@@ -313,17 +367,17 @@ export function Compose({
               )}
             >
               {isAiLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-              AI Magic
+              {t('compose.aiMagic', lang)}
             </button>
 
             {showAiMenu && (
-              <div className="absolute right-0 bottom-full mb-2 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
+              <div className="absolute right-0 bottom-full mb-2 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-[60]">
                 <div className="p-1 flex flex-col">
-                  <button onClick={() => handleAiAction('spellcheck')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">Proofread & Fix</button>
-                  <button onClick={() => handleAiAction('professional')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">Make Professional</button>
-                  <button onClick={() => handleAiAction('friendly')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">Make Friendly</button>
-                  <button onClick={() => handleAiAction('rewrite')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">Rewrite (Concise)</button>
-                  <button onClick={() => handleAiAction('translate')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">Auto-Translate</button>
+                  <button onClick={() => handleAiAction('spellcheck')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">{t('compose.proofread', lang)}</button>
+                  <button onClick={() => handleAiAction('professional')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">{t('compose.makeProfessional', lang)}</button>
+                  <button onClick={() => handleAiAction('friendly')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">{t('compose.makeFriendly', lang)}</button>
+                  <button onClick={() => handleAiAction('rewrite')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">{t('compose.rewrite', lang)}</button>
+                  <button onClick={() => handleAiAction('translate')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">{t('compose.autoTranslate', lang)}</button>
                 </div>
               </div>
             )}
@@ -335,18 +389,18 @@ export function Compose({
           className="flex-1 overflow-y-auto p-4 cursor-text relative group"
           style={{ 
             backgroundColor: settings.emailBackground || 'transparent', 
-            color: settings.fontColor || 'inherit',
           } as React.CSSProperties}
         >
           <div
             ref={editorRef}
             contentEditable
-            className="min-h-full outline-none text-sm prose prose-invert prose-zinc max-w-none prose-p:my-1"
+            className="min-h-full outline-none text-sm max-w-none"
+            style={{ color: settings.fontColor || 'inherit' }}
             onInput={(e) => setBody((e.target as HTMLDivElement).innerHTML)}
           />
           {!body && (
             <div className="absolute top-4 left-4 text-sm text-zinc-600 pointer-events-none">
-              Write your message here...
+              {t('compose.placeholder', lang)}
             </div>
           )}
         </div>
@@ -382,7 +436,7 @@ export function Compose({
             <button 
               onClick={() => fileInputRef.current?.click()}
               className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
-              title="Attach files"
+              title={t('compose.attachFiles', lang)}
             >
               <Paperclip className="w-5 h-5" />
             </button>
@@ -392,7 +446,7 @@ export function Compose({
                 onChange={(e) => setSelectedSignatureId(e.target.value)}
                 className="bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-300 px-2 py-1.5 focus:outline-none focus:border-emerald-500/50"
               >
-                <option value="">No Signature</option>
+                <option value="">{t('compose.noSignature', lang)}</option>
                 {settings.signatures.map(sig => (
                   <option key={sig.id} value={sig.id}>{sig.name}</option>
                 ))}
@@ -405,14 +459,14 @@ export function Compose({
               onClick={handleSaveDraft}
               className="px-4 py-2.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-sm font-medium transition-colors"
             >
-              Save Draft
+              {t('compose.saveDraft', lang)}
             </button>
             <button
               onClick={handleSend}
               className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 text-zinc-950 rounded-full font-semibold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] hover:scale-105 transition-all active:scale-95"
             >
               <Send className="w-4 h-4" />
-              Send
+              {t('compose.send', lang)}
             </button>
           </div>
         </div>

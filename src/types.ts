@@ -79,4 +79,5 @@ export type UserSettings = {
   customFonts: { name: string, url: string }[];
   availableTags: TagDef[];
   delayedSending: number;
+  language: 'en' | 'ru';
 };

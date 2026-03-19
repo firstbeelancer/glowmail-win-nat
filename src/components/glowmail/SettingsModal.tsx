@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useMail } from '../../store';
 import { motion } from 'framer-motion';
-import { X, User, Server, Palette, PenTool, Tags, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
+import { X, User, Server, Palette, PenTool, Tags, Plus, Trash2, Image as ImageIcon, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { t } from '@/lib/i18n';
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { settings, updateSettings } = useMail();
@@ -11,10 +12,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [localSettings, setLocalSettings] = useState(settings);
   const [newTag, setNewTag] = useState('');
   const [newTagColor, setNewTagColor] = useState('#10b981');
+  const lang = localSettings.language;
 
   const handleSave = () => {
     updateSettings(localSettings);
-    toast.success('Settings saved successfully');
+    toast.success(t('settings.saved', lang));
     onClose();
   };
 
@@ -43,11 +45,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   };
 
   const tabs = [
-    { id: 'account', label: 'Account', icon: User },
-    { id: 'server', label: 'Server', icon: Server },
-    { id: 'appearance', label: 'Appearance', icon: Palette },
-    { id: 'signature', label: 'Signature', icon: PenTool },
-    { id: 'tags', label: 'Tags', icon: Tags },
+    { id: 'account', label: t('settings.account', lang), icon: User },
+    { id: 'server', label: t('settings.server', lang), icon: Server },
+    { id: 'appearance', label: t('settings.appearance', lang), icon: Palette },
+    { id: 'signature', label: t('settings.signature', lang), icon: PenTool },
+    { id: 'tags', label: t('settings.tags', lang), icon: Tags },
   ] as const;
 
   return (
@@ -66,7 +68,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         {/* Sidebar */}
         <div className="w-full md:w-64 bg-zinc-900/50 border-r border-zinc-800/50 p-4 flex flex-row md:flex-col gap-2 overflow-x-auto shrink-0">
           <div className="hidden md:flex items-center justify-between mb-4 px-2">
-            <h2 className="text-lg font-bold text-zinc-100">Settings</h2>
+            <h2 className="text-lg font-bold text-zinc-100">{t('settings.title', lang)}</h2>
           </div>
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -92,7 +94,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         {/* Content */}
         <div className="flex-1 flex flex-col min-w-0">
           <div className="h-14 border-b border-zinc-800/50 flex items-center justify-between px-6 shrink-0">
-            <h3 className="text-sm font-semibold text-zinc-100 capitalize">{activeTab} Settings</h3>
+            <h3 className="text-sm font-semibold text-zinc-100 capitalize">
+              {activeTab === 'account' && t('settings.accountSettings', lang)}
+              {activeTab === 'server' && t('settings.serverSettings', lang)}
+              {activeTab === 'appearance' && t('settings.appearanceSettings', lang)}
+              {activeTab === 'signature' && t('settings.signatureSettings', lang)}
+              {activeTab === 'tags' && t('settings.tagsSettings', lang)}
+            </h3>
             <button onClick={onClose} className="p-2 -mr-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors">
               <X className="w-5 h-5" />
             </button>
@@ -102,7 +110,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             {activeTab === 'account' && (
               <div className="space-y-6 max-w-md">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-400">Display Name</label>
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.displayName', lang)}</label>
                   <input
                     type="text"
                     value={localSettings.account.name}
@@ -111,7 +119,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-400">Email Address</label>
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.emailAddress', lang)}</label>
                   <input
                     type="email"
                     value={localSettings.account.email}
@@ -120,7 +128,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-400">Delayed Sending (minutes)</label>
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.delayedSending', lang)}</label>
                   <input
                     type="number"
                     min="0"
@@ -128,7 +136,41 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     onChange={(e) => setLocalSettings({ ...localSettings, delayedSending: parseInt(e.target.value) || 0 })}
                     className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
                   />
-                  <p className="text-xs text-zinc-500">Emails will be held in outbox for this duration before sending.</p>
+                  <p className="text-xs text-zinc-500">{t('settings.delayedDesc', lang)}</p>
+                </div>
+
+                {/* Language Setting */}
+                <div className="space-y-2 pt-4 border-t border-zinc-800/50">
+                  <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+                    <Globe className="w-4 h-4" />
+                    {t('settings.languageLabel', lang)}
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      onClick={() => setLocalSettings({ ...localSettings, language: 'en' })}
+                      className={cn(
+                        "flex flex-col items-center gap-2 p-4 rounded-xl border transition-all",
+                        localSettings.language === 'en'
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+                          : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:bg-zinc-800"
+                      )}
+                    >
+                      <span className="text-2xl">🇬🇧</span>
+                      <span className="text-sm font-medium">{t('settings.english', lang)}</span>
+                    </button>
+                    <button
+                      onClick={() => setLocalSettings({ ...localSettings, language: 'ru' })}
+                      className={cn(
+                        "flex flex-col items-center gap-2 p-4 rounded-xl border transition-all",
+                        localSettings.language === 'ru'
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+                          : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:bg-zinc-800"
+                      )}
+                    >
+                      <span className="text-2xl">🇷🇺</span>
+                      <span className="text-sm font-medium">{t('settings.russian', lang)}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -136,10 +178,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             {activeTab === 'server' && (
               <div className="space-y-8 max-w-md">
                 <div className="space-y-4">
-                  <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2">Incoming (IMAP)</h4>
+                  <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2">{t('settings.incomingImap', lang)}</h4>
                   <div className="grid grid-cols-3 gap-4">
                     <div className="col-span-2 space-y-2">
-                      <label className="text-xs font-medium text-zinc-500">Host</label>
+                      <label className="text-xs font-medium text-zinc-500">{t('settings.host', lang)}</label>
                       <input
                         type="text"
                         value={localSettings.server.imapHost}
@@ -148,7 +190,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-medium text-zinc-500">Port</label>
+                      <label className="text-xs font-medium text-zinc-500">{t('settings.port', lang)}</label>
                       <input
                         type="number"
                         value={localSettings.server.imapPort}
@@ -160,10 +202,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
 
                 <div className="space-y-4">
-                  <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2">Outgoing (SMTP)</h4>
+                  <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2">{t('settings.outgoingSmtp', lang)}</h4>
                   <div className="grid grid-cols-3 gap-4">
                     <div className="col-span-2 space-y-2">
-                      <label className="text-xs font-medium text-zinc-500">Host</label>
+                      <label className="text-xs font-medium text-zinc-500">{t('settings.host', lang)}</label>
                       <input
                         type="text"
                         value={localSettings.server.smtpHost}
@@ -172,7 +214,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-medium text-zinc-500">Port</label>
+                      <label className="text-xs font-medium text-zinc-500">{t('settings.port', lang)}</label>
                       <input
                         type="number"
                         value={localSettings.server.smtpPort}
@@ -190,7 +232,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, secure: e.target.checked } })}
                     className="w-4 h-4 rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500/50 bg-zinc-900"
                   />
-                  <span className="text-sm text-zinc-300">Use secure connection (SSL/TLS)</span>
+                  <span className="text-sm text-zinc-300">{t('settings.secureConnection', lang)}</span>
                 </label>
               </div>
             )}
@@ -198,7 +240,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             {activeTab === 'appearance' && (
               <div className="space-y-6 max-w-md">
                 <div className="space-y-4">
-                  <label className="text-sm font-medium text-zinc-400">Theme Preference</label>
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.themePreference', lang)}</label>
                   <div className="grid grid-cols-2 gap-4">
                     <button
                       onClick={() => setLocalSettings({ ...localSettings, theme: 'light' })}
@@ -212,7 +254,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                       <div className="w-12 h-12 rounded-full bg-zinc-200 flex items-center justify-center">
                         <div className="w-6 h-6 rounded-full bg-white shadow-sm" />
                       </div>
-                      <span className="text-sm font-medium">Light</span>
+                      <span className="text-sm font-medium">{t('settings.light', lang)}</span>
                     </button>
                     <button
                       onClick={() => setLocalSettings({ ...localSettings, theme: 'dark' })}
@@ -226,13 +268,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                       <div className="w-12 h-12 rounded-full bg-zinc-900 flex items-center justify-center border border-zinc-800">
                         <div className="w-6 h-6 rounded-full bg-zinc-800 shadow-sm" />
                       </div>
-                      <span className="text-sm font-medium">Dark</span>
+                      <span className="text-sm font-medium">{t('settings.dark', lang)}</span>
                     </button>
                   </div>
                 </div>
 
                 <div className="space-y-4 pt-4 border-t border-zinc-800/50">
-                  <label className="text-sm font-medium text-zinc-400">Email Background Color</label>
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.emailBgColor', lang)}</label>
                   <div className="flex items-center gap-3">
                     <input
                       type="color"
@@ -245,7 +287,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
 
                 <div className="space-y-4 pt-4 border-t border-zinc-800/50">
-                  <label className="text-sm font-medium text-zinc-400">Default Font Color</label>
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.defaultFontColor', lang)}</label>
                   <div className="flex items-center gap-3">
                     <input
                       type="color"
@@ -258,7 +300,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
 
                 <div className="space-y-4 pt-4 border-t border-zinc-800/50">
-                  <label className="text-sm font-medium text-zinc-400">Custom Fonts</label>
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.customFonts', lang)}</label>
                   <div className="space-y-2">
                     {localSettings.customFonts.map((font, idx) => (
                       <div key={idx} className="flex items-center justify-between bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2">
@@ -289,7 +331,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                       className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 transition-colors mt-2"
                     >
                       <Plus className="w-4 h-4" />
-                      Add Custom Font
+                      {t('settings.addCustomFont', lang)}
                     </button>
                   </div>
                 </div>
@@ -299,10 +341,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             {activeTab === 'signature' && (
               <div className="space-y-6 max-w-2xl">
                 <div className="flex items-center justify-between border-b border-zinc-800/50 pb-4">
-                  <h3 className="text-sm font-medium text-zinc-300">Manage Signatures</h3>
+                  <h3 className="text-sm font-medium text-zinc-300">{t('settings.manageSignatures', lang)}</h3>
                   <button
                     onClick={() => {
-                      const name = window.prompt('Enter signature name:');
+                      const name = window.prompt(lang === 'ru' ? 'Введите название подписи:' : 'Enter signature name:');
                       if (name) {
                         const newSig = { id: Date.now().toString(), name, content: '<p><br>--<br>Sent from GlowMail AI</p>' };
                         setLocalSettings({
@@ -315,7 +357,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg text-xs font-medium transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    New Signature
+                    {t('settings.newSignature', lang)}
                   </button>
                 </div>
 
@@ -334,20 +376,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                             className="bg-transparent border-none outline-none text-sm font-medium text-zinc-200 focus:ring-0 p-0"
                           />
                           {localSettings.defaultSignatureId === sig.id ? (
-                            <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] uppercase tracking-wider font-bold rounded-full">Default</span>
+                            <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] uppercase tracking-wider font-bold rounded-full">{t('settings.default', lang)}</span>
                           ) : (
                             <button
                               onClick={() => setLocalSettings({ ...localSettings, defaultSignatureId: sig.id })}
                               className="text-xs text-zinc-500 hover:text-emerald-400 transition-colors"
                             >
-                              Set as Default
+                              {t('settings.setAsDefault', lang)}
                             </button>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => {
-                              const url = window.prompt('Enter image URL:');
+                              const url = window.prompt(lang === 'ru' ? 'Введите URL изображения:' : 'Enter image URL:');
                               if (url) {
                                 const newSigs = localSettings.signatures.map(s => 
                                   s.id === sig.id ? { ...s, content: s.content + `<br><img src="${url}" alt="Logo" style="max-height: 50px;" />` } : s
@@ -356,7 +398,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                               }
                             }}
                             className="p-1.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-zinc-200 transition-colors"
-                            title="Insert Logo"
+                            title={t('settings.insertLogo', lang)}
                           >
                             <ImageIcon className="w-4 h-4" />
                           </button>
@@ -370,7 +412,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                               });
                             }}
                             className="p-1.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-red-400 transition-colors"
-                            title="Delete Signature"
+                            title={t('settings.deleteSignature', lang)}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -383,13 +425,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                           setLocalSettings({ ...localSettings, signatures: newSigs });
                         }}
                         className="w-full h-32 bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 font-mono"
-                        placeholder="<p>Your signature here...</p>"
+                        placeholder={t('settings.signaturePlaceholder', lang)}
                       />
                     </div>
                   ))}
                   {localSettings.signatures.length === 0 && (
                     <div className="text-center py-8 text-zinc-500 text-sm">
-                      No signatures created yet.
+                      {t('settings.noSignatures', lang)}
                     </div>
                   )}
                 </div>
@@ -399,7 +441,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             {activeTab === 'tags' && (
               <div className="space-y-6 max-w-md">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-zinc-400">Add New Tag</label>
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.addNewTag', lang)}</label>
                   <div className="flex gap-2">
                     <input
                       type="color"
@@ -412,7 +454,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                       value={newTag}
                       onChange={(e) => setNewTag(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
-                      placeholder="e.g. newsletter"
+                      placeholder={t('settings.tagPlaceholder', lang)}
                       className="flex-1 bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
                     />
                     <button
@@ -420,13 +462,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                       disabled={!newTag.trim()}
                       className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-100 rounded-xl font-medium text-sm transition-colors flex items-center gap-2"
                     >
-                      <Plus className="w-4 h-4" /> Add
+                      <Plus className="w-4 h-4" /> {t('settings.add', lang)}
                     </button>
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  <label className="text-sm font-medium text-zinc-400">Available Tags</label>
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.availableTags', lang)}</label>
                   <div className="flex flex-col gap-2">
                     {localSettings.availableTags.map((tag) => (
                       <div
@@ -451,7 +493,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                       </div>
                     ))}
                     {localSettings.availableTags.length === 0 && (
-                      <p className="text-sm text-zinc-500 italic">No tags available.</p>
+                      <p className="text-sm text-zinc-500 italic">{t('settings.noTags', lang)}</p>
                     )}
                   </div>
                 </div>
@@ -464,13 +506,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               onClick={onClose}
               className="px-4 py-2 rounded-xl text-sm font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
             >
-              Cancel
+              {t('settings.cancel', lang)}
             </button>
             <button
               onClick={handleSave}
               className="px-6 py-2 bg-emerald-500 text-zinc-950 rounded-xl font-semibold text-sm shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] transition-all"
             >
-              Save Changes
+              {t('settings.saveChanges', lang)}
             </button>
           </div>
         </div>

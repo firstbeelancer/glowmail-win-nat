@@ -4,6 +4,7 @@ import { useMail } from '../../store';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SettingsModal } from './SettingsModal';
+import { t, translateFolderName } from '@/lib/i18n';
 
 const iconMap: Record<string, any> = {
   inbox: Inbox,
@@ -16,7 +17,8 @@ const iconMap: Record<string, any> = {
 };
 
 export function Layout({ children, onCompose }: { children: ReactNode; onCompose: () => void }) {
-  const { folders, currentFolder, setCurrentFolder, searchQuery, setSearchQuery } = useMail();
+  const { folders, currentFolder, setCurrentFolder, searchQuery, setSearchQuery, settings } = useMail();
+  const lang = settings.language;
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -51,6 +53,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
                   onCompose();
                   setIsSidebarOpen(false);
                 }}
+                lang={lang}
               />
             </motion.aside>
           </>
@@ -64,6 +67,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
           currentFolder={currentFolder}
           setCurrentFolder={setCurrentFolder}
           onCompose={onCompose}
+          lang={lang}
         />
       </aside>
 
@@ -82,7 +86,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
             <input
               type="text"
-              placeholder="Search in mail..."
+              placeholder={t('layout.searchPlaceholder', lang)}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-zinc-900/50 border border-zinc-800 rounded-full pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all placeholder:text-zinc-600"
@@ -121,11 +125,13 @@ function SidebarContent({
   currentFolder,
   setCurrentFolder,
   onCompose,
+  lang,
 }: {
   folders: any[];
   currentFolder: string;
   setCurrentFolder: (id: string) => void;
   onCompose?: () => void;
+  lang: 'en' | 'ru';
 }) {
   const { fetchEmails, addFolder, emails } = useMail();
   const [isFetching, setIsFetching] = useState(false);
@@ -159,7 +165,7 @@ function SidebarContent({
     <>
       <div className="p-4 h-16 flex items-center border-b border-zinc-800/50 shrink-0">
         <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent tracking-tight">
-          GlowMail AI
+          {t('app.title', lang)}
         </h1>
       </div>
       
@@ -171,21 +177,21 @@ function SidebarContent({
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 rounded-xl font-medium text-sm border border-zinc-700/50 transition-all disabled:opacity-50"
           >
             <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin text-emerald-400")} />
-            Get Mail
+            {t('layout.getMail', lang)}
           </button>
           <button
             onClick={onCompose}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500 text-zinc-950 rounded-xl font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_25px_rgba(16,185,129,0.4)] hover:-translate-y-0.5 transition-all"
           >
             <Edit3 className="w-4 h-4" />
-            Compose
+            {t('layout.compose', lang)}
           </button>
         </div>
       )}
 
       <div className="flex-1 overflow-y-auto py-2 px-3 space-y-1">
         <div className="flex items-center justify-between px-3 mt-2 mb-2">
-          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Folders</span>
+          <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">{t('layout.folders', lang)}</span>
           <button onClick={() => setShowNewFolderModal(true)} className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-zinc-200 transition-colors">
             <Plus className="w-3.5 h-3.5" />
           </button>
@@ -206,7 +212,7 @@ function SidebarContent({
               )}
             >
               <Icon className={cn("w-4 h-4", isActive ? "text-emerald-400" : "text-zinc-500")} />
-              <span className="flex-1 text-left">{folder.name}</span>
+              <span className="flex-1 text-left">{translateFolderName(folder.id, folder.name, lang)}</span>
               {count > 0 && (
                 <span className={cn(
                   "px-2 py-0.5 rounded-full text-xs font-bold",
@@ -230,7 +236,7 @@ function SidebarContent({
               className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden"
             >
               <div className="p-4 border-b border-zinc-800/50 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-zinc-100">Create Folder</h2>
+                <h2 className="text-lg font-semibold text-zinc-100">{t('layout.createFolder', lang)}</h2>
                 <button
                   onClick={() => setShowNewFolderModal(false)}
                   className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-zinc-200 transition-colors"
@@ -240,13 +246,13 @@ function SidebarContent({
               </div>
               <form onSubmit={handleAddFolder} className="p-4">
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-zinc-400 mb-1.5">Folder Name</label>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1.5">{t('layout.folderName', lang)}</label>
                   <input
                     type="text"
                     value={newFolderName}
                     onChange={(e) => setNewFolderName(e.target.value)}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
-                    placeholder="e.g., Work, Personal, Receipts"
+                    placeholder={t('layout.folderPlaceholder', lang)}
                     autoFocus
                   />
                 </div>
@@ -256,14 +262,14 @@ function SidebarContent({
                     onClick={() => setShowNewFolderModal(false)}
                     className="px-4 py-2 text-sm font-medium text-zinc-300 hover:text-zinc-100 transition-colors"
                   >
-                    Cancel
+                    {t('layout.cancel', lang)}
                   </button>
                   <button
                     type="submit"
                     disabled={!newFolderName.trim()}
                     className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-xl text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Create
+                    {t('layout.create', lang)}
                   </button>
                 </div>
               </form>

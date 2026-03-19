@@ -264,12 +264,15 @@ function MailApp() {
 }
 
 const Index = () => {
-  const [loggedIn] = useState(() => {
+  const [loggedIn, setLoggedIn] = useState(() => {
     return !!localStorage.getItem('glowmail_credentials');
   });
 
   if (!loggedIn) {
-    return <Login />;
+    return <Login onLogin={(creds) => {
+      localStorage.setItem('glowmail_credentials', JSON.stringify(creds));
+      setLoggedIn(true);
+    }} />;
   }
 
   return (

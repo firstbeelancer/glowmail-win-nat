@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { MailProvider, useMail } from './store';
-import { Layout } from './components/glowmail/Layout';
-import { EmailList } from './components/glowmail/EmailList';
-import { EmailDetail } from './components/glowmail/EmailDetail';
-import { Compose } from './components/glowmail/Compose';
-import { Email } from './types';
+import { MailProvider, useMail } from '../store';
+import { Layout } from '../components/glowmail/Layout';
+import { EmailList } from '../components/glowmail/EmailList';
+import { EmailDetail } from '../components/glowmail/EmailDetail';
+import { Compose } from '../components/glowmail/Compose';
+import { Email } from '../types';
 import { Toaster } from 'react-hot-toast';
 import { AnimatePresence } from 'framer-motion';
 import { useEffect } from 'react';

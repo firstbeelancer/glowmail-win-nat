@@ -245,14 +245,20 @@ export function Compose({
               onClick={() => {
                 const w = window.open('', '_blank', 'width=800,height=700,menubar=no,toolbar=no,status=no');
                 if (w) {
+                  const sigOptions = (settings.signatures || []).map(s => `<option value="${s.id}"${s.id === selectedSignatureId ? ' selected' : ''}>${s.name}</option>`).join('');
+                  const sigDataJson = JSON.stringify(settings.signatures || []).replace(/"/g, '&quot;').replace(/'/g, "\\'");
+                  const tagOptions = (settings.availableTags || []).map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+                  const edgeFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/email-ai`;
+                  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
                   w.document.write(`<!DOCTYPE html><html><head><title>${t('compose.newMessage', lang)}</title>
                     <style>
                       * { margin: 0; padding: 0; box-sizing: border-box; }
                       body { font-family: 'Involve', system-ui, sans-serif; background: #09090b; color: #f4f4f5; padding: 24px; }
                       .field { margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
                       .field label { color: #71717a; font-size: 14px; min-width: 60px; }
-                      .field input, .field select { flex: 1; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 8px 12px; color: #f4f4f5; font-size: 14px; outline: none; }
-                      .field input:focus, .field select:focus { border-color: rgba(16,185,129,0.5); }
+                      .field input, .field select { flex: 1; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 8px 12px; color: #f4f4f5; font-size: 14px; outline: none; appearance: none; background-image: none; }
+                      .field select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; padding-right: 28px; cursor: pointer; }
+                      .field input:focus, .field select:focus { border-color: rgba(16,185,129,0.5); box-shadow: 0 0 0 1px rgba(16,185,129,0.5); }
                       .editor { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; min-height: 300px; color: #e4e4e7; font-size: 14px; outline: none; margin-bottom: 16px; overflow-y: auto; }
                       .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: #10b981; color: #09090b; border: none; border-radius: 999px; font-weight: 600; font-size: 14px; cursor: pointer; }
                       .btn:hover { background: #34d399; }
@@ -263,6 +269,15 @@ export function Compose({
                       .toolbar button:hover, .toolbar select:hover { background: #3f3f46; color: #f4f4f5; }
                       .toolbar .sep { width: 1px; height: 16px; background: #3f3f46; margin: 0 4px; }
                       .toolbar input[type=color] { width: 24px; height: 24px; border: none; padding: 0; cursor: pointer; background: transparent; border-radius: 4px; }
+                      .footer-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+                      .footer-bar select { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 6px 28px 6px 10px; color: #a1a1aa; font-size: 13px; outline: none; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; }
+                      .footer-bar select:focus { border-color: rgba(16,185,129,0.5); }
+                      .ai-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid rgba(16,185,129,0.3); background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.15)); color: #34d399; position: relative; }
+                      .ai-btn:hover { background: linear-gradient(135deg, rgba(16,185,129,0.25), rgba(6,182,212,0.25)); }
+                      .ai-menu { display: none; position: absolute; right: 0; bottom: 100%; margin-bottom: 4px; width: 180px; background: #18181b; border: 1px solid #27272a; border-radius: 12px; overflow: hidden; z-index: 100; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+                      .ai-menu.show { display: block; }
+                      .ai-menu button { display: block; width: 100%; text-align: left; padding: 8px 12px; font-size: 13px; color: #a1a1aa; background: none; border: none; cursor: pointer; }
+                      .ai-menu button:hover { background: #27272a; color: #34d399; }
                     </style></head><body>
                     <h2 style="margin-bottom:16px;font-size:18px;">${t('compose.newMessage', lang)}</h2>
                     <div class="field"><label>${t('compose.to', lang)}</label><input id="to" value="${to}" /></div>
@@ -289,16 +304,76 @@ export function Compose({
                       <span class="sep"></span>
                       <button onclick="var url=prompt('URL:');if(url)document.execCommand('createLink',false,url)" title="Link">🔗</button>
                       <button onclick="var input=document.createElement('input');input.type='file';input.accept='image/*';input.onchange=function(e){var r=new FileReader();r.onload=function(ev){document.execCommand('insertImage',false,ev.target.result)};r.readAsDataURL(e.target.files[0])};input.click()" title="${t('compose.insertImage', lang)}">🖼</button>
+                      <span class="sep"></span>
+                      <div style="position:relative;display:inline-flex;">
+                        <button class="ai-btn" onclick="var m=document.getElementById('ai-menu');m.classList.toggle('show');">✨ ${t('compose.aiMagic', lang)}</button>
+                        <div class="ai-menu" id="ai-menu">
+                          <button onclick="doAI('spellcheck')">${t('compose.proofread', lang)}</button>
+                          <button onclick="doAI('professional')">${t('compose.makeProfessional', lang)}</button>
+                          <button onclick="doAI('friendly')">${t('compose.makeFriendly', lang)}</button>
+                          <button onclick="doAI('rewrite')">${t('compose.rewrite', lang)}</button>
+                          <button onclick="doAI('translate')">${t('compose.autoTranslate', lang)}</button>
+                        </div>
+                      </div>
                     </div>
                     <div class="editor" contenteditable="true" id="body">${editorRef.current?.innerHTML || body}</div>
-                    <div style="display:flex;justify-content:flex-end;gap:8px;">
-                      <button class="btn-draft" onclick="window.opener.postMessage({type:'glowmail-draft',to:document.getElementById('to').value,cc:document.getElementById('cc').value,bcc:document.getElementById('bcc').value,subject:document.getElementById('subject').value,body:document.getElementById('body').innerHTML},'*');window.close();">
-                        ${t('compose.saveDraft', lang)}
-                      </button>
-                      <button class="btn" onclick="window.opener.postMessage({type:'glowmail-compose',to:document.getElementById('to').value,cc:document.getElementById('cc').value,bcc:document.getElementById('bcc').value,subject:document.getElementById('subject').value,body:document.getElementById('body').innerHTML},'*');window.close();">
-                        ✉ ${t('compose.send', lang)}
-                      </button>
+                    <div class="footer-bar">
+                      <div style="display:flex;align-items:center;gap:8px;">
+                        <select id="sig-select" onchange="applySig(this.value)">
+                          <option value="">${t('compose.noSignature', lang)}</option>
+                          ${sigOptions}
+                        </select>
+                      </div>
+                      <div style="display:flex;gap:8px;">
+                        <button class="btn-draft" onclick="window.opener.postMessage({type:'glowmail-draft',to:document.getElementById('to').value,cc:document.getElementById('cc').value,bcc:document.getElementById('bcc').value,subject:document.getElementById('subject').value,body:document.getElementById('body').innerHTML},'*');window.close();">
+                          ${t('compose.saveDraft', lang)}
+                        </button>
+                        <button class="btn" onclick="window.opener.postMessage({type:'glowmail-compose',to:document.getElementById('to').value,cc:document.getElementById('cc').value,bcc:document.getElementById('bcc').value,subject:document.getElementById('subject').value,body:document.getElementById('body').innerHTML},'*');window.close();">
+                          ✉ ${t('compose.send', lang)}
+                        </button>
+                      </div>
                     </div>
+                    <script>
+                      var sigData = ${JSON.stringify(settings.signatures || [])};
+                      function applySig(id) {
+                        var s = sigData.find(function(x){return x.id===id});
+                        var ed = document.getElementById('body');
+                        var old = ed.querySelector('.email-signature');
+                        if(old) old.remove();
+                        if(s && s.content) {
+                          var d = document.createElement('div');
+                          d.className = 'email-signature';
+                          d.innerHTML = '<br>' + s.content;
+                          var hr = ed.querySelector('hr');
+                          if(hr) ed.insertBefore(d, hr);
+                          else ed.appendChild(d);
+                        }
+                      }
+                      async function doAI(action) {
+                        document.getElementById('ai-menu').classList.remove('show');
+                        var ed = document.getElementById('body');
+                        var full = ed.innerHTML;
+                        var hrIdx = full.indexOf('<hr');
+                        var userHtml = hrIdx!==-1 ? full.substring(0,hrIdx) : full;
+                        var threadHtml = hrIdx!==-1 ? full.substring(hrIdx) : '';
+                        var sigEl = ed.querySelector('.email-signature');
+                        var sigHtml = sigEl ? sigEl.outerHTML : '';
+                        if(sigEl) { userHtml = userHtml.replace(sigHtml, ''); }
+                        var plain = userHtml.replace(/<[^>]*>/g,'').trim();
+                        if(!plain) return;
+                        try {
+                          var resp = await fetch('${edgeFnUrl}', {
+                            method:'POST',
+                            headers:{'Content-Type':'application/json','Authorization':'Bearer ${anonKey}'},
+                            body: JSON.stringify({action:action, text:plain})
+                          });
+                          var data = await resp.json();
+                          if(data.result) {
+                            ed.innerHTML = '<p>'+data.result.replace(/\\n/g,'<br>')+'</p>' + sigHtml + threadHtml;
+                          }
+                        } catch(e) { console.error(e); }
+                      }
+                    <\/script>
                   </body></html>`);
                   w.document.close();
                   onClose();

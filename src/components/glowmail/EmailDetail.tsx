@@ -8,12 +8,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { t } from '@/lib/i18n';
 
 export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: (type: 'reply' | 'replyAll' | 'forward', email: Email, quickReplyText?: string) => void; onEditDraft?: (email: Email) => void }> = ({ email, onBack, onReply, onEditDraft }) => {
-  const { toggleStar, deleteEmail, settings } = useMail();
+  const { toggleStar, deleteEmail, settings, updateEmailTags } = useMail();
   const lang = settings.language;
   const [showHeaders, setShowHeaders] = useState(false);
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const [isGeneratingReplies, setIsGeneratingReplies] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showTagPicker, setShowTagPicker] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,6 +161,44 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
             >
               <Trash2 className="w-5 h-5 group-hover:drop-shadow-[0_0_8px_rgba(248,113,113,0.5)]" />
             </button>
+          </div>
+          {/* Tag picker in toolbar */}
+          <div className="relative ml-2">
+            <button
+              onClick={() => setShowTagPicker(!showTagPicker)}
+              className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-400 transition-colors"
+              title={t('compose.tagsLabel', lang)}
+            >
+              <Tag className="w-5 h-5" />
+            </button>
+            {showTagPicker && (
+              <div className="absolute left-0 top-full mt-1 w-44 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
+                <div className="p-1.5 flex flex-col max-h-52 overflow-y-auto">
+                  {settings.availableTags.map(tag => {
+                    const isActive = email.tags.includes(tag.name);
+                    return (
+                      <button
+                        key={tag.id}
+                        onClick={() => {
+                          const newTags = isActive
+                            ? email.tags.filter(t2 => t2 !== tag.name)
+                            : [...email.tags, tag.name];
+                          updateEmailTags(email.id, newTags);
+                        }}
+                        className={cn(
+                          "flex items-center gap-2 text-left px-3 py-1.5 text-xs rounded-lg transition-colors",
+                          isActive ? "bg-zinc-800 text-emerald-400" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                        )}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                        {tag.name}
+                        {isActive && <span className="ml-auto text-emerald-400">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-1">

@@ -54,8 +54,8 @@
     --zinc-900: 240 5% 96%;
     --zinc-950: 0 0% 98%;
     
-    --emerald-400: #047857;
-    --emerald-500: #059669;
+    --emerald-400: #348E70;
+    --emerald-500: #348E70;
 
     --background: 0 0% 98%;
     --foreground: 240 10% 4%;
@@ -133,6 +133,15 @@ select option {
   background: hsl(var(--zinc-900));
   color: hsl(var(--zinc-100));
   padding: 8px;
+}
+
+/* Settings modal dropdown overrides — ensure all selects match the unified style */
+select {
+  background-color: hsl(var(--zinc-900) / 0.5);
+  border: 1px solid hsl(var(--zinc-800));
+  border-radius: 12px;
+  color: hsl(var(--zinc-100));
+  font-size: 14px;
 }
 
 /* Unified dropdown menus */

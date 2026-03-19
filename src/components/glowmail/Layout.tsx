@@ -133,10 +133,14 @@ function SidebarContent({
   onCompose?: () => void;
   lang: 'en' | 'ru';
 }) {
-  const { fetchEmails, addFolder, emails } = useMail();
+  const { fetchEmails, addFolder, emails, contacts, addContact } = useMail();
   const [isFetching, setIsFetching] = useState(false);
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [showAddressBook, setShowAddressBook] = useState(false);
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
 
   const getFolderCount = (folderId: string) => {
     const folderEmails = emails.filter(e => e.folderId === folderId);

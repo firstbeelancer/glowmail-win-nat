@@ -394,7 +394,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       const mapped = mapMessages(data, currentFolder);
 
       const total = data.total || 0;
-      setEmails(mapped);
+      setFolderEmails(mapped);
       setCurrentPage(1);
       setTotalEmails(total);
       setHasMoreEmails(mapped.length < total);

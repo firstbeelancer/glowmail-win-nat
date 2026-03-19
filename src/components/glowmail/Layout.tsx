@@ -332,8 +332,8 @@ function SidebarContent({
                           dragOverFolder === child.id && "ring-2 ring-emerald-400/50 bg-emerald-500/10"
                         )}
                       >
-                        <ChildIcon className={cn("w-3.5 h-3.5", isChildActive ? "text-emerald-400" : "text-zinc-600")} />
-                        <span className="flex-1 text-left truncate">{translateFolderName(child.id, child.name, lang)}</span>
+                        <ChildIcon className="w-3.5 h-3.5" style={childColor ? { color: childColor } : undefined} />
+                        <span className="flex-1 text-left truncate" style={childColor && !isChildActive ? { color: childColor } : undefined}>{translateFolderName(child.id, child.name, lang)}</span>
                         {childCount > 0 && (
                           <span className={cn(
                             "px-1.5 py-0.5 rounded-full text-[10px] font-bold",

@@ -419,14 +419,29 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
             </div>
           )}
 
-          <div
-            className="prose prose-invert prose-zinc max-w-none prose-a:text-emerald-400 hover:prose-a:text-emerald-300 prose-p:leading-relaxed p-4 rounded-xl"
-            style={{ 
-              backgroundColor: settings.emailBackground || 'transparent', 
-              color: settings.fontColor || 'inherit',
-            } as React.CSSProperties}
-            dangerouslySetInnerHTML={{ __html: email.body }}
-          />
+          {(() => {
+            const body = email.body || '';
+            const hasHtmlTags = /<\/?[a-z][\s\S]*>/i.test(body);
+            if (hasHtmlTags) {
+              return (
+                <div className="rounded-xl overflow-hidden border border-zinc-800/50 shadow-sm">
+                  <EmailHtmlViewer html={body} />
+                </div>
+              );
+            }
+            if (body.trim()) {
+              return (
+                <div className="rounded-xl overflow-hidden border border-zinc-800/50 shadow-sm">
+                  <EmailTextViewer text={body} />
+                </div>
+              );
+            }
+            return (
+              <p className="text-zinc-500 text-sm italic">
+                {settings.language === 'ru' ? 'Текст письма не удалось загрузить.' : 'Could not load email text.'}
+              </p>
+            );
+          })()}
 
           {email.attachments.length > 0 && (
             <div className="mt-12 pt-8 border-t border-zinc-800/50">

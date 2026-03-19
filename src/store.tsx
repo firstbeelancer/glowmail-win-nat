@@ -176,7 +176,8 @@ const MailContext = createContext<MailContextType | undefined>(undefined);
 
 export function MailProvider({ children }: { children: ReactNode }) {
   const [folders, setFolders] = useState<Folder[]>(MOCK_FOLDERS);
-  const [emails, setEmails] = useState<Email[]>([]);
+  const [folderEmails, setFolderEmails] = useState<Email[]>([]);
+  const [searchResults, setSearchResults] = useState<Email[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [currentFolder, setCurrentFolder] = useState<string>('INBOX');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -191,10 +192,13 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchResultCount, setSearchResultCount] = useState(0);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [regularEmails, setRegularEmails] = useState<Email[]>([]);
   const [searchPage, setSearchPage] = useState(1);
   const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRequestIdRef = useRef(0);
+
+  // Derived: UI always reads from `emails`, which switches based on search mode
+  const emails = isSearchActive ? searchResults : folderEmails;
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('glowmail_settings');
     let parsedSettings: Partial<UserSettings> = {};
@@ -377,6 +381,12 @@ export function MailProvider({ children }: { children: ReactNode }) {
     });
   }, [settings.account.email]);
 
+  // Helper: update both folderEmails and searchResults for mutations (read/star/delete/tags)
+  const updateBothEmailStates = useCallback((updater: (prev: Email[]) => Email[]) => {
+    setFolderEmails(updater);
+    setSearchResults(updater);
+  }, []);
+
   const PAGE_SIZE = 50;
   const SEARCH_PAGE_SIZE = 30;
 
@@ -390,7 +400,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       const mapped = mapMessages(data, currentFolder);
 
       const total = data.total || 0;
-      setEmails(mapped);
+      setFolderEmails(mapped);
       setCurrentPage(1);
       setTotalEmails(total);
       setHasMoreEmails(mapped.length < total);
@@ -416,7 +426,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
         const data = await mailApi.searchEmails(currentFolder, searchQuery.trim(), nextPage, SEARCH_PAGE_SIZE);
         const mapped = mapMessages(data, currentFolder);
 
-        setEmails(prev => {
+        setSearchResults(prev => {
           const existingIds = new Set(prev.map(e => e.id));
           const newEmails = mapped.filter(e => !existingIds.has(e.id));
           return [...prev, ...newEmails];
@@ -444,7 +454,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       const data = await mailApi.fetchEmailList(currentFolder, nextPage, PAGE_SIZE);
       const mapped = mapMessages(data, currentFolder);
 
-      setEmails(prev => {
+      setFolderEmails(prev => {
         const existingIds = new Set(prev.map(e => e.id));
         const newEmails = mapped.filter(e => !existingIds.has(e.id));
         return [...prev, ...newEmails];
@@ -477,19 +487,19 @@ export function MailProvider({ children }: { children: ReactNode }) {
   }, [currentFolder, fetchEmails]);
 
   // Server-side search with debounce (metadata-only: subject, from, to, cc)
+  // NO dependency on `emails` or `isSearchActive` to prevent loops/overwrites
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
     const trimmedQuery = searchQuery.trim();
     if (!trimmedQuery) {
       setSearchError(null);
-      if (isSearchActive) {
-        setIsSearchActive(false);
-        setSearchResultCount(0);
-        setEmails(regularEmails);
-        setSearchPage(1);
-        setHasMoreSearchResults(false);
-      }
+      setIsSearching(false);
+      setIsSearchActive(false);
+      setSearchResults([]);
+      setSearchResultCount(0);
+      setSearchPage(1);
+      setHasMoreSearchResults(false);
       return;
     }
 
@@ -497,36 +507,41 @@ export function MailProvider({ children }: { children: ReactNode }) {
       const hasCreds = !!localStorage.getItem('glowmail_credentials');
       if (!hasCreds) return;
 
+      const requestId = ++searchRequestIdRef.current;
+
       setIsSearching(true);
+      setIsSearchActive(true);
       setSearchError(null);
       try {
-        if (!isSearchActive) {
-          setRegularEmails(emails.filter((email) => email.folderId === currentFolder));
-        }
         const data = await mailApi.searchEmails(currentFolder, trimmedQuery, 1, SEARCH_PAGE_SIZE);
+
+        // Stale response guard: ignore if a newer search was triggered
+        if (searchRequestIdRef.current !== requestId) return;
+
         const mapped = mapMessages(data, currentFolder);
-        setEmails(mapped);
-        setIsSearchActive(true);
+        setSearchResults(mapped);
         setSearchPage(1);
         setSearchResultCount(Number.isFinite(Number(data.total)) ? Number(data.total) : mapped.length);
         setHasMoreSearchResults(!!data.hasMore);
       } catch (e: any) {
+        if (searchRequestIdRef.current !== requestId) return;
         console.error('Search error:', e);
-        setIsSearchActive(true);
-        setEmails([]);
+        setSearchResults([]);
         setSearchPage(1);
         setSearchResultCount(0);
         setHasMoreSearchResults(false);
         setSearchError(e.message || 'Search failed');
       } finally {
-        setIsSearching(false);
+        if (searchRequestIdRef.current === requestId) {
+          setIsSearching(false);
+        }
       }
     }, 500);
 
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [searchQuery, currentFolder, mapMessages, isSearchActive, emails]);
+  }, [searchQuery, currentFolder, mapMessages]);
 
   // Auto-sync interval
   useEffect(() => {
@@ -541,7 +556,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
 
   const markAsRead = (id: string) => {
     const uid = Number(id);
-    setEmails((prev) =>
+    updateBothEmailStates((prev) =>
       prev.map((e) => {
         if (e.id === id && !e.read) {
           if (!isNaN(uid) && uid > 0) {
@@ -556,7 +571,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
 
   const markAsUnread = (id: string) => {
     const uid = Number(id);
-    setEmails((prev) =>
+    updateBothEmailStates((prev) =>
       prev.map((e) => {
         if (e.id === id && e.read) {
           if (!isNaN(uid) && uid > 0) {
@@ -570,7 +585,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
   };
 
   const toggleStar = (id: string) => {
-    setEmails((prev) =>
+    updateBothEmailStates((prev) =>
       prev.map((e) => {
         if (e.id === id) {
           const newStarred = !e.starred;
@@ -594,7 +609,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     } else {
       mailApi.moveEmail(currentFolder, Number(id), trashFolder).catch(console.error);
     }
-    setEmails((prev) => prev.filter((e) => e.id !== id));
+    updateBothEmailStates((prev) => prev.filter((e) => e.id !== id));
   };
 
   const moveEmailToFolder = (id: string, targetFolder: string) => {
@@ -602,7 +617,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     if (!isNaN(uid) && uid > 0) {
       mailApi.moveEmail(currentFolder, uid, targetFolder).catch(console.error);
     }
-    setEmails((prev) => prev.filter((e) => e.id !== id));
+    updateBothEmailStates((prev) => prev.filter((e) => e.id !== id));
   };
 
   const copyEmailToFolder = (id: string, targetFolder: string) => {
@@ -655,7 +670,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
         attachments: email.attachments || [],
         headers: { messageId: `<${Date.now()}@local>` },
       };
-      setEmails((prev) => {
+      updateBothEmailStates((prev) => {
         const updated = email.id ? prev.filter(e => e.id !== email.id) : prev;
         return [newEmail, ...updated];
       });
@@ -687,7 +702,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       attachments: email.attachments || [],
       headers: { messageId: `<${Date.now()}@local>` },
     };
-    setEmails((prev) => {
+    updateBothEmailStates((prev) => {
       const updated = email.id ? prev.filter(e => e.id !== email.id) : prev;
       return [newEmail, ...updated];
     });
@@ -716,7 +731,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
   };
 
   const updateEmailTags = (id: string, tags: string[]) => {
-    setEmails((prev) =>
+    updateBothEmailStates((prev) =>
       prev.map((e) => (e.id === id ? { ...e, tags } : e))
     );
   };

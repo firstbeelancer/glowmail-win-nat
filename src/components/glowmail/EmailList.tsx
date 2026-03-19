@@ -294,7 +294,7 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
         </div>
       </div>
 
-      {isSearching ? (
+      {isSearching && sortedEmails.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full">
           <svg className="w-8 h-8 animate-spin text-primary mb-3" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -358,6 +358,12 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
                   : `Found ${searchResultCount} ${searchResultCount === 1 ? 'email' : 'emails'}`
                 }
               </span>
+              {isSearching && (
+                <svg className="w-3.5 h-3.5 animate-spin text-emerald-400 ml-auto" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                </svg>
+              )}
             </div>
           )}
           {groupedEmails.map((group, gi) => (

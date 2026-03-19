@@ -88,6 +88,7 @@ Deno.serve(async (req) => {
 
         const sequence = pageUids.join(",");
         const messages = await (client as any).fetch(sequence, {
+          byUid: true,
           uid: true,
           envelope: true,
           flags: true,

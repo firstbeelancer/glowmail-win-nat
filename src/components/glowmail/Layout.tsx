@@ -90,14 +90,19 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
         )}
       </AnimatePresence>
 
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 lg:w-72 bg-zinc-900/50 border-r border-zinc-800/50 flex-col">
+      {/* Desktop Sidebar - resizable */}
+      <aside className="hidden md:flex bg-zinc-900/50 border-r border-zinc-800/50 flex-col relative" style={{ width: sidebarWidth, minWidth: 180, maxWidth: 400 }}>
         <SidebarContent
           folders={folders}
           currentFolder={currentFolder}
           setCurrentFolder={setCurrentFolder}
           onCompose={onCompose}
           lang={lang}
+        />
+        {/* Resize handle */}
+        <div
+          onMouseDown={handleMouseDown}
+          className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize group z-20 hover:bg-emerald-500/30 active:bg-emerald-500/40 transition-colors"
         />
       </aside>
 

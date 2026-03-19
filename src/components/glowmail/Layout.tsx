@@ -1,4 +1,4 @@
-import React, { useState, ReactNode } from 'react';
+import React, { useState, ReactNode, DragEvent } from 'react';
 import { Menu, Search, Edit3, Settings, Inbox, Send, File, AlertCircle, Trash2, Briefcase, Plus, RefreshCw, X, Clock, BookUser, ChevronDown, ChevronRight, Mail, LogOut, FolderIcon, FileText } from 'lucide-react';
 import { useMail } from '../../store';
 import { cn } from '@/lib/utils';
@@ -145,7 +145,7 @@ function SidebarContent({
   onCompose?: (prefill?: { to?: string }) => void;
   lang: 'en' | 'ru';
 }) {
-  const { fetchEmails, addFolder, emails, contacts, addContact } = useMail();
+  const { fetchEmails, addFolder, emails, contacts, addContact, moveEmailToFolder } = useMail();
   const [isFetching, setIsFetching] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ INBOX: true });
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
@@ -154,6 +154,26 @@ function SidebarContent({
   const [showAddContact, setShowAddContact] = useState(false);
   const [newContactName, setNewContactName] = useState('');
   const [newContactEmail, setNewContactEmail] = useState('');
+  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
+
+  const handleFolderDragOver = (e: DragEvent, folderId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverFolder(folderId);
+  };
+
+  const handleFolderDragLeave = () => {
+    setDragOverFolder(null);
+  };
+
+  const handleFolderDrop = (e: DragEvent, folderId: string) => {
+    e.preventDefault();
+    setDragOverFolder(null);
+    const emailId = e.dataTransfer.getData('text/email-id');
+    if (emailId && folderId !== currentFolder) {
+      moveEmailToFolder(emailId, folderId);
+    }
+  };
 
   const getFolderCount = (folderId: string) => {
     const folderEmails = emails.filter(e => e.folderId === folderId);
@@ -220,14 +240,18 @@ function SidebarContent({
           const hasChildren = folder.children && folder.children.length > 0;
           const isExpanded = expandedFolders[folder.id] ?? false;
           return (
-            <div key={folder.id}>
+             <div key={folder.id}>
               <button
                 onClick={() => setCurrentFolder(folder.id)}
+                onDragOver={(e) => handleFolderDragOver(e, folder.id)}
+                onDragLeave={handleFolderDragLeave}
+                onDrop={(e) => handleFolderDrop(e, folder.id)}
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
                   isActive
                     ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]"
-                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
+                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200",
+                  dragOverFolder === folder.id && "ring-2 ring-emerald-400/50 bg-emerald-500/10"
                 )}
               >
                 {hasChildren && (
@@ -262,11 +286,15 @@ function SidebarContent({
                       <button
                         key={child.id}
                         onClick={() => setCurrentFolder(child.id)}
+                        onDragOver={(e) => handleFolderDragOver(e, child.id)}
+                        onDragLeave={handleFolderDragLeave}
+                        onDrop={(e) => handleFolderDrop(e, child.id)}
                         className={cn(
                           "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-200",
                           isChildActive
                             ? "bg-emerald-500/10 text-emerald-400"
-                            : "text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"
+                            : "text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300",
+                          dragOverFolder === child.id && "ring-2 ring-emerald-400/50 bg-emerald-500/10"
                         )}
                       >
                         <ChildIcon className={cn("w-3.5 h-3.5", isChildActive ? "text-emerald-400" : "text-zinc-600")} />

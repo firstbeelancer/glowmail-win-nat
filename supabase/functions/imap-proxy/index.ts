@@ -133,15 +133,26 @@ Deno.serve(async (req) => {
             uid: true,
             envelope: true,
             flags: true,
-            body: true,
+            bodyParts: ["HEADER", "TEXT"],
+            full: true,
           });
         } catch (fetchErr) {
-          console.error("fetch with body failed, retrying without body:", fetchErr);
-          messages = await client.fetch(String(uid), {
-            uid: true,
-            envelope: true,
-            flags: true,
-          });
+          console.error("fetch with bodyParts failed, retrying with full only:", fetchErr);
+          try {
+            messages = await client.fetch(String(uid), {
+              uid: true,
+              envelope: true,
+              flags: true,
+              full: true,
+            });
+          } catch (fetchErr2) {
+            console.error("fetch with full failed too:", fetchErr2);
+            messages = await client.fetch(String(uid), {
+              uid: true,
+              envelope: true,
+              flags: true,
+            });
+          }
         }
 
         const msg = Array.isArray(messages) ? messages[0] : messages;
@@ -164,27 +175,111 @@ Deno.serve(async (req) => {
           });
         }
 
-        // Try to extract body text
+        // Helper to decode Uint8Array
+        function decodeData(data: unknown): string {
+          if (data instanceof Uint8Array) {
+            return new TextDecoder().decode(data);
+          }
+          if (typeof data === "string") return data;
+          return "";
+        }
+
+        // Try to extract body text from different sources
         let bodyText = "";
         let bodyHtml = "";
         
-        if (msg.body) {
+        // Method 1: parts.TEXT (from bodyParts)
+        if (msg.parts?.TEXT?.data) {
+          bodyText = decodeData(msg.parts.TEXT.data);
+        }
+        // Method 2: raw message - parse MIME
+        else if (msg.raw) {
+          const rawText = decodeData(msg.raw);
+          const headerBodySplit = rawText.indexOf("\r\n\r\n");
+          if (headerBodySplit > -1) {
+            const headerPart = rawText.substring(0, headerBodySplit);
+            const bodyPart = rawText.substring(headerBodySplit + 4);
+            
+            // Check for multipart
+            const boundaryMatch = headerPart.match(/boundary="?([^";\s]+)"?/i);
+            if (boundaryMatch) {
+              const boundary = boundaryMatch[1];
+              const parts = bodyPart.split("--" + boundary);
+              for (const part of parts) {
+                if (part.trim() === "--" || part.trim() === "") continue;
+                const partSplit = part.indexOf("\r\n\r\n");
+                if (partSplit === -1) continue;
+                const partHeader = part.substring(0, partSplit).toLowerCase();
+                const partBody = part.substring(partSplit + 4).replace(/--$/, "").trim();
+                
+                // Decode quoted-printable or base64
+                let decoded = partBody;
+                if (partHeader.includes("base64")) {
+                  try { decoded = atob(partBody.replace(/\s/g, "")); } catch { decoded = partBody; }
+                  // Handle UTF-8 from base64
+                  try {
+                    const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
+                    decoded = new TextDecoder("utf-8").decode(bytes);
+                  } catch { /* keep as is */ }
+                } else if (partHeader.includes("quoted-printable")) {
+                  decoded = partBody
+                    .replace(/=\r?\n/g, "")
+                    .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+                  try {
+                    const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
+                    decoded = new TextDecoder("utf-8").decode(bytes);
+                  } catch { /* keep as is */ }
+                }
+                
+                if (partHeader.includes("text/html")) {
+                  bodyHtml = decoded;
+                } else if (partHeader.includes("text/plain") && !bodyText) {
+                  bodyText = decoded;
+                }
+              }
+            } else {
+              // Single part message
+              let decoded = bodyPart;
+              if (headerPart.toLowerCase().includes("base64")) {
+                try { decoded = atob(bodyPart.replace(/\s/g, "")); } catch { decoded = bodyPart; }
+                try {
+                  const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
+                  decoded = new TextDecoder("utf-8").decode(bytes);
+                } catch { /* keep as is */ }
+              } else if (headerPart.toLowerCase().includes("quoted-printable")) {
+                decoded = bodyPart
+                  .replace(/=\r?\n/g, "")
+                  .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+                try {
+                  const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
+                  decoded = new TextDecoder("utf-8").decode(bytes);
+                } catch { /* keep as is */ }
+              }
+              bodyText = decoded;
+            }
+          }
+        }
+        // Method 3: body property (legacy fallback)
+        else if (msg.body) {
           if (typeof msg.body === "string") {
             bodyText = msg.body;
           } else if (typeof msg.body === "object") {
             bodyText = msg.body["1"] || msg.body["TEXT"] || msg.body["text"] || "";
             if (!bodyText) {
-              // Try first available key
               const keys = Object.keys(msg.body);
               if (keys.length > 0) bodyText = String(msg.body[keys[0]] || "");
             }
           }
         }
         
-        // Simple check if it's HTML
-        if (bodyText.includes("<html") || bodyText.includes("<div") || bodyText.includes("<p")) {
+        // If we got HTML but no plain text, use HTML
+        if (!bodyText && bodyHtml) bodyText = bodyHtml;
+        // If bodyText looks like HTML, set bodyHtml
+        if (!bodyHtml && bodyText && (bodyText.includes("<html") || bodyText.includes("<div") || bodyText.includes("<p") || bodyText.includes("<table"))) {
           bodyHtml = bodyText;
         }
+
+        console.log("fetch result - bodyText length:", bodyText.length, "bodyHtml length:", bodyHtml.length, "has parts:", !!msg.parts, "has raw:", !!msg.raw);
 
         const env = msg.envelope || {};
         
@@ -212,6 +307,18 @@ Deno.serve(async (req) => {
           bodyText,
           bodyHtml,
         });
+      }
+
+      case "copy": {
+        const { folder = "INBOX", uid: copyUid, targetFolder } = body;
+        if (!copyUid || !targetFolder) return err("Missing uid or targetFolder", 400);
+
+        await client.selectMailbox(folder);
+        await client.copyMessages(String(copyUid), targetFolder, true);
+
+        await client.disconnect();
+        client = null;
+        return ok({ success: true });
       }
 
       case "flags": {

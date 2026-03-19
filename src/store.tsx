@@ -147,6 +147,8 @@ type MailContextType = {
   markAsRead: (id: string) => void;
   toggleStar: (id: string) => void;
   deleteEmail: (id: string) => void;
+  moveEmailToFolder: (id: string, targetFolder: string) => void;
+  copyEmailToFolder: (id: string, targetFolder: string) => void;
   sendEmail: (email: Partial<Email>) => void;
   saveDraft: (email: Partial<Email>) => void;
   addContact: (contact: Contact) => void;
@@ -157,6 +159,7 @@ type MailContextType = {
   isLoading: boolean;
   isConnected: boolean;
   connectionError: string | null;
+  allFoldersFlat: Folder[];
 };
 
 const MailContext = createContext<MailContextType | undefined>(undefined);
@@ -417,6 +420,34 @@ export function MailProvider({ children }: { children: ReactNode }) {
     setEmails((prev) => prev.filter((e) => e.id !== id));
   };
 
+  const moveEmailToFolder = (id: string, targetFolder: string) => {
+    const uid = Number(id);
+    if (!isNaN(uid) && uid > 0) {
+      mailApi.moveEmail(currentFolder, uid, targetFolder).catch(console.error);
+    }
+    setEmails((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  const copyEmailToFolder = (id: string, targetFolder: string) => {
+    const uid = Number(id);
+    if (!isNaN(uid) && uid > 0) {
+      mailApi.copyEmail(currentFolder, uid, targetFolder).catch(console.error);
+    }
+  };
+
+  // Flatten folder tree for folder pickers
+  const allFoldersFlat = useMemo(() => {
+    const result: Folder[] = [];
+    const walk = (list: Folder[]) => {
+      list.forEach(f => {
+        result.push(f);
+        if (f.children) walk(f.children);
+      });
+    };
+    walk(folders);
+    return result;
+  }, [folders]);
+
   const handleSendEmail = async (email: Partial<Email>) => {
     try {
       await mailApi.sendEmail({
@@ -526,6 +557,8 @@ export function MailProvider({ children }: { children: ReactNode }) {
       markAsRead,
       toggleStar,
       deleteEmail: handleDeleteEmail,
+      moveEmailToFolder,
+      copyEmailToFolder,
       sendEmail: handleSendEmail,
       saveDraft,
       addContact,
@@ -536,8 +569,9 @@ export function MailProvider({ children }: { children: ReactNode }) {
       isLoading,
       isConnected,
       connectionError,
+      allFoldersFlat,
     }),
-    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isConnected, connectionError, fetchEmails]
+    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isConnected, connectionError, fetchEmails, allFoldersFlat]
   );
 
   return <MailContext.Provider value={value}>{children}</MailContext.Provider>;

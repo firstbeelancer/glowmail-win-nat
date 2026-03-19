@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useMail } from '../../store';
 import { Email } from '../../types';
 import { formatDistanceToNow } from 'date-fns';
@@ -13,6 +13,18 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
   const [sortBy, setSortBy] = useState<'date' | 'sender' | 'subject' | 'tags' | 'unread'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const prevFolderRef = useRef(currentFolder);
+
+  // Reset sort when folder changes, unless keepFiltersAcrossFolders is on
+  useEffect(() => {
+    if (prevFolderRef.current !== currentFolder) {
+      prevFolderRef.current = currentFolder;
+      if (!settings.keepFiltersAcrossFolders) {
+        setSortBy('date');
+        setSortOrder('desc');
+      }
+    }
+  }, [currentFolder, settings.keepFiltersAcrossFolders]);
 
   const handleSort = (type: 'date' | 'sender' | 'subject' | 'tags' | 'unread') => {
     if (sortBy === type) {

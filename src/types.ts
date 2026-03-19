@@ -79,5 +79,7 @@ export type UserSettings = {
   customFonts: { name: string, url: string }[];
   availableTags: TagDef[];
   delayedSending: number;
+  syncInterval: number;
+  keepFiltersAcrossFolders: boolean;
   language: 'en' | 'ru';
 };

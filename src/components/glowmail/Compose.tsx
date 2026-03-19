@@ -253,24 +253,49 @@ export function Compose({
                       .field label { color: #71717a; font-size: 14px; min-width: 60px; }
                       .field input, .field select { flex: 1; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 8px 12px; color: #f4f4f5; font-size: 14px; outline: none; }
                       .field input:focus, .field select:focus { border-color: rgba(16,185,129,0.5); }
-                      .editor { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; min-height: 300px; color: #e4e4e7; font-size: 14px; outline: none; margin-bottom: 16px; }
+                      .editor { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; min-height: 300px; color: #e4e4e7; font-size: 14px; outline: none; margin-bottom: 16px; overflow-y: auto; }
                       .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: #10b981; color: #09090b; border: none; border-radius: 999px; font-weight: 600; font-size: 14px; cursor: pointer; }
                       .btn:hover { background: #34d399; }
-                      .toolbar { display: flex; gap: 4px; margin-bottom: 12px; }
-                      .toolbar button { background: #27272a; border: 1px solid #3f3f46; border-radius: 6px; padding: 6px 8px; color: #a1a1aa; cursor: pointer; font-size: 12px; }
-                      .toolbar button:hover { background: #3f3f46; color: #f4f4f5; }
+                      .btn-draft { background: transparent; color: #a1a1aa; border: 1px solid #3f3f46; border-radius: 999px; padding: 10px 20px; font-size: 14px; cursor: pointer; margin-right: 8px; }
+                      .btn-draft:hover { background: #27272a; color: #f4f4f5; }
+                      .toolbar { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+                      .toolbar button, .toolbar select { background: #27272a; border: 1px solid #3f3f46; border-radius: 6px; padding: 6px 8px; color: #a1a1aa; cursor: pointer; font-size: 12px; }
+                      .toolbar button:hover, .toolbar select:hover { background: #3f3f46; color: #f4f4f5; }
+                      .toolbar .sep { width: 1px; height: 16px; background: #3f3f46; margin: 0 4px; }
+                      .toolbar input[type=color] { width: 24px; height: 24px; border: none; padding: 0; cursor: pointer; background: transparent; border-radius: 4px; }
                     </style></head><body>
                     <h2 style="margin-bottom:16px;font-size:18px;">${t('compose.newMessage', lang)}</h2>
                     <div class="field"><label>${t('compose.to', lang)}</label><input id="to" value="${to}" /></div>
+                    <div class="field"><label>${t('compose.cc', lang)}</label><input id="cc" value="${cc}" /></div>
+                    <div class="field"><label>${t('compose.bcc', lang)}</label><input id="bcc" value="${bcc}" /></div>
                     <div class="field"><label>${t('compose.subjectLabel', lang)}</label><input id="subject" value="${subject}" /></div>
                     <div class="toolbar">
-                      <button onclick="document.execCommand('bold')"><b>B</b></button>
-                      <button onclick="document.execCommand('italic')"><i>I</i></button>
-                      <button onclick="document.execCommand('underline')"><u>U</u></button>
+                      <select onchange="document.execCommand('fontName',false,this.value)">
+                        <option value="Inter">Inter</option><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Courier New">Courier New</option>
+                      </select>
+                      <select onchange="document.execCommand('fontSize',false,this.value)">
+                        <option value="1">${t('compose.small', lang)}</option><option value="3" selected>${t('compose.normal', lang)}</option><option value="5">${t('compose.large', lang)}</option><option value="7">${t('compose.huge', lang)}</option>
+                      </select>
+                      <span class="sep"></span>
+                      <button onclick="document.execCommand('bold')" title="Bold"><b>B</b></button>
+                      <button onclick="document.execCommand('italic')" title="Italic"><i>I</i></button>
+                      <button onclick="document.execCommand('underline')" title="Underline"><u>U</u></button>
+                      <span class="sep"></span>
+                      <button onclick="document.execCommand('insertUnorderedList')" title="Bullet List">• List</button>
+                      <button onclick="document.execCommand('insertOrderedList')" title="Numbered List">1. List</button>
+                      <span class="sep"></span>
+                      <input type="color" onchange="document.execCommand('foreColor',false,this.value)" title="${t('compose.textColor', lang)}" />
+                      <input type="color" onchange="document.execCommand('hiliteColor',false,this.value)" title="${t('compose.highlightColor', lang)}" />
+                      <span class="sep"></span>
+                      <button onclick="var url=prompt('URL:');if(url)document.execCommand('createLink',false,url)" title="Link">🔗</button>
+                      <button onclick="var input=document.createElement('input');input.type='file';input.accept='image/*';input.onchange=function(e){var r=new FileReader();r.onload=function(ev){document.execCommand('insertImage',false,ev.target.result)};r.readAsDataURL(e.target.files[0])};input.click()" title="${t('compose.insertImage', lang)}">🖼</button>
                     </div>
                     <div class="editor" contenteditable="true" id="body">${editorRef.current?.innerHTML || body}</div>
-                    <div style="display:flex;justify-content:flex-end;">
-                      <button class="btn" onclick="window.opener.postMessage({type:'glowmail-compose',to:document.getElementById('to').value,subject:document.getElementById('subject').value,body:document.getElementById('body').innerHTML},'*');window.close();">
+                    <div style="display:flex;justify-content:flex-end;gap:8px;">
+                      <button class="btn-draft" onclick="window.opener.postMessage({type:'glowmail-draft',to:document.getElementById('to').value,cc:document.getElementById('cc').value,bcc:document.getElementById('bcc').value,subject:document.getElementById('subject').value,body:document.getElementById('body').innerHTML},'*');window.close();">
+                        ${t('compose.saveDraft', lang)}
+                      </button>
+                      <button class="btn" onclick="window.opener.postMessage({type:'glowmail-compose',to:document.getElementById('to').value,cc:document.getElementById('cc').value,bcc:document.getElementById('bcc').value,subject:document.getElementById('subject').value,body:document.getElementById('body').innerHTML},'*');window.close();">
                         ✉ ${t('compose.send', lang)}
                       </button>
                     </div>

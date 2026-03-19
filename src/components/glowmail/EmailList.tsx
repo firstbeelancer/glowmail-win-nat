@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useMail } from '../../store';
 import { Email } from '../../types';
 import { formatDistanceToNow } from 'date-fns';

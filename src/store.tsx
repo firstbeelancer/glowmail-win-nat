@@ -420,6 +420,34 @@ export function MailProvider({ children }: { children: ReactNode }) {
     setEmails((prev) => prev.filter((e) => e.id !== id));
   };
 
+  const moveEmailToFolder = (id: string, targetFolder: string) => {
+    const uid = Number(id);
+    if (!isNaN(uid) && uid > 0) {
+      mailApi.moveEmail(currentFolder, uid, targetFolder).catch(console.error);
+    }
+    setEmails((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  const copyEmailToFolder = (id: string, targetFolder: string) => {
+    const uid = Number(id);
+    if (!isNaN(uid) && uid > 0) {
+      mailApi.copyEmail(currentFolder, uid, targetFolder).catch(console.error);
+    }
+  };
+
+  // Flatten folder tree for folder pickers
+  const allFoldersFlat = useMemo(() => {
+    const result: Folder[] = [];
+    const walk = (list: Folder[]) => {
+      list.forEach(f => {
+        result.push(f);
+        if (f.children) walk(f.children);
+      });
+    };
+    walk(folders);
+    return result;
+  }, [folders]);
+
   const handleSendEmail = async (email: Partial<Email>) => {
     try {
       await mailApi.sendEmail({

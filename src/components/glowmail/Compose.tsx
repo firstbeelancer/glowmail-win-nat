@@ -633,21 +633,53 @@ export function Compose({
           />
           <button onClick={() => imageInputRef.current?.click()} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors" title={t('compose.insertImage', lang)}><ImageIcon className="w-4 h-4" /></button>
           <div className="w-px h-4 bg-zinc-800 mx-1" />
-          <button
-            onClick={() => {
-              if (!editorRef.current) return;
-              const sel = window.getSelection();
-              const selectedText = sel?.toString() || '';
-              const codeHtml = `<pre style="background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:12px 16px;font-family:'JetBrains Mono','Fira Code',Consolas,monospace;font-size:13px;overflow-x:auto;margin:8px 0;border:1px solid #313244;white-space:pre-wrap;word-break:break-all;"><code>${selectedText || (lang === 'ru' ? '// ваш код здесь' : '// your code here')}</code></pre><p><br></p>`;
-              editorRef.current.focus();
-              document.execCommand('insertHTML', false, codeHtml);
-              setBody(editorRef.current.innerHTML);
-            }}
-            className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"
-            title={lang === 'ru' ? 'Вставить блок кода' : 'Insert code block'}
-          >
-            <Code className="w-4 h-4" />
-          </button>
+          {/* Code insertion dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => { setShowCodeMenu(!showCodeMenu); setShowAiMenu(false); }}
+              className={cn("p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors", showCodeMenu && "bg-zinc-800 text-zinc-200")}
+              title={lang === 'ru' ? 'Вставить код' : 'Insert code'}
+            >
+              <Code className="w-4 h-4" />
+            </button>
+            {showCodeMenu && (
+              <div className="absolute left-0 bottom-full mb-2 w-52 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-[60]">
+                <div className="p-1 flex flex-col">
+                  <span className="px-3 py-1.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{lang === 'ru' ? 'Вставить код' : 'Insert Code'}</span>
+                  <button
+                    onClick={() => insertCodeElement('inline')}
+                    className="flex items-center gap-2.5 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                  >
+                    <Braces className="w-4 h-4 text-zinc-500" />
+                    <div>
+                      <div className="font-medium">Inline code</div>
+                      <div className="text-[11px] text-zinc-500">{lang === 'ru' ? 'Код внутри строки' : 'Code within text'}</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => insertCodeElement('block')}
+                    className="flex items-center gap-2.5 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                  >
+                    <Code className="w-4 h-4 text-zinc-500" />
+                    <div>
+                      <div className="font-medium">Code block</div>
+                      <div className="text-[11px] text-zinc-500">{lang === 'ru' ? 'Многострочный код' : 'Multi-line code'}</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => insertCodeElement('log')}
+                    className="flex items-center gap-2.5 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                  >
+                    <Terminal className="w-4 h-4 text-zinc-500" />
+                    <div>
+                      <div className="font-medium">{lang === 'ru' ? 'Лог / Терминал' : 'Log / Terminal'}</div>
+                      <div className="text-[11px] text-zinc-500">{lang === 'ru' ? 'Логи, конфиги, вывод' : 'Logs, configs, output'}</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           
           <div className="flex-1" />
           

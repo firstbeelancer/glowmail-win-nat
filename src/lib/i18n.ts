@@ -314,6 +314,13 @@ const translations = {
     'settings.groupDesc': 'Группировка писем в списке для удобной навигации.',
     'settings.fetchFolders': 'Загрузить папки с сервера',
     'settings.fetchingFolders': 'Загрузка...',
+    'settings.markAsReadDelay': 'Задержка пометки прочитанным (сек)',
+    'settings.markAsReadDelayDesc': 'Через сколько секунд после открытия письмо помечается прочитанным. 0 = сразу.',
+    'settings.ldapServer': 'Сервер LDAP',
+    'settings.ldapBaseDn': 'Base DN',
+    'settings.ldapLoad': 'Загрузить контакты из LDAP',
+    'settings.ldapLoading': 'Загрузка...',
+    'settings.ldapSection': 'Адресная книга LDAP',
     'layout.openInWindow': 'Открыть в новом окне',
   },
 } as const;

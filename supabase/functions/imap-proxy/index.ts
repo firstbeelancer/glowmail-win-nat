@@ -150,6 +150,15 @@ Deno.serve(async (req) => {
           return atts;
         };
 
+        // Debug: log bodyStructure for first 3 messages to understand format
+        normalized.slice(0, 3).forEach((msg: any, i: number) => {
+          if (msg?.bodyStructure) {
+            try {
+              console.log(`bodyStructure[${i}] uid=${msg.uid}:`, JSON.stringify(msg.bodyStructure).slice(0, 1000));
+            } catch { console.log(`bodyStructure[${i}] uid=${msg.uid}: [not serializable]`, Object.keys(msg.bodyStructure)); }
+          }
+        });
+
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
           .map((msg: any) => {

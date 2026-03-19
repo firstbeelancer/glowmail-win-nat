@@ -224,7 +224,23 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
         </div>
       </div>
 
-      {sortedEmails.length === 0 ? (
+      {isLoading && emails.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full">
+          <svg className="w-8 h-8 animate-spin text-primary mb-3" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          </svg>
+          <p>{lang === 'ru' ? 'Загрузка писем...' : 'Loading emails...'}</p>
+        </div>
+      ) : connectionError ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full px-6">
+          <AlertTriangle className="w-8 h-8 text-yellow-500 mb-3" />
+          <p className="text-sm text-center mb-3">{connectionError}</p>
+          <button onClick={() => fetchEmails()} className="text-xs text-primary hover:underline">
+            {lang === 'ru' ? 'Попробовать снова' : 'Try again'}
+          </button>
+        </div>
+      ) : sortedEmails.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full">
           <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(255,255,255,0.02)]">
             <Inbox className="w-8 h-8 opacity-50" />

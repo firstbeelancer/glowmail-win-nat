@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
           return { text, html };
         }
 
-        // Step 1: Try bodyParts first (lightweight, no full source download)
+        // Step 1: Try bodyParts + bodyStructure (lightweight, no full source download)
         let msg: any = null;
         try {
           const messages = await (client as any).fetch(String(targetUid), {
@@ -284,6 +284,7 @@ Deno.serve(async (req) => {
             uid: true,
             envelope: true,
             flags: true,
+            bodyStructure: true,
             bodyParts: ["TEXT", "1", "1.1", "1.2", "2"],
           });
           const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
@@ -296,6 +297,7 @@ Deno.serve(async (req) => {
               uid: true,
               envelope: true,
               flags: true,
+              bodyStructure: true,
               bodyParts: ["TEXT"],
             });
             const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
@@ -314,6 +316,36 @@ Deno.serve(async (req) => {
         let bodyText = "";
         let bodyHtml = "";
 
+        // Extract charset/encoding from bodyStructure for each MIME part
+        type PartMeta = { type: string; subtype: string; charset: string; encoding: string; partId: string };
+        function flattenStructure(struct: any, partPrefix = ""): PartMeta[] {
+          const results: PartMeta[] = [];
+          if (!struct) return results;
+          if (struct.childNodes && Array.isArray(struct.childNodes)) {
+            struct.childNodes.forEach((child: any, idx: number) => {
+              const childPart = partPrefix ? `${partPrefix}.${idx + 1}` : String(idx + 1);
+              results.push(...flattenStructure(child, childPart));
+            });
+            return results;
+          }
+          const type = (struct.type || "").toLowerCase();
+          const subtype = (struct.subtype || "").toLowerCase();
+          const params = struct.parameters || struct.params || {};
+          const charset = (params.charset || "utf-8").toLowerCase();
+          const encoding = (struct.encoding || "7bit").toLowerCase();
+          const partId = partPrefix || "1";
+          results.push({ type, subtype, charset, encoding, partId });
+          return results;
+        }
+
+        const structParts = flattenStructure(msg.bodyStructure);
+        console.log("bodyStructure parts:", JSON.stringify(structParts.map(p => ({ id: p.partId, t: `${p.type}/${p.subtype}`, cs: p.charset, enc: p.encoding }))));
+
+        function findPartMeta(partKey: string): PartMeta | undefined {
+          if (partKey === "TEXT") return structParts.find(p => p.type === "text");
+          return structParts.find(p => p.partId === partKey);
+        }
+
         const isLikelyBase64 = (value: string): boolean => {
           const compact = value.replace(/\s/g, "");
           if (compact.length < 64 || compact.length % 4 !== 0) return false;
@@ -325,30 +357,45 @@ Deno.serve(async (req) => {
           let text = "";
           let html = "";
 
-          for (const [, partValue] of Object.entries(parts as Record<string, unknown>)) {
+          for (const [partKey, partValue] of Object.entries(parts as Record<string, unknown>)) {
             const value = partValue as any;
-            const raw = decodeData(value?.data ?? value?.body ?? value);
-            if (!raw) continue;
+            let rawBytes: Uint8Array | null = null;
+            const rawField = value?.data ?? value?.body ?? value;
+            if (rawField instanceof Uint8Array) {
+              rawBytes = rawField;
+            } else if (typeof rawField === "string") {
+              rawBytes = Uint8Array.from(rawField, (c: string) => c.charCodeAt(0) & 0xff);
+            }
+            if (!rawBytes || rawBytes.length === 0) continue;
 
+            const meta = findPartMeta(partKey);
             const headersRaw = String(value?.headers || value?.header || "");
             const headers = headersRaw.toLowerCase();
-            const charset = extractCharset(headers);
-            const headerEncoding = extractEncoding(headers);
 
-            let decoded = raw;
-            if (headerEncoding === "base64") {
-              decoded = decodeContent(raw, "base64", charset);
-            } else if (headerEncoding === "quoted-printable") {
-              decoded = decodeContent(raw, "quoted-printable", charset);
-            } else if (isLikelyBase64(raw) && /^(PCFET0|PGh0bWw|PGRpdi|PHA|PHRhYmxl)/i.test(raw.replace(/\s/g, ""))) {
-              decoded = decodeContent(raw, "base64", charset);
-            } else if (/=\r?\n|=[0-9A-Fa-f]{2}/.test(raw)) {
-              decoded = decodeContent(raw, "quoted-printable", charset);
+            const charset = meta?.charset || extractCharset(headers) || "utf-8";
+            const encoding = meta?.encoding || extractEncoding(headers) || "7bit";
+            const isHtmlPart = meta ? (meta.subtype === "html") : headers.includes("text/html");
+            const isPlainPart = meta ? (meta.subtype === "plain") : headers.includes("text/plain");
+
+            // Convert bytes to string for decoding
+            const rawStr = new TextDecoder("latin1").decode(rawBytes);
+
+            let decoded = rawStr;
+            if (encoding === "base64") {
+              decoded = decodeContent(rawStr, "base64", charset);
+            } else if (encoding === "quoted-printable") {
+              decoded = decodeContent(rawStr, "quoted-printable", charset);
+            } else {
+              // 7bit/8bit — just re-decode with the correct charset
+              try {
+                decoded = new TextDecoder(charset).decode(rawBytes);
+              } catch {
+                try { decoded = new TextDecoder("utf-8").decode(rawBytes); } catch { /* keep rawStr */ }
+              }
             }
 
-            const isHtml = headers.includes("text/html") || /<\/?[a-z][\s\S]*>/i.test(decoded);
-
-            if (isHtml && !html) html = decoded;
+            const looksHtml = /<\/?[a-z][\s\S]*>/i.test(decoded);
+            if ((isHtmlPart || (!isPlainPart && looksHtml)) && !html) html = decoded;
             else if (!text) text = decoded;
           }
 
@@ -366,18 +413,10 @@ Deno.serve(async (req) => {
           bodyHtml = fromBodyParts.html;
         }
 
-        // Normalize encoded artifacts that still leak through in HTML
-        if (bodyHtml && /=\r?\n|=[0-9A-Fa-f]{2}/.test(bodyHtml)) {
-          bodyHtml = decodeContent(bodyHtml, "quoted-printable", "utf-8");
-        }
-        if (bodyHtml && isLikelyBase64(bodyHtml) && /^(PCFET0|PGh0bWw|PGRpdi|PHA|PHRhYmxl)/i.test(bodyHtml.replace(/\s/g, ""))) {
-          bodyHtml = decodeContent(bodyHtml, "base64", "utf-8");
-        }
-
         // If bodyText looks like raw MIME, parse it
-        if (bodyText && !bodyHtml && bodyText.includes("Content-Type:")) {
+        if (bodyText && bodyText.includes("Content-Type:")) {
           const parsed = parseMimeParts(bodyText);
-          if (parsed.html) bodyHtml = parsed.html;
+          if (parsed.html && !bodyHtml) bodyHtml = parsed.html;
           if (parsed.text) bodyText = parsed.text;
         }
 

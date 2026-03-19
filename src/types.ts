@@ -2,6 +2,8 @@ export type Folder = {
   id: string;
   name: string;
   icon: string;
+  children?: Folder[];
+  parent?: string;
 };
 
 export type Contact = {
@@ -57,6 +59,8 @@ export type Signature = {
   content: string;
 };
 
+export type AuthMethod = 'password' | 'oauth2' | 'app-password';
+
 export type UserSettings = {
   account: {
     name: string;
@@ -69,6 +73,8 @@ export type UserSettings = {
     smtpHost: string;
     smtpPort: number;
     secure: boolean;
+    authMethod: AuthMethod;
+    oauthProvider?: string;
   };
   signature: string;
   signatures: Signature[];
@@ -81,5 +87,6 @@ export type UserSettings = {
   delayedSending: number;
   syncInterval: number;
   keepFiltersAcrossFolders: boolean;
+  groupBy: 'none' | 'date' | 'sender' | 'tag';
   language: 'en' | 'ru';
 };

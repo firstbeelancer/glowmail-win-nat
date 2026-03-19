@@ -150,6 +150,8 @@ export function MailProvider({ children }: { children: ReactNode }) {
         smtpHost: 'smtp.example.com',
         smtpPort: 465,
         secure: true,
+        authMethod: parsedSettings.server?.authMethod || 'password',
+        oauthProvider: parsedSettings.server?.oauthProvider || '',
       },
       signature: defaultSignature,
       signatures,
@@ -161,6 +163,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       delayedSending: parsedSettings.delayedSending || 0,
       syncInterval: parsedSettings.syncInterval ?? 5,
       keepFiltersAcrossFolders: parsedSettings.keepFiltersAcrossFolders ?? false,
+      groupBy: parsedSettings.groupBy || 'none',
       language: parsedSettings.language || 'en',
       availableTags: parsedSettings.availableTags || [
         { id: '1', name: 'work', color: '#3b82f6' },

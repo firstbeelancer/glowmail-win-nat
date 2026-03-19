@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { useMail } from '../../store';
 import { motion } from 'framer-motion';
-import { X, User, Server, Palette, PenTool, Tags, Plus, Trash2, Image as ImageIcon, Globe } from 'lucide-react';
+import { X, User, Server, Palette, PenTool, Tags, Plus, Trash2, Image as ImageIcon, Globe, FolderTree, Loader2, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { t } from '@/lib/i18n';
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { settings, updateSettings } = useMail();
+  const { settings, updateSettings, addFolder } = useMail();
   const [activeTab, setActiveTab] = useState<'account' | 'server' | 'appearance' | 'signature' | 'tags'>('account');
   const [localSettings, setLocalSettings] = useState(settings);
   const [newTag, setNewTag] = useState('');
   const [newTagColor, setNewTagColor] = useState('#10b981');
+  const [isFetchingFolders, setIsFetchingFolders] = useState(false);
   const lang = localSettings.language;
 
   const handleSave = () => {
@@ -265,6 +266,70 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   />
                   <span className="text-sm text-zinc-300">{t('settings.secureConnection', lang)}</span>
                 </label>
+
+                {/* Authentication Method */}
+                <div className="space-y-4 pt-4 border-t border-zinc-800/50">
+                  <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2">{t('settings.authMethod', lang)}</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    {(['password', 'oauth2', 'app-password'] as const).map((method) => {
+                      const labelKey = method === 'password' ? 'settings.authPassword' : method === 'oauth2' ? 'settings.authOAuth2' : 'settings.authAppPassword';
+                      return (
+                        <button
+                          key={method}
+                          onClick={() => setLocalSettings({ ...localSettings, server: { ...localSettings.server, authMethod: method } })}
+                          className={cn(
+                            "px-3 py-2.5 rounded-xl border text-sm font-medium transition-all text-center",
+                            localSettings.server.authMethod === method
+                              ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+                              : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:bg-zinc-800"
+                          )}
+                        >
+                          {t(labelKey, lang)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {localSettings.server.authMethod === 'oauth2' && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">{t('settings.oauthProvider', lang)}</label>
+                      <select
+                        value={localSettings.server.oauthProvider || ''}
+                        onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, oauthProvider: e.target.value } })}
+                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                      >
+                        <option value="">—</option>
+                        <option value="google">Google</option>
+                        <option value="microsoft">Microsoft / Outlook</option>
+                        <option value="yahoo">Yahoo</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* Fetch Folders from Server */}
+                <div className="pt-4 border-t border-zinc-800/50">
+                  <button
+                    onClick={async () => {
+                      setIsFetchingFolders(true);
+                      // Simulate loading folder tree from server
+                      await new Promise(r => setTimeout(r, 1500));
+                      const serverFolders = [
+                        { name: 'INBOX/Notifications', icon: 'inbox' },
+                        { name: 'INBOX/Subscriptions', icon: 'inbox' },
+                        { name: 'Archive', icon: 'folder' },
+                        { name: 'Junk', icon: 'alert-circle' },
+                      ];
+                      serverFolders.forEach(f => addFolder(f.name));
+                      setIsFetchingFolders(false);
+                      toast.success(lang === 'ru' ? 'Папки загружены с сервера' : 'Folders loaded from server');
+                    }}
+                    disabled={isFetchingFolders}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 rounded-xl font-medium text-sm border border-zinc-700/50 transition-all disabled:opacity-50"
+                  >
+                    {isFetchingFolders ? <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> : <FolderTree className="w-4 h-4" />}
+                    {isFetchingFolders ? t('settings.fetchingFolders', lang) : t('settings.fetchFolders', lang)}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -365,6 +430,25 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                       {t('settings.addCustomFont', lang)}
                     </button>
                   </div>
+                </div>
+
+                {/* Grouping */}
+                <div className="space-y-4 pt-4 border-t border-zinc-800/50">
+                  <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+                    <Layers className="w-4 h-4" />
+                    {t('settings.groupBy', lang)}
+                  </label>
+                  <select
+                    value={localSettings.groupBy}
+                    onChange={(e) => setLocalSettings({ ...localSettings, groupBy: e.target.value as any })}
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                  >
+                    <option value="none">{t('settings.groupNone', lang)}</option>
+                    <option value="date">{t('settings.groupDate', lang)}</option>
+                    <option value="sender">{t('settings.groupSender', lang)}</option>
+                    <option value="tag">{t('settings.groupTag', lang)}</option>
+                  </select>
+                  <p className="text-xs text-zinc-500">{t('settings.groupDesc', lang)}</p>
                 </div>
               </div>
             )}

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useMail } from '../../store';
 import { Email, Contact, Attachment } from '../../types';
-import { X, Send, Paperclip, Sparkles, Loader2, Bold, Italic, Underline, Link, Image as ImageIcon, List, ListOrdered, AlertTriangle, Trash2 } from 'lucide-react';
+import { X, Send, Paperclip, Sparkles, Loader2, Bold, Italic, Underline, Link, Image as ImageIcon, List, ListOrdered, AlertTriangle, Trash2, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -220,6 +220,49 @@ export function Compose({
         <div className="h-14 border-b border-zinc-800/50 flex items-center justify-between px-4 bg-zinc-900/50 shrink-0">
           <h2 className="text-sm font-semibold text-zinc-100">{t('compose.newMessage', lang)}</h2>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const w = window.open('', '_blank', 'width=800,height=700,menubar=no,toolbar=no,status=no');
+                if (w) {
+                  w.document.write(`<!DOCTYPE html><html><head><title>${t('compose.newMessage', lang)}</title>
+                    <style>
+                      * { margin: 0; padding: 0; box-sizing: border-box; }
+                      body { font-family: 'Involve', system-ui, sans-serif; background: #09090b; color: #f4f4f5; padding: 24px; }
+                      .field { margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+                      .field label { color: #71717a; font-size: 14px; min-width: 60px; }
+                      .field input, .field select { flex: 1; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 8px 12px; color: #f4f4f5; font-size: 14px; outline: none; }
+                      .field input:focus, .field select:focus { border-color: rgba(16,185,129,0.5); }
+                      .editor { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 16px; min-height: 300px; color: #e4e4e7; font-size: 14px; outline: none; margin-bottom: 16px; }
+                      .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: #10b981; color: #09090b; border: none; border-radius: 999px; font-weight: 600; font-size: 14px; cursor: pointer; }
+                      .btn:hover { background: #34d399; }
+                      .toolbar { display: flex; gap: 4px; margin-bottom: 12px; }
+                      .toolbar button { background: #27272a; border: 1px solid #3f3f46; border-radius: 6px; padding: 6px 8px; color: #a1a1aa; cursor: pointer; font-size: 12px; }
+                      .toolbar button:hover { background: #3f3f46; color: #f4f4f5; }
+                    </style></head><body>
+                    <h2 style="margin-bottom:16px;font-size:18px;">${t('compose.newMessage', lang)}</h2>
+                    <div class="field"><label>${t('compose.to', lang)}</label><input id="to" value="${to}" /></div>
+                    <div class="field"><label>${t('compose.subjectLabel', lang)}</label><input id="subject" value="${subject}" /></div>
+                    <div class="toolbar">
+                      <button onclick="document.execCommand('bold')"><b>B</b></button>
+                      <button onclick="document.execCommand('italic')"><i>I</i></button>
+                      <button onclick="document.execCommand('underline')"><u>U</u></button>
+                    </div>
+                    <div class="editor" contenteditable="true" id="body">${editorRef.current?.innerHTML || body}</div>
+                    <div style="display:flex;justify-content:flex-end;">
+                      <button class="btn" onclick="window.opener.postMessage({type:'glowmail-compose',to:document.getElementById('to').value,subject:document.getElementById('subject').value,body:document.getElementById('body').innerHTML},'*');window.close();">
+                        ✉ ${t('compose.send', lang)}
+                      </button>
+                    </div>
+                  </body></html>`);
+                  w.document.close();
+                  onClose();
+                }
+              }}
+              className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+              title={t('layout.openInWindow', lang)}
+            >
+              <ExternalLink className="w-4 h-4" />
+            </button>
             <button
               onClick={handleSaveDraft}
               className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"

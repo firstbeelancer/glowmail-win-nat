@@ -130,6 +130,29 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
     return sortOrder === 'asc' ? comparison : -comparison;
   });
 
+  // Group emails
+  const groupBy = settings.groupBy || 'none';
+  const groupedEmails: { label: string; emails: Email[] }[] = [];
+  if (groupBy === 'none') {
+    groupedEmails.push({ label: '', emails: sortedEmails });
+  } else {
+    const groups: Record<string, Email[]> = {};
+    sortedEmails.forEach(email => {
+      let key = '';
+      if (groupBy === 'date') {
+        const d = new Date(email.date);
+        key = d.toLocaleDateString();
+      } else if (groupBy === 'sender') {
+        key = email.from.name || email.from.email;
+      } else if (groupBy === 'tag') {
+        key = email.tags.length > 0 ? email.tags[0] : (lang === 'ru' ? 'Без тега' : 'No tag');
+      }
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(email);
+    });
+    Object.entries(groups).forEach(([label, emails]) => groupedEmails.push({ label, emails }));
+  }
+
   return (
     <div className="flex flex-col h-full bg-zinc-950">
       {/* Sort Toolbar */}
@@ -192,7 +215,14 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
-          {sortedEmails.map((email, index) => (
+          {groupedEmails.map((group, gi) => (
+            <div key={gi}>
+              {group.label && (
+                <div className="px-4 py-2 bg-zinc-900/50 border-b border-zinc-800/50 sticky top-0 z-10">
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">{group.label}</span>
+                </div>
+              )}
+              {group.emails.map((email, index) => (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -206,7 +236,8 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
               }}
               className={cn(
                 "group flex flex-col p-4 border-b border-zinc-800/50 cursor-pointer transition-all hover:bg-zinc-900/50 relative",
-                !email.read && "bg-zinc-900/20"
+                !email.read && "bg-zinc-900/20",
+                email.starred && "bg-emerald-500/[0.03] shadow-[inset_0_0_25px_rgba(16,185,129,0.06)]"
               )}
             >
               <div className="flex items-center justify-between mb-1">
@@ -286,7 +317,11 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
               </div>
               
               <div className="flex items-center gap-2 mb-1">
-                <h3 className={cn("text-sm flex-1", !email.read ? "font-bold text-zinc-100" : "font-medium text-zinc-400")}>
+                <h3 className={cn(
+                  "text-sm flex-1",
+                  !email.read ? "font-bold text-zinc-100" : "font-medium text-zinc-400",
+                  email.starred && "font-bold text-emerald-300"
+                )}>
                   {email.subject}
                 </h3>
               </div>
@@ -309,6 +344,8 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
                 </div>
               )}
             </motion.div>
+          ))}
+            </div>
           ))}
         </div>
       )}

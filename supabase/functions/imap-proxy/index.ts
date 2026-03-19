@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
           date: parsed.date || env.date || "",
           messageId: parsed.messageId || env.messageId || "",
           bodyText,
-          bodyHtml,
+          bodyHtml: finalHtml,
         });
       }
 

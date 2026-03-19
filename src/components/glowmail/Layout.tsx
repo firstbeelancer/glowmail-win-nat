@@ -1,4 +1,4 @@
-import React, { useState, ReactNode, DragEvent } from 'react';
+import React, { useState, ReactNode, DragEvent, useCallback, useRef, useEffect } from 'react';
 import { Menu, Search, Edit3, Settings, Inbox, Send, File, AlertCircle, Trash2, Briefcase, Plus, RefreshCw, X, Clock, BookUser, ChevronDown, ChevronRight, Mail, LogOut, FolderIcon, FileText } from 'lucide-react';
 import { useMail } from '../../store';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,34 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
   const lang = settings.language;
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('glowmail_sidebar_width');
+    return saved ? Number(saved) : 256;
+  });
+  const isResizing = useRef(false);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isResizing.current) return;
+      const newWidth = Math.min(Math.max(ev.clientX, 180), 400);
+      setSidebarWidth(newWidth);
+    };
+    const onMouseUp = () => {
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      setSidebarWidth(w => { localStorage.setItem('glowmail_sidebar_width', String(w)); return w; });
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, []);
 
   return (
     <div className="flex h-screen w-full bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
@@ -62,14 +90,19 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
         )}
       </AnimatePresence>
 
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-64 lg:w-72 bg-zinc-900/50 border-r border-zinc-800/50 flex-col">
+      {/* Desktop Sidebar - resizable */}
+      <aside className="hidden md:flex bg-zinc-900/50 border-r border-zinc-800/50 flex-col relative" style={{ width: sidebarWidth, minWidth: 180, maxWidth: 400 }}>
         <SidebarContent
           folders={folders}
           currentFolder={currentFolder}
           setCurrentFolder={setCurrentFolder}
           onCompose={onCompose}
           lang={lang}
+        />
+        {/* Resize handle */}
+        <div
+          onMouseDown={handleMouseDown}
+          className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize group z-20 hover:bg-emerald-500/30 active:bg-emerald-500/40 transition-colors"
         />
       </aside>
 

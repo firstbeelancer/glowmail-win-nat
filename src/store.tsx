@@ -381,7 +381,32 @@ export function MailProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [currentFolder, settings.account.email, loadFolders]);
+  }, [currentFolder, loadFolders, mapMessages, collectContacts]);
+
+  const loadMoreEmails = useCallback(async () => {
+    if (isLoadingMore || !hasMoreEmails) return;
+    setIsLoadingMore(true);
+    try {
+      const nextPage = currentPage + 1;
+      const data = await mailApi.fetchEmailList(currentFolder, nextPage, PAGE_SIZE);
+      const mapped = mapMessages(data, currentFolder);
+      
+      setEmails(prev => {
+        const existingIds = new Set(prev.map(e => e.id));
+        const newEmails = mapped.filter(e => !existingIds.has(e.id));
+        return [...prev, ...newEmails];
+      });
+      setCurrentPage(nextPage);
+      const totalLoaded = currentPage * PAGE_SIZE + mapped.length;
+      setHasMoreEmails(totalLoaded < (data.total || totalEmails));
+      
+      collectContacts(mapped);
+    } catch (e: any) {
+      console.error('loadMoreEmails error:', e);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [currentFolder, currentPage, isLoadingMore, hasMoreEmails, totalEmails, mapMessages, collectContacts]);
 
   // Auto-fetch on mount and folder change
   useEffect(() => {

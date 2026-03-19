@@ -142,6 +142,7 @@ export function Compose({
       body: editorRef.current?.innerHTML || '',
       importance,
       attachments,
+      tags: emailTags,
     });
     toast.success(t('compose.draftSaved', lang));
     onClose();

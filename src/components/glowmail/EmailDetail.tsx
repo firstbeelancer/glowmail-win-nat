@@ -8,13 +8,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { t, translateFolderName } from '@/lib/i18n';
 
 export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: (type: 'reply' | 'replyAll' | 'forward', email: Email, quickReplyText?: string) => void; onEditDraft?: (email: Email) => void }> = ({ email, onBack, onReply, onEditDraft }) => {
-  const { toggleStar, deleteEmail, settings, updateEmailTags } = useMail();
+  const { toggleStar, deleteEmail, settings, updateEmailTags, moveEmailToFolder, copyEmailToFolder, allFoldersFlat, currentFolder } = useMail();
   const lang = settings.language;
   const [showHeaders, setShowHeaders] = useState(false);
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const [isGeneratingReplies, setIsGeneratingReplies] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showTagPicker, setShowTagPicker] = useState(false);
+  const [showMovePicker, setShowMovePicker] = useState(false);
+  const [showCopyPicker, setShowCopyPicker] = useState(false);
 
   useEffect(() => {
     let cancelled = false;

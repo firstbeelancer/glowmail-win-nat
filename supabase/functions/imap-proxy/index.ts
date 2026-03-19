@@ -276,7 +276,7 @@ Deno.serve(async (req) => {
           return { text, html };
         }
 
-        // Fetch raw RFC822 message (source + body parts) for reliable parsing
+        // Step 1: Try bodyParts first (lightweight, no full source download)
         let msg: any = null;
         try {
           const messages = await (client as any).fetch(String(targetUid), {
@@ -284,14 +284,12 @@ Deno.serve(async (req) => {
             uid: true,
             envelope: true,
             flags: true,
-            source: true,
             bodyParts: ["TEXT", "1", "1.1", "1.2", "2"],
           });
           const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
           msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || fetched[0] || null;
         } catch (e) {
-          console.error("fetch with source failed:", e);
-          // Fallback: try a minimal body-part only request
+          console.error("fetch bodyParts failed:", e);
           try {
             const messages = await (client as any).fetch(String(targetUid), {
               byUid: true,
@@ -303,7 +301,7 @@ Deno.serve(async (req) => {
             const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
             msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || fetched[0] || null;
           } catch (e2) {
-            console.error("fallback fetch also failed:", e2);
+            console.error("fetch TEXT failed:", e2);
           }
         }
 
@@ -336,22 +334,10 @@ Deno.serve(async (req) => {
           return { text, html };
         };
 
-        // Primary: parse from raw source (most reliable)
-        if (msg.source) {
-          const rawStr = decodeData(msg.source);
-          if (rawStr) {
-            const parsed = parseMimeParts(rawStr);
-            bodyText = parsed.text;
-            bodyHtml = parsed.html;
-          }
-        }
-
-        // Fallback: deno-imap can return parts as either `parts` or `bodyParts`
-        if (!bodyText && !bodyHtml) {
-          const fromParts = extractFromParts(msg.parts);
-          bodyText = fromParts.text;
-          bodyHtml = fromParts.html;
-        }
+        // Try parts/bodyParts first
+        const fromParts = extractFromParts(msg.parts);
+        bodyText = fromParts.text;
+        bodyHtml = fromParts.html;
 
         if (!bodyText && !bodyHtml) {
           const fromBodyParts = extractFromParts(msg.bodyParts);
@@ -366,23 +352,42 @@ Deno.serve(async (req) => {
           if (parsed.text) bodyText = parsed.text;
         }
 
+        // Step 2: If parts yielded nothing, try source but only for small messages (< 500KB)
+        if (!bodyText && !bodyHtml) {
+          const msgSize = Number(body.size || msg.size || 0);
+          const sizeLimit = 500_000;
+          if (!msgSize || msgSize < sizeLimit) {
+            try {
+              console.log("Parts empty, falling back to source for uid", targetUid, "size:", msgSize);
+              const srcMessages = await (client as any).fetch(String(targetUid), {
+                byUid: true,
+                uid: true,
+                source: true,
+              });
+              const srcFetched = (Array.isArray(srcMessages) ? srcMessages : [srcMessages]).filter(Boolean);
+              const srcMsg = srcFetched.find((item: any) => Number(item?.uid) === targetUid) || srcFetched[0];
+              if (srcMsg?.source) {
+                const rawStr = decodeData(srcMsg.source);
+                if (rawStr) {
+                  const parsed = parseMimeParts(rawStr);
+                  bodyText = parsed.text;
+                  bodyHtml = parsed.html;
+                }
+              }
+            } catch (e) {
+              console.error("source fallback failed:", e);
+            }
+          } else {
+            console.log("Skipping source fallback for large message, size:", msgSize);
+          }
+        }
+
         // If no HTML and bodyText looks like HTML
         if (!bodyHtml && bodyText && (bodyText.includes("<html") || bodyText.includes("<div") || bodyText.includes("<table"))) {
           bodyHtml = bodyText;
         }
 
-        console.log(
-          "fetch result - bodyText length:",
-          bodyText.length,
-          "bodyHtml length:",
-          bodyHtml.length,
-          "has source:",
-          !!msg.source,
-          "has parts:",
-          !!msg.parts,
-          "has bodyParts:",
-          !!msg.bodyParts,
-        );
+        console.log("fetch result - bodyText:", bodyText.length, "bodyHtml:", bodyHtml.length);
 
         const env = msg.envelope || {};
         const resolvedUid = Number.isFinite(Number(msg.uid)) ? Number(msg.uid) : targetUid;

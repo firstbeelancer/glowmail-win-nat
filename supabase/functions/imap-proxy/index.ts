@@ -147,6 +147,7 @@ Deno.serve(async (req) => {
         // Try fetching with source (full RFC822)
         try {
           const messages = await (client as any).fetch(String(targetUid), {
+            byUid: true,
             uid: true,
             envelope: true,
             flags: true,
@@ -175,6 +176,7 @@ Deno.serve(async (req) => {
         if (!rawSource) {
           try {
             const messages2 = await (client as any).fetch(String(targetUid), {
+              byUid: true,
               uid: true,
               envelope: true,
               flags: true,

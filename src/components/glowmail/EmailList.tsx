@@ -2,17 +2,18 @@ import { useState, useRef, useEffect } from 'react';
 import { useMail } from '../../store';
 import { Email } from '../../types';
 import { formatDistanceToNow } from 'date-fns';
-import { Star, Paperclip, Tag, Inbox, AlertTriangle, ArrowDownAZ, ArrowUpAZ, Calendar, User, Type, Trash2, MoreVertical, Download, Printer } from 'lucide-react';
+import { Star, Paperclip, Tag, Inbox, AlertTriangle, ArrowDownAZ, ArrowUpAZ, Calendar, User, Type, Trash2, MoreVertical, Download, Printer, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { t } from '@/lib/i18n';
 
 export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) => void, onEditDraft?: (email: Email) => void }) {
-  const { emails, currentFolder, searchQuery, toggleStar, deleteEmail, settings } = useMail();
+  const { emails, currentFolder, searchQuery, toggleStar, deleteEmail, settings, updateEmailTags } = useMail();
   const lang = settings.language;
   const [sortBy, setSortBy] = useState<'date' | 'sender' | 'subject' | 'tags' | 'unread'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [tagPickerOpenId, setTagPickerOpenId] = useState<string | null>(null);
   const prevFolderRef = useRef(currentFolder);
 
   // Reset sort when folder changes, unless keepFiltersAcrossFolders is on
@@ -38,6 +39,15 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
   const getTagColor = (tagName: string) => {
     const tagDef = settings.availableTags.find(t => t.name === tagName);
     return tagDef ? tagDef.color : '#10b981';
+  };
+
+  const toggleEmailTag = (emailId: string, tagName: string) => {
+    const email = emails.find(e => e.id === emailId);
+    if (!email) return;
+    const newTags = email.tags.includes(tagName)
+      ? email.tags.filter(t => t !== tagName)
+      : [...email.tags, tagName];
+    updateEmailTags(emailId, newTags);
   };
 
   const handleSaveEmail = (email: Email, e: React.MouseEvent) => {
@@ -256,6 +266,47 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
                   <span className="text-xs text-zinc-500">
                     {formatDistanceToNow(new Date(email.date), { addSuffix: true })}
                   </span>
+                  {/* Tag picker button */}
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTagPickerOpenId(tagPickerOpenId === email.id ? null : email.id);
+                        setMenuOpenId(null);
+                      }}
+                      className="p-1 -mr-1 rounded-full hover:bg-zinc-800 text-zinc-600 hover:text-emerald-400 transition-colors opacity-0 group-hover:opacity-100"
+                      title={t('emailList.addTag', lang)}
+                    >
+                      <Tag className="w-3.5 h-3.5" />
+                    </button>
+                    {tagPickerOpenId === email.id && (
+                      <div
+                        className="absolute right-0 top-full mt-1 w-44 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="p-1.5 flex flex-col max-h-48 overflow-y-auto">
+                          <span className="px-2 py-1 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{t('emailList.assignTags', lang)}</span>
+                          {settings.availableTags.map(tag => {
+                            const isActive = email.tags.includes(tag.name);
+                            return (
+                              <button
+                                key={tag.id}
+                                onClick={() => toggleEmailTag(email.id, tag.name)}
+                                className={cn(
+                                  "flex items-center gap-2 text-left px-3 py-1.5 text-xs rounded-lg transition-colors",
+                                  isActive ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                                )}
+                              >
+                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                                {tag.name}
+                                {isActive && <span className="ml-auto text-emerald-400 text-[10px]">✓</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -276,6 +327,7 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
                       onClick={(e) => {
                         e.stopPropagation();
                         setMenuOpenId(menuOpenId === email.id ? null : email.id);
+                        setTagPickerOpenId(null);
                       }}
                       className="p-1 -mr-1 rounded-full hover:bg-zinc-800 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
                     >

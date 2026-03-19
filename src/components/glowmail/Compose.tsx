@@ -59,10 +59,24 @@ export function Compose({
   }, [size]);
 
   useEffect(() => {
-    if (editorRef.current && !editorRef.current.innerHTML && body) {
-      editorRef.current.innerHTML = body;
+    if (editorRef.current && !editorRef.current.innerHTML) {
+      // Build initial content with signature placed before quoted text
+      let initialBody = body || '';
+      if (selectedSignatureId) {
+        const sig = settings.signatures?.find(s => s.id === selectedSignatureId);
+        if (sig?.content) {
+          const hrIndex = initialBody.indexOf('<hr>');
+          if (hrIndex !== -1) {
+            // Insert signature before the quoted/forwarded content
+            initialBody = initialBody.slice(0, hrIndex) + `<br><div class="email-signature">${sig.content}</div><br>` + initialBody.slice(hrIndex);
+          } else {
+            initialBody = initialBody + `<br><br><div class="email-signature">${sig.content}</div>`;
+          }
+        }
+      }
+      editorRef.current.innerHTML = initialBody;
     }
-  }, [body]);
+  }, []);
 
   // Apply default font color to editor
   useEffect(() => {

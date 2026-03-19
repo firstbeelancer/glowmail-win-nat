@@ -284,25 +284,19 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 {/* Authentication Method */}
                 <div className="space-y-4 pt-4 border-t border-zinc-800/50">
                   <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2">{t('settings.authMethod', lang)}</h4>
-                  <div className="grid grid-cols-3 gap-3">
-                    {(['password', 'oauth2', 'app-password'] as const).map((method) => {
-                      const labelKey = method === 'password' ? 'settings.authPassword' : method === 'oauth2' ? 'settings.authOAuth2' : 'settings.authAppPassword';
-                      return (
-                        <button
-                          key={method}
-                          onClick={() => setLocalSettings({ ...localSettings, server: { ...localSettings.server, authMethod: method } })}
-                          className={cn(
-                            "px-3 py-2.5 rounded-xl border text-sm font-medium transition-all text-center",
-                            localSettings.server.authMethod === method
-                              ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
-                              : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:bg-zinc-800"
-                          )}
-                        >
-                          {t(labelKey, lang)}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <select
+                    value={localSettings.server.authMethod}
+                    onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, authMethod: e.target.value as any } })}
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                  >
+                    <option value="password">{t('settings.authPassword', lang)}</option>
+                    <option value="encrypted-password">{t('settings.authEncryptedPassword', lang)}</option>
+                    <option value="oauth2">{t('settings.authOAuth2', lang)}</option>
+                    <option value="app-password">{t('settings.authAppPassword', lang)}</option>
+                    <option value="kerberos">{t('settings.authKerberos', lang)}</option>
+                    <option value="ntlm">{t('settings.authNtlm', lang)}</option>
+                    <option value="tls-certificate">{t('settings.authTlsCert', lang)}</option>
+                  </select>
                   {localSettings.server.authMethod === 'oauth2' && (
                     <div className="space-y-2">
                       <label className="text-xs font-medium text-zinc-500">{t('settings.oauthProvider', lang)}</label>
@@ -316,6 +310,42 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                         <option value="microsoft">Microsoft / Outlook</option>
                         <option value="yahoo">Yahoo</option>
                       </select>
+                    </div>
+                  )}
+                  {localSettings.server.authMethod === 'kerberos' && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">{t('settings.kerberosRealm', lang)}</label>
+                      <input
+                        type="text"
+                        value={(localSettings.server as any).kerberosRealm || ''}
+                        onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, kerberosRealm: e.target.value } as any })}
+                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                        placeholder="EXAMPLE.COM"
+                      />
+                    </div>
+                  )}
+                  {localSettings.server.authMethod === 'tls-certificate' && (
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-zinc-500">{t('settings.tlsCertPath', lang)}</label>
+                        <input
+                          type="text"
+                          value={(localSettings.server as any).tlsCertPath || ''}
+                          onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, tlsCertPath: e.target.value } as any })}
+                          className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                          placeholder="/path/to/cert.pem"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-zinc-500">{t('settings.tlsKeyPath', lang)}</label>
+                        <input
+                          type="text"
+                          value={(localSettings.server as any).tlsKeyPath || ''}
+                          onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, tlsKeyPath: e.target.value } as any })}
+                          className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                          placeholder="/path/to/key.pem"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

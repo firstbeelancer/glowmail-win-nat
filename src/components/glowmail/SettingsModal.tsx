@@ -1,0 +1,480 @@
+import { useState } from 'react';
+import { useMail } from '../../store';
+import { motion } from 'framer-motion';
+import { X, User, Server, Palette, PenTool, Tags, Plus, Trash2, Image as ImageIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import toast from 'react-hot-toast';
+
+export function SettingsModal({ onClose }: { onClose: () => void }) {
+  const { settings, updateSettings } = useMail();
+  const [activeTab, setActiveTab] = useState<'account' | 'server' | 'appearance' | 'signature' | 'tags'>('account');
+  const [localSettings, setLocalSettings] = useState(settings);
+  const [newTag, setNewTag] = useState('');
+  const [newTagColor, setNewTagColor] = useState('#10b981');
+
+  const handleSave = () => {
+    updateSettings(localSettings);
+    toast.success('Settings saved successfully');
+    onClose();
+  };
+
+  const handleAddTag = () => {
+    if (newTag.trim() && !localSettings.availableTags.find(t => t.name === newTag.trim())) {
+      setLocalSettings({
+        ...localSettings,
+        availableTags: [...localSettings.availableTags, { id: Date.now().toString(), name: newTag.trim(), color: newTagColor }],
+      });
+      setNewTag('');
+    }
+  };
+
+  const handleRemoveTag = (tagIdToRemove: string) => {
+    setLocalSettings({
+      ...localSettings,
+      availableTags: localSettings.availableTags.filter(t => t.id !== tagIdToRemove),
+    });
+  };
+
+  const handleUpdateTagColor = (tagId: string, color: string) => {
+    setLocalSettings({
+      ...localSettings,
+      availableTags: localSettings.availableTags.map(t => t.id === tagId ? { ...t, color } : t),
+    });
+  };
+
+  const tabs = [
+    { id: 'account', label: 'Account', icon: User },
+    { id: 'server', label: 'Server', icon: Server },
+    { id: 'appearance', label: 'Appearance', icon: Palette },
+    { id: 'signature', label: 'Signature', icon: PenTool },
+    { id: 'tags', label: 'Tags', icon: Tags },
+  ] as const;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 20 }}
+        className="w-full max-w-3xl bg-zinc-950 border border-zinc-800/50 rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[85vh]"
+      >
+        {/* Sidebar */}
+        <div className="w-full md:w-64 bg-zinc-900/50 border-r border-zinc-800/50 p-4 flex flex-row md:flex-col gap-2 overflow-x-auto shrink-0">
+          <div className="hidden md:flex items-center justify-between mb-4 px-2">
+            <h2 className="text-lg font-bold text-zinc-100">Settings</h2>
+          </div>
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap",
+                  isActive
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]"
+                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
+                )}
+              >
+                <Icon className={cn("w-4 h-4", isActive ? "text-emerald-400" : "text-zinc-500")} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="h-14 border-b border-zinc-800/50 flex items-center justify-between px-6 shrink-0">
+            <h3 className="text-sm font-semibold text-zinc-100 capitalize">{activeTab} Settings</h3>
+            <button onClick={onClose} className="p-2 -mr-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-6">
+            {activeTab === 'account' && (
+              <div className="space-y-6 max-w-md">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-400">Display Name</label>
+                  <input
+                    type="text"
+                    value={localSettings.account.name}
+                    onChange={(e) => setLocalSettings({ ...localSettings, account: { ...localSettings.account, name: e.target.value } })}
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-400">Email Address</label>
+                  <input
+                    type="email"
+                    value={localSettings.account.email}
+                    onChange={(e) => setLocalSettings({ ...localSettings, account: { ...localSettings.account, email: e.target.value } })}
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-400">Delayed Sending (minutes)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={localSettings.delayedSending}
+                    onChange={(e) => setLocalSettings({ ...localSettings, delayedSending: parseInt(e.target.value) || 0 })}
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                  />
+                  <p className="text-xs text-zinc-500">Emails will be held in outbox for this duration before sending.</p>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'server' && (
+              <div className="space-y-8 max-w-md">
+                <div className="space-y-4">
+                  <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2">Incoming (IMAP)</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="col-span-2 space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">Host</label>
+                      <input
+                        type="text"
+                        value={localSettings.server.imapHost}
+                        onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, imapHost: e.target.value } })}
+                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">Port</label>
+                      <input
+                        type="number"
+                        value={localSettings.server.imapPort}
+                        onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, imapPort: parseInt(e.target.value) || 993 } })}
+                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2">Outgoing (SMTP)</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="col-span-2 space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">Host</label>
+                      <input
+                        type="text"
+                        value={localSettings.server.smtpHost}
+                        onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, smtpHost: e.target.value } })}
+                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">Port</label>
+                      <input
+                        type="number"
+                        value={localSettings.server.smtpPort}
+                        onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, smtpPort: parseInt(e.target.value) || 465 } })}
+                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={localSettings.server.secure}
+                    onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, secure: e.target.checked } })}
+                    className="w-4 h-4 rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500/50 bg-zinc-900"
+                  />
+                  <span className="text-sm text-zinc-300">Use secure connection (SSL/TLS)</span>
+                </label>
+              </div>
+            )}
+
+            {activeTab === 'appearance' && (
+              <div className="space-y-6 max-w-md">
+                <div className="space-y-4">
+                  <label className="text-sm font-medium text-zinc-400">Theme Preference</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      onClick={() => setLocalSettings({ ...localSettings, theme: 'light' })}
+                      className={cn(
+                        "flex flex-col items-center gap-3 p-4 rounded-xl border transition-all",
+                        localSettings.theme === 'light'
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+                          : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:bg-zinc-800"
+                      )}
+                    >
+                      <div className="w-12 h-12 rounded-full bg-zinc-200 flex items-center justify-center">
+                        <div className="w-6 h-6 rounded-full bg-white shadow-sm" />
+                      </div>
+                      <span className="text-sm font-medium">Light</span>
+                    </button>
+                    <button
+                      onClick={() => setLocalSettings({ ...localSettings, theme: 'dark' })}
+                      className={cn(
+                        "flex flex-col items-center gap-3 p-4 rounded-xl border transition-all",
+                        localSettings.theme === 'dark'
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+                          : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:bg-zinc-800"
+                      )}
+                    >
+                      <div className="w-12 h-12 rounded-full bg-zinc-900 flex items-center justify-center border border-zinc-800">
+                        <div className="w-6 h-6 rounded-full bg-zinc-800 shadow-sm" />
+                      </div>
+                      <span className="text-sm font-medium">Dark</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t border-zinc-800/50">
+                  <label className="text-sm font-medium text-zinc-400">Email Background Color</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={localSettings.emailBackground}
+                      onChange={(e) => setLocalSettings({ ...localSettings, emailBackground: e.target.value })}
+                      className="w-10 h-10 p-1 rounded-lg bg-zinc-900 border border-zinc-800 cursor-pointer"
+                    />
+                    <span className="text-sm text-zinc-300">{localSettings.emailBackground}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t border-zinc-800/50">
+                  <label className="text-sm font-medium text-zinc-400">Default Font Color</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={localSettings.fontColor}
+                      onChange={(e) => setLocalSettings({ ...localSettings, fontColor: e.target.value })}
+                      className="w-10 h-10 p-1 rounded-lg bg-zinc-900 border border-zinc-800 cursor-pointer"
+                    />
+                    <span className="text-sm text-zinc-300">{localSettings.fontColor}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-4 pt-4 border-t border-zinc-800/50">
+                  <label className="text-sm font-medium text-zinc-400">Custom Fonts</label>
+                  <div className="space-y-2">
+                    {localSettings.customFonts.map((font, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2">
+                        <span className="text-sm text-zinc-300">{font.name}</span>
+                        <button
+                          onClick={() => {
+                            const newFonts = [...localSettings.customFonts];
+                            newFonts.splice(idx, 1);
+                            setLocalSettings({ ...localSettings, customFonts: newFonts });
+                          }}
+                          className="p-1 text-zinc-500 hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => {
+                        const name = window.prompt('Enter font name (e.g., Roboto):');
+                        const url = window.prompt('Enter font URL (e.g., Google Fonts CSS URL):');
+                        if (name && url) {
+                          setLocalSettings({
+                            ...localSettings,
+                            customFonts: [...localSettings.customFonts, { name, url }]
+                          });
+                        }
+                      }}
+                      className="flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 transition-colors mt-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Custom Font
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'signature' && (
+              <div className="space-y-6 max-w-2xl">
+                <div className="flex items-center justify-between border-b border-zinc-800/50 pb-4">
+                  <h3 className="text-sm font-medium text-zinc-300">Manage Signatures</h3>
+                  <button
+                    onClick={() => {
+                      const name = window.prompt('Enter signature name:');
+                      if (name) {
+                        const newSig = { id: Date.now().toString(), name, content: '<p><br>--<br>Sent from GlowMail AI</p>' };
+                        setLocalSettings({
+                          ...localSettings,
+                          signatures: [...localSettings.signatures, newSig],
+                          defaultSignatureId: localSettings.signatures.length === 0 ? newSig.id : localSettings.defaultSignatureId
+                        });
+                      }
+                    }}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg text-xs font-medium transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    New Signature
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {localSettings.signatures.map((sig) => (
+                    <div key={sig.id} className="space-y-3 p-4 bg-zinc-900/30 border border-zinc-800/50 rounded-xl">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="text"
+                            value={sig.name}
+                            onChange={(e) => {
+                              const newSigs = localSettings.signatures.map(s => s.id === sig.id ? { ...s, name: e.target.value } : s);
+                              setLocalSettings({ ...localSettings, signatures: newSigs });
+                            }}
+                            className="bg-transparent border-none outline-none text-sm font-medium text-zinc-200 focus:ring-0 p-0"
+                          />
+                          {localSettings.defaultSignatureId === sig.id ? (
+                            <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] uppercase tracking-wider font-bold rounded-full">Default</span>
+                          ) : (
+                            <button
+                              onClick={() => setLocalSettings({ ...localSettings, defaultSignatureId: sig.id })}
+                              className="text-xs text-zinc-500 hover:text-emerald-400 transition-colors"
+                            >
+                              Set as Default
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              const url = window.prompt('Enter image URL:');
+                              if (url) {
+                                const newSigs = localSettings.signatures.map(s => 
+                                  s.id === sig.id ? { ...s, content: s.content + `<br><img src="${url}" alt="Logo" style="max-height: 50px;" />` } : s
+                                );
+                                setLocalSettings({ ...localSettings, signatures: newSigs });
+                              }
+                            }}
+                            className="p-1.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-zinc-200 transition-colors"
+                            title="Insert Logo"
+                          >
+                            <ImageIcon className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              const newSigs = localSettings.signatures.filter(s => s.id !== sig.id);
+                              setLocalSettings({ 
+                                ...localSettings, 
+                                signatures: newSigs,
+                                defaultSignatureId: localSettings.defaultSignatureId === sig.id ? newSigs[0]?.id : localSettings.defaultSignatureId
+                              });
+                            }}
+                            className="p-1.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-red-400 transition-colors"
+                            title="Delete Signature"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                      <textarea
+                        value={sig.content}
+                        onChange={(e) => {
+                          const newSigs = localSettings.signatures.map(s => s.id === sig.id ? { ...s, content: e.target.value } : s);
+                          setLocalSettings({ ...localSettings, signatures: newSigs });
+                        }}
+                        className="w-full h-32 bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 font-mono"
+                        placeholder="<p>Your signature here...</p>"
+                      />
+                    </div>
+                  ))}
+                  {localSettings.signatures.length === 0 && (
+                    <div className="text-center py-8 text-zinc-500 text-sm">
+                      No signatures created yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'tags' && (
+              <div className="space-y-6 max-w-md">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-400">Add New Tag</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="color"
+                      value={newTagColor}
+                      onChange={(e) => setNewTagColor(e.target.value)}
+                      className="w-10 h-10 rounded-xl bg-zinc-900/50 border border-zinc-800 cursor-pointer p-1"
+                    />
+                    <input
+                      type="text"
+                      value={newTag}
+                      onChange={(e) => setNewTag(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+                      placeholder="e.g. newsletter"
+                      className="flex-1 bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                    />
+                    <button
+                      onClick={handleAddTag}
+                      disabled={!newTag.trim()}
+                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-zinc-100 rounded-xl font-medium text-sm transition-colors flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" /> Add
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-zinc-400">Available Tags</label>
+                  <div className="flex flex-col gap-2">
+                    {localSettings.availableTags.map((tag) => (
+                      <div
+                        key={tag.id}
+                        className="flex items-center justify-between px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="color"
+                            value={tag.color}
+                            onChange={(e) => handleUpdateTagColor(tag.id, e.target.value)}
+                            className="w-6 h-6 rounded bg-transparent border-none cursor-pointer p-0"
+                          />
+                          <span className="text-sm text-zinc-300 font-medium">{tag.name}</span>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveTag(tag.id)}
+                          className="text-zinc-600 hover:text-red-400 transition-colors p-1"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {localSettings.availableTags.length === 0 && (
+                      <p className="text-sm text-zinc-500 italic">No tags available.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="h-16 border-t border-zinc-800/50 flex items-center justify-end px-6 gap-3 shrink-0 bg-zinc-900/30">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-sm font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-6 py-2 bg-emerald-500 text-zinc-950 rounded-xl font-semibold text-sm shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] transition-all"
+            >
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}

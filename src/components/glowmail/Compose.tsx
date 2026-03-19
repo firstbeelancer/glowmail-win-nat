@@ -416,6 +416,20 @@ export function Compose({
                           else ed.appendChild(d);
                         }
                       }
+                      function insertCode(type) {
+                        document.getElementById('code-menu').classList.remove('show');
+                        var ed = document.getElementById('body');
+                        var sel = window.getSelection();
+                        var txt = sel ? sel.toString() : '';
+                        ed.focus();
+                        if (type === 'inline') {
+                          document.execCommand('insertHTML', false, '<code style="background-color:#f4f4f5;color:#18181b;padding:2px 6px;border-radius:4px;font-family:JetBrains Mono,Fira Code,Consolas,Courier New,monospace;font-size:0.9em;border:1px solid #e4e4e7;">' + (txt || 'code') + '</code>&nbsp;');
+                        } else if (type === 'block') {
+                          document.execCommand('insertHTML', false, '<div style="margin:12px 0;"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr><td style="background-color:#1e1e2e;border:1px solid #313244;border-radius:8px;padding:16px;font-family:JetBrains Mono,Fira Code,Consolas,Courier New,monospace;font-size:13px;line-height:1.5;color:#cdd6f4;white-space:pre-wrap;word-break:break-all;">' + (txt || '// code here') + '</td></tr></table></div><p><br></p>');
+                        } else {
+                          document.execCommand('insertHTML', false, '<div style="margin:12px 0;"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr><td style="background-color:#0c0c0c;border:1px solid #333;border-radius:8px;padding:16px;font-family:JetBrains Mono,Fira Code,Consolas,Courier New,monospace;font-size:13px;line-height:1.5;color:#00ff41;white-space:pre-wrap;word-break:break-all;">' + (txt || '$ output here') + '</td></tr></table></div><p><br></p>');
+                        }
+                      }
                       async function doAI(action) {
                         document.getElementById('ai-menu').classList.remove('show');
                         var ed = document.getElementById('body');

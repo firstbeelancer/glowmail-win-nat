@@ -286,11 +286,15 @@ function SidebarContent({
                       <button
                         key={child.id}
                         onClick={() => setCurrentFolder(child.id)}
+                        onDragOver={(e) => handleFolderDragOver(e, child.id)}
+                        onDragLeave={handleFolderDragLeave}
+                        onDrop={(e) => handleFolderDrop(e, child.id)}
                         className={cn(
                           "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-200",
                           isChildActive
                             ? "bg-emerald-500/10 text-emerald-400"
-                            : "text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300"
+                            : "text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300",
+                          dragOverFolder === child.id && "ring-2 ring-emerald-400/50 bg-emerald-500/10"
                         )}
                       >
                         <ChildIcon className={cn("w-3.5 h-3.5", isChildActive ? "text-emerald-400" : "text-zinc-600")} />

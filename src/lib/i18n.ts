@@ -343,6 +343,8 @@ const translations = {
     'settings.syncDesc': 'Как часто автоматически проверять новую почту.',
     'settings.keepFilters': 'Сохранять фильтры между папками',
     'settings.keepFiltersDesc': 'Сохранять сортировку и фильтры при переключении между папками.',
+    'settings.aiEnabled': 'Включить ИИ-функции',
+    'settings.aiEnabledDesc': 'Быстрые ответы, переписывание текста, проверка орфографии и перевод с помощью ИИ.',
     'settings.groupBy': 'Группировка писем',
     'settings.groupNone': 'Без группировки',
     'settings.groupDate': 'По дате',

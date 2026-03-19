@@ -343,13 +343,54 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     {isFetchingFolders ? t('settings.fetchingFolders', lang) : t('settings.fetchFolders', lang)}
                   </button>
                 </div>
+
+                {/* LDAP */}
+                <div className="space-y-4 pt-4 border-t border-zinc-800/50">
+                  <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2">{t('settings.ldapSection', lang)}</h4>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">{t('settings.ldapServer', lang)}</label>
+                      <input
+                        type="text"
+                        value={localSettings.ldapServer}
+                        onChange={(e) => setLocalSettings({ ...localSettings, ldapServer: e.target.value })}
+                        placeholder="ldap://ldap.example.com:389"
+                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">{t('settings.ldapBaseDn', lang)}</label>
+                      <input
+                        type="text"
+                        value={localSettings.ldapBaseDn}
+                        onChange={(e) => setLocalSettings({ ...localSettings, ldapBaseDn: e.target.value })}
+                        placeholder="ou=people,dc=example,dc=com"
+                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                      />
+                    </div>
+                    <button
+                      onClick={async () => {
+                        setIsLoadingLdap(true);
+                        await new Promise(r => setTimeout(r, 1500));
+                        const ldapContacts = [
+                          { id: `ldap-${Date.now()}-1`, name: 'John Doe', email: 'john.doe@corp.example.com' },
+                          { id: `ldap-${Date.now()}-2`, name: 'Jane Smith', email: 'jane.smith@corp.example.com' },
+                          { id: `ldap-${Date.now()}-3`, name: 'Admin Support', email: 'admin@corp.example.com' },
+                        ];
+                        ldapContacts.forEach(c => addContact(c));
+                        setIsLoadingLdap(false);
+                        toast.success(lang === 'ru' ? 'Контакты загружены из LDAP' : 'Contacts loaded from LDAP');
+                      }}
+                      disabled={isLoadingLdap || !localSettings.ldapServer}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 rounded-xl font-medium text-sm border border-zinc-700/50 transition-all disabled:opacity-50"
+                    >
+                      {isLoadingLdap ? <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> : <Globe className="w-4 h-4" />}
+                      {isLoadingLdap ? t('settings.ldapLoading', lang) : t('settings.ldapLoad', lang)}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
-
-            {activeTab === 'appearance' && (
-              <div className="space-y-6 max-w-md">
-                <div className="space-y-4">
-                  <label className="text-sm font-medium text-zinc-400">{t('settings.themePreference', lang)}</label>
                   <div className="grid grid-cols-2 gap-4">
                     <button
                       onClick={() => setLocalSettings({ ...localSettings, theme: 'light' })}

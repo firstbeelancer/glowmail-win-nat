@@ -85,7 +85,7 @@
   }
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbar — emerald themed */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -96,18 +96,18 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--zinc-800));
+  background: hsl(160 84% 39% / 0.3);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--zinc-600));
+  background: hsl(160 84% 39% / 0.6);
 }
 
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: hsl(var(--zinc-800)) transparent;
+  scrollbar-color: hsl(160 84% 39% / 0.3) transparent;
 }
 
 /* Unified select / dropdown styles */

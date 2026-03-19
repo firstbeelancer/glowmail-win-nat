@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { t } from '@/lib/i18n';
 
-export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) => void, onEditDraft?: (email: Email) => void }) {
+export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect: (email: Email) => void, onEditDraft?: (email: Email) => void, selectedEmailId?: string }) {
   const { emails, currentFolder, searchQuery, toggleStar, deleteEmail, settings, updateEmailTags, isLoading, connectionError, fetchEmails } = useMail();
   const lang = settings.language;
   const [sortBy, setSortBy] = useState<'date' | 'sender' | 'subject' | 'tags' | 'unread'>('date');
@@ -276,7 +276,8 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
               className={cn(
                 "group flex flex-col p-4 border-b border-zinc-800/50 cursor-grab transition-all hover:bg-zinc-900/50 relative active:cursor-grabbing",
                 !email.read && "bg-zinc-900/20",
-                email.starred && "bg-emerald-500/[0.03] shadow-[inset_0_0_25px_rgba(16,185,129,0.06)]"
+                email.starred && "bg-emerald-500/[0.03] shadow-[inset_0_0_25px_rgba(16,185,129,0.06)]",
+                selectedEmailId === email.id && "ring-1 ring-emerald-500/50 bg-emerald-500/[0.06] border-l-2 border-l-emerald-500"
               )}
             >
               <div className="flex items-center justify-between mb-1">

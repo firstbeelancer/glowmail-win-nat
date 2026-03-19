@@ -10,11 +10,19 @@ import { AnimatePresence } from 'framer-motion';
 import Login from './Login';
 import * as mailApi from '../lib/mail-api';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
+import { Columns3, Rows3 } from 'lucide-react';
 
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [composeData, setComposeData] = useState<Partial<Email> | null>(null);
+  const [layoutMode, setLayoutMode] = useState<'vertical' | 'horizontal'>(() => {
+    return (localStorage.getItem('glowmail_layout') as 'vertical' | 'horizontal') || 'vertical';
+  });
   const { markAsRead, settings, sendEmail, isLoading, connectionError, fetchEmails, currentFolder } = useMail();
+
+  useEffect(() => {
+    localStorage.setItem('glowmail_layout', layoutMode);
+  }, [layoutMode]);
 
   // Listen for messages from detached composer window
   useEffect(() => {
@@ -98,7 +106,6 @@ function MailApp() {
     let to: any[] = [];
     let cc: any[] = [];
 
-    // Build quoted header with full details
     const dateStr = new Date(email.date).toLocaleString();
     const fromStr = `${email.from.name} &lt;${email.from.email}&gt;`;
     const toStr = email.to.map(c => `${c.name} &lt;${c.email}&gt;`).join(', ');
@@ -142,6 +149,48 @@ function MailApp() {
     });
   };
 
+  const renderEmailDetail = () => (
+    <AnimatePresence mode="wait">
+      {selectedEmail ? (
+        <EmailDetail
+          key={selectedEmail.id}
+          email={selectedEmail}
+          onBack={() => setSelectedEmail(null)}
+          onReply={handleReply}
+          onEditDraft={handleEditDraft}
+        />
+      ) : (
+        <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full">
+          <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(255,255,255,0.02)]">
+            <svg className="w-8 h-8 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <p>{settings.language === 'ru' ? 'Выберите письмо для чтения' : 'Select an email to read'}</p>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+
+  const layoutToggle = (
+    <div className="absolute top-2 right-2 z-30 flex bg-zinc-900 border border-zinc-800 rounded-lg p-0.5">
+      <button
+        onClick={() => setLayoutMode('vertical')}
+        className={`p-1.5 rounded-md transition-colors ${layoutMode === 'vertical' ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+        title={settings.language === 'ru' ? 'Вертикальная компоновка' : 'Vertical layout'}
+      >
+        <Columns3 className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => setLayoutMode('horizontal')}
+        className={`p-1.5 rounded-md transition-colors ${layoutMode === 'horizontal' ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+        title={settings.language === 'ru' ? 'Горизонтальная компоновка' : 'Horizontal layout'}
+      >
+        <Rows3 className="w-4 h-4" />
+      </button>
+    </div>
+  );
+
   return (
     <Layout onCompose={(prefill) => {
       if (prefill?.to) {
@@ -151,43 +200,39 @@ function MailApp() {
       }
     }}>
       <div className="flex h-full relative">
-        {/* Desktop: Resizable panels */}
-        <div className="hidden lg:flex flex-1 min-w-0">
-          <ResizablePanelGroup direction="horizontal" className="h-full">
-            <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
-              <EmailList onSelect={handleSelectEmail} onEditDraft={handleEditDraft} />
-            </ResizablePanel>
-            <ResizableHandle withHandle className="bg-zinc-800/50 hover:bg-emerald-500/30 transition-colors data-[resize-handle-active]:bg-emerald-500/50" />
-            <ResizablePanel defaultSize={65} minSize={40}>
-              <div className="h-full flex flex-col bg-zinc-950 relative">
-                <AnimatePresence mode="wait">
-                  {selectedEmail ? (
-                    <EmailDetail
-                      key={selectedEmail.id}
-                      email={selectedEmail}
-                      onBack={() => setSelectedEmail(null)}
-                      onReply={handleReply}
-                      onEditDraft={handleEditDraft}
-                    />
-                  ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-zinc-500">
-                      <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(255,255,255,0.02)]">
-                        <svg className="w-8 h-8 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                      <p>{settings.language === 'ru' ? 'Выберите письмо для чтения' : 'Select an email to read'}</p>
-                    </div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
+        {/* Desktop layout */}
+        <div className="hidden lg:flex flex-1 min-w-0 relative">
+          {layoutToggle}
+          {layoutMode === 'vertical' ? (
+            <ResizablePanelGroup direction="horizontal" className="h-full">
+              <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
+                <EmailList onSelect={handleSelectEmail} onEditDraft={handleEditDraft} selectedEmailId={selectedEmail?.id} />
+              </ResizablePanel>
+              <ResizableHandle withHandle className="bg-zinc-800/50 hover:bg-emerald-500/30 transition-colors data-[resize-handle-active]:bg-emerald-500/50" />
+              <ResizablePanel defaultSize={65} minSize={40}>
+                <div className="h-full flex flex-col bg-zinc-950 relative">
+                  {renderEmailDetail()}
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          ) : (
+            <ResizablePanelGroup direction="vertical" className="h-full">
+              <ResizablePanel defaultSize={40} minSize={20} maxSize={70}>
+                <EmailList onSelect={handleSelectEmail} onEditDraft={handleEditDraft} selectedEmailId={selectedEmail?.id} />
+              </ResizablePanel>
+              <ResizableHandle withHandle className="bg-zinc-800/50 hover:bg-emerald-500/30 transition-colors data-[resize-handle-active]:bg-emerald-500/50" />
+              <ResizablePanel defaultSize={60} minSize={25}>
+                <div className="h-full flex flex-col bg-zinc-950 relative">
+                  {renderEmailDetail()}
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          )}
         </div>
 
         {/* Mobile: stacked */}
         <div className="lg:hidden flex-1 flex flex-col min-w-0">
-          <EmailList onSelect={handleSelectEmail} onEditDraft={handleEditDraft} />
+          <EmailList onSelect={handleSelectEmail} onEditDraft={handleEditDraft} selectedEmailId={selectedEmail?.id} />
         </div>
 
         <div className="lg:hidden">
@@ -225,7 +270,6 @@ const Index = () => {
   if (!loggedIn) {
     return (
       <Login onLogin={(creds) => {
-        // Save credentials and update settings via store after mount
         localStorage.setItem('glowmail_credentials', JSON.stringify(creds));
         setLoggedIn(true);
       }} />

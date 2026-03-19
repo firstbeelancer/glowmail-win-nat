@@ -140,7 +140,7 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   {email.importance === 'high' && (
-                    <AlertTriangle className="w-3.5 h-3.5 text-red-400 drop-shadow-[0_0_5px_rgba(248,113,113,0.5)]" title="High Importance" />
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-400 drop-shadow-[0_0_5px_rgba(248,113,113,0.5)]" />
                   )}
                   <span className={cn("font-semibold text-sm", !email.read ? "text-zinc-100" : "text-zinc-300")}>
                     {email.from.name}

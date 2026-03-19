@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMail } from '../../store';
 import { motion } from 'framer-motion';
-import { X, User, Server, Palette, PenTool, Tags, Plus, Trash2, Image as ImageIcon, Globe, FolderTree, Loader2, Layers } from 'lucide-react';
+import { X, User, Server, Palette, PenTool, Tags, Plus, Trash2, Image as ImageIcon, Globe, FolderTree, Loader2, Layers, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { t } from '@/lib/i18n';
@@ -183,6 +183,22 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
                   />
                   <p className="text-xs text-zinc-500">{t('settings.markAsReadDelayDesc', lang)}</p>
+                </div>
+
+                <div className="pt-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.aiEnabled}
+                      onChange={(e) => setLocalSettings({ ...localSettings, aiEnabled: e.target.checked })}
+                      className="w-4 h-4 rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500/50 bg-zinc-900"
+                    />
+                    <span className="text-sm text-zinc-300 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      {t('settings.aiEnabled', lang)}
+                    </span>
+                  </label>
+                  <p className="text-xs text-zinc-500 ml-7 mt-1">{t('settings.aiEnabledDesc', lang)}</p>
                 </div>
 
                 <div className="space-y-2">

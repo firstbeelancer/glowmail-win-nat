@@ -607,7 +607,7 @@ export function Compose({
           <div className="flex-1" />
           
           {/* AI Assistant Button */}
-          <div className="relative">
+          {settings.aiEnabled && <div className="relative">
             <button
               onClick={() => setShowAiMenu(!showAiMenu)}
               disabled={isAiLoading}
@@ -633,7 +633,7 @@ export function Compose({
                 </div>
               </div>
             )}
-          </div>
+          </div>}
         </div>
 
         {/* Editor */}

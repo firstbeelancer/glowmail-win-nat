@@ -225,6 +225,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
         { id: '4', name: 'finance', color: '#f59e0b' },
         { id: '5', name: 'project', color: '#8b5cf6' },
       ],
+      aiEnabled: true,
       ...parsedSettings,
     };
   });

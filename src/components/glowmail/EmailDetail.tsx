@@ -45,7 +45,7 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
         if (!cancelled) setIsGeneratingReplies(false);
       }
     };
-    if (email.folderId !== 'drafts' && email.folderId !== 'sent') {
+    if (email.folderId !== 'drafts' && email.folderId !== 'sent' && settings.aiEnabled) {
       generateReplies();
     }
     return () => { cancelled = true; };

@@ -93,4 +93,5 @@ export type UserSettings = {
   ldapServer: string;
   ldapBaseDn: string;
   language: 'en' | 'ru';
+  aiEnabled: boolean;
 };

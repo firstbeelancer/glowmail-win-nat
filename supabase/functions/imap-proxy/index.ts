@@ -261,9 +261,9 @@ Deno.serve(async (req) => {
             : [],
         });
 
-        const readRawCandidate = (label: string, value: unknown) => {
+        const readRawCandidate = async (label: string, value: unknown) => {
           if (value == null) return;
-          const converted = toUint8Array(value);
+          const converted = await toUint8Array(value);
           if (converted && converted.length > 0) {
             rawSource = converted;
             rawSourceOrigin = label;

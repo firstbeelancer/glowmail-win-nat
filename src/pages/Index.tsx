@@ -78,6 +78,24 @@ function MailApp() {
     return stripInvisible(plain).length > 0;
   };
 
+  const looksCorruptedText = (value: string) => {
+    if (!value) return false;
+    const plain = value
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<[^>]*>/g, ' ');
+
+    const controls = (plain.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || []).length;
+    if (controls > 2) return true;
+
+    const replacement = (plain.match(/�/g) || []).length;
+    if (replacement > 0) return true;
+
+    const cyr = (plain.match(/[А-Яа-яЁё]/g) || []).length;
+    const weird = (plain.match(/[@><;]{1}/g) || []).length;
+    return cyr < 3 && weird > 24 && plain.length > 120;
+  };
+
   const escapeHtml = (value: string) => value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -114,6 +132,7 @@ function MailApp() {
 
   const normalizeBase64Input = (value: string) => {
     let compact = value.replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
+    compact = compact.replace(/^[^A-Za-z0-9+/=]+/, '').replace(/[^A-Za-z0-9+/=]+$/, '');
     if (!compact) return compact;
     const remainder = compact.length % 4;
     if (remainder) compact += '='.repeat(4 - remainder);
@@ -263,10 +282,11 @@ function MailApp() {
       if (reparsed.text) bodyText = reparsed.text;
     }
 
-    if (!bodyHtml && isLikelyBase64(bodyText)) {
+    if ((!bodyHtml || looksCorruptedText(bodyHtml)) && isLikelyBase64(bodyText)) {
       const decodedText = decodeBase64(bodyText, 'utf-8');
       if (/<\/?[a-z][\s\S]*>/i.test(decodedText)) {
         bodyHtml = decodedText;
+        bodyText = '';
       } else {
         bodyText = decodedText;
       }
@@ -286,6 +306,12 @@ function MailApp() {
       }
     }
 
+    const bodyTextLooksHtml = /<\/?[a-z][\s\S]*>/i.test(bodyText);
+    if (bodyTextLooksHtml && (!bodyHtml || looksCorruptedText(bodyHtml)) && !looksCorruptedText(bodyText)) {
+      bodyHtml = bodyText;
+      bodyText = '';
+    }
+
     const htmlHasTags = /<\/?[a-z][\s\S]*>/i.test(bodyHtml);
     bodyText = stripInvisible(bodyText);
 
@@ -294,7 +320,7 @@ function MailApp() {
       bodyHtml = '';
     }
 
-    if (hasVisibleText(bodyHtml) && htmlHasTags && !looksLikeMimeBlob(bodyHtml)) return bodyHtml;
+    if (hasVisibleText(bodyHtml) && htmlHasTags && !looksLikeMimeBlob(bodyHtml) && !looksCorruptedText(bodyHtml)) return bodyHtml;
     if (hasVisibleText(bodyText)) {
       return `<div style="white-space: pre-wrap; line-height: 1.55;">${escapeHtml(bodyText)}</div>`;
     }

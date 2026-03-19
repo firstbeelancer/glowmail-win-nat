@@ -314,6 +314,12 @@ Deno.serve(async (req) => {
         let bodyText = "";
         let bodyHtml = "";
 
+        const isLikelyBase64 = (value: string): boolean => {
+          const compact = value.replace(/\s/g, "");
+          if (compact.length < 64 || compact.length % 4 !== 0) return false;
+          return /^[A-Za-z0-9+/=]+$/.test(compact);
+        };
+
         const extractFromParts = (parts: unknown): { text: string; html: string } => {
           if (!parts || typeof parts !== "object") return { text: "", html: "" };
           let text = "";
@@ -324,11 +330,26 @@ Deno.serve(async (req) => {
             const raw = decodeData(value?.data ?? value?.body ?? value);
             if (!raw) continue;
 
-            const headers = String(value?.headers || value?.header || "").toLowerCase();
-            const isHtml = headers.includes("text/html") || /<\/?[a-z][\s\S]*>/i.test(raw);
+            const headersRaw = String(value?.headers || value?.header || "");
+            const headers = headersRaw.toLowerCase();
+            const charset = extractCharset(headers);
+            const headerEncoding = extractEncoding(headers);
 
-            if (isHtml && !html) html = raw;
-            else if (!text) text = raw;
+            let decoded = raw;
+            if (headerEncoding === "base64") {
+              decoded = decodeContent(raw, "base64", charset);
+            } else if (headerEncoding === "quoted-printable") {
+              decoded = decodeContent(raw, "quoted-printable", charset);
+            } else if (isLikelyBase64(raw) && /^(PCFET0|PGh0bWw|PGRpdi|PHA|PHRhYmxl)/i.test(raw.replace(/\s/g, ""))) {
+              decoded = decodeContent(raw, "base64", charset);
+            } else if (/=\r?\n|=[0-9A-Fa-f]{2}/.test(raw)) {
+              decoded = decodeContent(raw, "quoted-printable", charset);
+            }
+
+            const isHtml = headers.includes("text/html") || /<\/?[a-z][\s\S]*>/i.test(decoded);
+
+            if (isHtml && !html) html = decoded;
+            else if (!text) text = decoded;
           }
 
           return { text, html };
@@ -343,6 +364,14 @@ Deno.serve(async (req) => {
           const fromBodyParts = extractFromParts(msg.bodyParts);
           bodyText = fromBodyParts.text;
           bodyHtml = fromBodyParts.html;
+        }
+
+        // Normalize encoded artifacts that still leak through in HTML
+        if (bodyHtml && /=\r?\n|=[0-9A-Fa-f]{2}/.test(bodyHtml)) {
+          bodyHtml = decodeContent(bodyHtml, "quoted-printable", "utf-8");
+        }
+        if (bodyHtml && isLikelyBase64(bodyHtml) && /^(PCFET0|PGh0bWw|PGRpdi|PHA|PHRhYmxl)/i.test(bodyHtml.replace(/\s/g, ""))) {
+          bodyHtml = decodeContent(bodyHtml, "base64", "utf-8");
         }
 
         // If bodyText looks like raw MIME, parse it

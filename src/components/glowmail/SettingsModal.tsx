@@ -554,6 +554,50 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
 
+                {/* Folder Colors */}
+                <div className="space-y-4 pt-4 border-t border-zinc-800/50">
+                  <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+                    <FolderTree className="w-4 h-4" />
+                    {t('settings.folderColors', lang)}
+                  </label>
+                  <p className="text-xs text-zinc-500">{t('settings.folderColorsDesc', lang)}</p>
+                  {(() => {
+                    const subfolders = allFoldersFlat.filter(f => f.parent);
+                    if (subfolders.length === 0) {
+                      return <p className="text-xs text-zinc-600">{t('settings.noSubfolders', lang)}</p>;
+                    }
+                    return (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {subfolders.map(f => (
+                          <div key={f.id} className="flex items-center gap-3 bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2">
+                            <input
+                              type="color"
+                              value={localSettings.folderColors[f.id] || '#6b7280'}
+                              onChange={(e) => setLocalSettings({
+                                ...localSettings,
+                                folderColors: { ...localSettings.folderColors, [f.id]: e.target.value }
+                              })}
+                              className="w-7 h-7 p-0.5 rounded-lg bg-zinc-900 border border-zinc-800 cursor-pointer shrink-0"
+                            />
+                            <span className="text-sm text-zinc-300 truncate flex-1">{f.name}</span>
+                            {localSettings.folderColors[f.id] && (
+                              <button
+                                onClick={() => {
+                                  const { [f.id]: _, ...rest } = localSettings.folderColors;
+                                  setLocalSettings({ ...localSettings, folderColors: rest });
+                                }}
+                                className="p-1 text-zinc-500 hover:text-red-400 transition-colors"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+
                 {/* Grouping */}
                 <div className="space-y-4 pt-4 border-t border-zinc-800/50">
                   <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">

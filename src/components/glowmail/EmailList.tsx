@@ -262,6 +262,11 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
               key={email.id}
+              draggable
+              onDragStart={(e: any) => {
+                e.dataTransfer.setData('text/email-id', email.id);
+                e.dataTransfer.effectAllowed = 'move';
+              }}
               onClick={() => onSelect(email)}
               onDoubleClick={() => {
                 if (email.folderId === 'drafts' && onEditDraft) {
@@ -269,7 +274,7 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
                 }
               }}
               className={cn(
-                "group flex flex-col p-4 border-b border-zinc-800/50 cursor-pointer transition-all hover:bg-zinc-900/50 relative",
+                "group flex flex-col p-4 border-b border-zinc-800/50 cursor-grab transition-all hover:bg-zinc-900/50 relative active:cursor-grabbing",
                 !email.read && "bg-zinc-900/20",
                 email.starred && "bg-emerald-500/[0.03] shadow-[inset_0_0_25px_rgba(16,185,129,0.06)]"
               )}

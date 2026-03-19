@@ -409,6 +409,7 @@ export function Compose({
               </div>
             </div>
           </div>
+        </div>
 
         <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/30 shrink-0 overflow-visible relative">
           <select 

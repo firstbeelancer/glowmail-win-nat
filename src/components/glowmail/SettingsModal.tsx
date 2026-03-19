@@ -139,6 +139,37 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   <p className="text-xs text-zinc-500">{t('settings.delayedDesc', lang)}</p>
                 </div>
 
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.syncInterval', lang)}</label>
+                  <select
+                    value={localSettings.syncInterval}
+                    onChange={(e) => setLocalSettings({ ...localSettings, syncInterval: parseInt(e.target.value) })}
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                  >
+                    <option value={1}>1 {t('settings.minutes', lang)}</option>
+                    <option value={5}>5 {t('settings.minutes', lang)}</option>
+                    <option value={10}>10 {t('settings.minutes', lang)}</option>
+                    <option value={15}>15 {t('settings.minutes', lang)}</option>
+                    <option value={30}>30 {t('settings.minutes', lang)}</option>
+                    <option value={60}>60 {t('settings.minutes', lang)}</option>
+                    <option value={0}>{t('settings.syncManual', lang)}</option>
+                  </select>
+                  <p className="text-xs text-zinc-500">{t('settings.syncDesc', lang)}</p>
+                </div>
+
+                <div className="pt-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.keepFiltersAcrossFolders}
+                      onChange={(e) => setLocalSettings({ ...localSettings, keepFiltersAcrossFolders: e.target.checked })}
+                      className="w-4 h-4 rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500/50 bg-zinc-900"
+                    />
+                    <span className="text-sm text-zinc-300">{t('settings.keepFilters', lang)}</span>
+                  </label>
+                  <p className="text-xs text-zinc-500 ml-7 mt-1">{t('settings.keepFiltersDesc', lang)}</p>
+                </div>
+
                 {/* Language Setting */}
                 <div className="space-y-2 pt-4 border-t border-zinc-800/50">
                   <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">

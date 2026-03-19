@@ -13,6 +13,16 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
   const [sortBy, setSortBy] = useState<'date' | 'sender' | 'subject' | 'tags' | 'unread'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const prevFolderRef = useRef(currentFolder);
+
+  // Reset sort when folder changes, unless keepFiltersAcrossFolders is on
+  if (prevFolderRef.current !== currentFolder) {
+    prevFolderRef.current = currentFolder;
+    if (!settings.keepFiltersAcrossFolders) {
+      if (sortBy !== 'date') setSortBy('date');
+      if (sortOrder !== 'desc') setSortOrder('desc');
+    }
+  }
 
   const handleSort = (type: 'date' | 'sender' | 'subject' | 'tags' | 'unread') => {
     if (sortBy === type) {

@@ -126,6 +126,19 @@ function MailApp() {
     }
   };
 
+  const isLikelyBase64 = (value: string) => {
+    const compact = value.replace(/\s/g, '');
+    if (compact.length < 24 || compact.length % 4 !== 0) return false;
+    return /^[A-Za-z0-9+/=]+$/.test(compact);
+  };
+
+  const looksLikeMimeBlob = (value: string) => {
+    const lower = value.toLowerCase();
+    return lower.includes('content-type: multipart/') ||
+      lower.includes('content-transfer-encoding:') ||
+      /(?:^|\r?\n)--[^\r\n]{8,}/.test(value);
+  };
+
   const parseMultipartBlob = (source: string): { text: string; html: string } => {
     const normalized = source.replace(/\r\n/g, '\n');
     const boundaryFromHeader = normalized.match(/boundary="?([^"\n;]+)"?/i)?.[1]?.trim();
@@ -164,13 +177,13 @@ function MailApp() {
       let decoded = bodyRaw;
       if (headers.includes('content-transfer-encoding: quoted-printable')) {
         decoded = decodeQuotedPrintable(bodyRaw, charset);
-      } else if (headers.includes('content-transfer-encoding: base64')) {
+      } else if (headers.includes('content-transfer-encoding: base64') || isLikelyBase64(bodyRaw)) {
         decoded = decodeBase64(bodyRaw, charset);
       }
 
-      if (isHtml) {
+      if (isHtml && !html) {
         html = decoded;
-      } else if (!text) {
+      } else if (isPlain && !text) {
         text = decoded;
       }
     }
@@ -178,24 +191,47 @@ function MailApp() {
     return { text: text.trim(), html: html.trim() };
   };
 
+  const decodeStandaloneBlob = (value: string): string => {
+    if (!value) return value;
+    if (/=\r?\n|=[0-9A-Fa-f]{2}/.test(value)) {
+      return decodeQuotedPrintable(value, 'utf-8');
+    }
+    if (isLikelyBase64(value)) {
+      return decodeBase64(value, 'utf-8');
+    }
+    return value;
+  };
+
   const buildRenderableEmailBody = (full: any) => {
     let bodyHtml = typeof full?.bodyHtml === 'string' ? full.bodyHtml : '';
     let bodyText = typeof full?.bodyText === 'string' ? full.bodyText : '';
 
-    if (bodyText.includes('Content-Type:') || bodyText.includes('This is a multi-part message')) {
-      const parsed = parseMultipartBlob(bodyText);
-      if (!hasVisibleText(bodyHtml) && parsed.html) bodyHtml = parsed.html;
-      if ((!hasVisibleText(bodyText) || /^this is a multi-part message/i.test(bodyText.trim())) && parsed.text) {
-        bodyText = parsed.text;
+    const parseFromCandidate = (candidate: string) => {
+      if (!candidate || !looksLikeMimeBlob(candidate)) return;
+      const parsed = parseMultipartBlob(candidate);
+      if (parsed.html) bodyHtml = parsed.html;
+      if (parsed.text && (!bodyText || looksLikeMimeBlob(bodyText))) bodyText = parsed.text;
+    };
+
+    parseFromCandidate(bodyHtml);
+    parseFromCandidate(bodyText);
+
+    bodyHtml = decodeStandaloneBlob(bodyHtml);
+    bodyText = decodeStandaloneBlob(bodyText);
+
+    if (looksLikeMimeBlob(bodyHtml)) {
+      const reparsed = parseMultipartBlob(bodyHtml);
+      if (reparsed.html) bodyHtml = reparsed.html;
+      if (reparsed.text && !bodyText) bodyText = reparsed.text;
+    }
+
+    if (!bodyHtml && isLikelyBase64(bodyText)) {
+      const decodedText = decodeBase64(bodyText, 'utf-8');
+      if (/<\/?[a-z][\s\S]*>/i.test(decodedText)) {
+        bodyHtml = decodedText;
+      } else {
+        bodyText = decodedText;
       }
-    }
-
-    if (/=\r?\n|=[0-9A-Fa-f]{2}/.test(bodyText)) {
-      bodyText = decodeQuotedPrintable(bodyText, 'utf-8');
-    }
-
-    if (/=\r?\n|=[0-9A-Fa-f]{2}/.test(bodyHtml)) {
-      bodyHtml = decodeQuotedPrintable(bodyHtml, 'utf-8');
     }
 
     const compactHtml = bodyHtml.replace(/\s/g, '');
@@ -214,7 +250,7 @@ function MailApp() {
 
     bodyText = stripInvisible(bodyText);
 
-    if (hasVisibleText(bodyHtml)) return bodyHtml;
+    if (hasVisibleText(bodyHtml) && !looksLikeMimeBlob(bodyHtml)) return bodyHtml;
     if (hasVisibleText(bodyText)) {
       return `<div style="white-space: pre-wrap; line-height: 1.55;">${escapeHtml(bodyText)}</div>`;
     }

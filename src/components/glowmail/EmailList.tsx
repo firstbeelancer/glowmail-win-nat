@@ -11,7 +11,7 @@ import { t } from '@/lib/i18n';
 type FilterMode = 'all' | 'unread' | 'attachments' | 'to_me' | 'from_me';
 
 export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect: (email: Email) => void, onEditDraft?: (email: Email) => void, selectedEmailId?: string }) {
-  const { emails, currentFolder, searchQuery, setSearchQuery, toggleStar, deleteEmail, settings, updateEmailTags, isLoading, isLoadingMore, hasMoreEmails, totalEmails, connectionError, fetchEmails, loadMoreEmails, markAsRead, markAsUnread, isSearching, isSearchActive, searchResultCount } = useMail();
+  const { emails, currentFolder, searchQuery, setSearchQuery, toggleStar, deleteEmail, settings, updateEmailTags, isLoading, isLoadingMore, hasMoreEmails, totalEmails, connectionError, fetchEmails, loadMoreEmails, markAsRead, markAsUnread, isSearching, isSearchActive, searchResultCount, hasMoreSearchResults, searchError } = useMail();
   const lang = settings.language;
   const [sortBy, setSortBy] = useState<'date' | 'sender' | 'subject' | 'tags' | 'unread'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');

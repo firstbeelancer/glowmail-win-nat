@@ -97,10 +97,38 @@ Deno.serve(async (req) => {
         });
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+
+        // Helper: extract attachment info from bodyStructure
+        const extractAttachments = (bs: any): { name: string; size: number; type: string }[] => {
+          if (!bs) return [];
+          const atts: { name: string; size: number; type: string }[] = [];
+          const walk = (node: any) => {
+            if (!node) return;
+            const disposition = (node.disposition || '').toLowerCase();
+            const mimeType = `${node.type || ''}/${node.subtype || ''}`.toLowerCase();
+            const isAttachment = disposition === 'attachment' ||
+              (disposition === 'inline' && node.id && mimeType.startsWith('image/')) ||
+              (node.parameters?.name && !['text/plain', 'text/html'].includes(mimeType));
+            if (isAttachment) {
+              atts.push({
+                name: node.dispositionParameters?.filename || node.parameters?.name || 'unnamed',
+                size: node.size || 0,
+                type: mimeType,
+              });
+            }
+            if (node.childNodes) {
+              node.childNodes.forEach(walk);
+            }
+          };
+          walk(bs);
+          return atts;
+        };
+
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
           .map((msg: any) => {
             const env = msg.envelope || {};
+            const attachments = extractAttachments(msg.bodyStructure);
             return {
               uid: msg.uid,
               flags: msg.flags || [],
@@ -123,6 +151,7 @@ Deno.serve(async (req) => {
               date: env.date || new Date().toISOString(),
               messageId: env.messageId || "",
               inReplyTo: env.inReplyTo || "",
+              attachments,
             };
           });
 

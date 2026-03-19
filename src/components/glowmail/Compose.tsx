@@ -88,12 +88,11 @@ export function Compose({
     }
   }, [settings.fontColor]);
 
-  const handleSend = () => {
-    if (!to) {
-      toast.error(t('compose.recipientRequired', lang));
-      return;
-    }
-    
+  const [pendingSend, setPendingSend] = useState(false);
+  const [subjectWarningShown, setSubjectWarningShown] = useState(false);
+  const [attachmentWarningShown, setAttachmentWarningShown] = useState(false);
+
+  const doSend = () => {
     const toContacts: Contact[] = to.split(',').map((emailStr) => {
       const email = emailStr.trim();
       const existing = contacts.find((c) => c.email === email);
@@ -131,6 +130,34 @@ export function Compose({
       toast.success(t('compose.emailSent', lang));
     }
     onClose();
+  };
+
+  const handleSend = () => {
+    if (!to) {
+      toast.error(t('compose.recipientRequired', lang));
+      return;
+    }
+
+    // Warning: empty subject
+    if (!subject.trim() && !subjectWarningShown) {
+      setSubjectWarningShown(true);
+      toast(lang === 'ru' ? 'Тема письма пустая. Нажмите «Отправить» ещё раз для подтверждения.' : 'Subject is empty. Press Send again to confirm.', { icon: '⚠️' });
+      return;
+    }
+
+    // Warning: body mentions attachment but none attached
+    const bodyText = (editorRef.current?.innerText || '').toLowerCase();
+    const attachKeywords = lang === 'ru'
+      ? ['вложен', 'прикреп', 'приложен', 'файл', 'прикладыва', 'attach']
+      : ['attach', 'enclosed', 'file attached', 'see attached', 'find attached'];
+    const mentionsAttachment = attachKeywords.some(kw => bodyText.includes(kw));
+    if (mentionsAttachment && attachments.length === 0 && !attachmentWarningShown) {
+      setAttachmentWarningShown(true);
+      toast(lang === 'ru' ? 'Похоже, вы упомянули вложение, но файл не приложен. Нажмите «Отправить» ещё раз.' : 'You mentioned an attachment but none is attached. Press Send again to confirm.', { icon: '📎' });
+      return;
+    }
+
+    doSend();
   };
 
   const handleSaveDraft = () => {

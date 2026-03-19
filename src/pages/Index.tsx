@@ -154,31 +154,43 @@ function MailApp() {
       }
     }}>
       <div className="flex h-full relative">
-        <div className="flex-1 flex flex-col min-w-0 border-r border-zinc-800/50">
-          <EmailList onSelect={handleSelectEmail} onEditDraft={handleEditDraft} />
+        {/* Desktop: Resizable panels */}
+        <div className="hidden lg:flex flex-1 min-w-0">
+          <ResizablePanelGroup direction="horizontal" className="h-full">
+            <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
+              <EmailList onSelect={handleSelectEmail} onEditDraft={handleEditDraft} />
+            </ResizablePanel>
+            <ResizableHandle withHandle className="bg-zinc-800/50 hover:bg-emerald-500/30 transition-colors data-[resize-handle-active]:bg-emerald-500/50" />
+            <ResizablePanel defaultSize={65} minSize={40}>
+              <div className="h-full flex flex-col bg-zinc-950 relative">
+                <AnimatePresence mode="wait">
+                  {selectedEmail ? (
+                    <EmailDetail
+                      key={selectedEmail.id}
+                      email={selectedEmail}
+                      onBack={() => setSelectedEmail(null)}
+                      onReply={handleReply}
+                      onEditDraft={handleEditDraft}
+                    />
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center text-zinc-500">
+                      <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(255,255,255,0.02)]">
+                        <svg className="w-8 h-8 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <p>{settings.language === 'ru' ? 'Выберите письмо для чтения' : 'Select an email to read'}</p>
+                    </div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
         </div>
 
-        <div className="hidden lg:flex flex-[2] flex-col min-w-0 bg-zinc-950 relative">
-          <AnimatePresence mode="wait">
-            {selectedEmail ? (
-              <EmailDetail
-                key={selectedEmail.id}
-                email={selectedEmail}
-                onBack={() => setSelectedEmail(null)}
-                onReply={handleReply}
-                onEditDraft={handleEditDraft}
-              />
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-zinc-500">
-                <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(255,255,255,0.02)]">
-                  <svg className="w-8 h-8 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                <p>{settings.language === 'ru' ? 'Выберите письмо для чтения' : 'Select an email to read'}</p>
-              </div>
-            )}
-          </AnimatePresence>
+        {/* Mobile: stacked */}
+        <div className="lg:hidden flex-1 flex flex-col min-w-0">
+          <EmailList onSelect={handleSelectEmail} onEditDraft={handleEditDraft} />
         </div>
 
         <div className="lg:hidden">

@@ -164,8 +164,24 @@ export function Compose({
   };
 
   const handleAiAction = async (action: 'rewrite' | 'spellcheck' | 'professional' | 'friendly' | 'translate') => {
-    const currentText = editorRef.current?.innerText || '';
-    if (!currentText.trim()) {
+    if (!editorRef.current) return;
+    const fullHtml = editorRef.current.innerHTML;
+    
+    // Split content: find the quoted thread (after <hr>) and signature
+    const hrIndex = fullHtml.indexOf('<hr');
+    const userHtml = hrIndex !== -1 ? fullHtml.substring(0, hrIndex) : fullHtml;
+    const threadHtml = hrIndex !== -1 ? fullHtml.substring(hrIndex) : '';
+    
+    // Extract signature from user text if present
+    const sigDivider = userHtml.lastIndexOf('--<br>');
+    const sigIndex2 = userHtml.lastIndexOf('<p><br>--<br>');
+    const sigStart = Math.max(sigDivider !== -1 ? userHtml.lastIndexOf('<p>', sigDivider) : -1, sigIndex2);
+    
+    let textToRewrite = sigStart !== -1 ? userHtml.substring(0, sigStart) : userHtml;
+    const signatureHtml = sigStart !== -1 ? userHtml.substring(sigStart) : '';
+    
+    const plainText = textToRewrite.replace(/<[^>]*>/g, '').trim();
+    if (!plainText) {
       toast.error(t('compose.writeFirst', lang));
       setShowAiMenu(false);
       return;
@@ -175,11 +191,12 @@ export function Compose({
     setShowAiMenu(false);
     try {
       const { callEmailAI } = await import('@/lib/ai');
-      const result = await callEmailAI({ action, text: currentText });
-      if (editorRef.current) {
-        editorRef.current.innerHTML = `<p>${result.replace(/\n/g, '<br>')}</p>`;
-        setBody(editorRef.current.innerHTML);
-      }
+      const result = await callEmailAI({ action, text: plainText });
+      const rewrittenHtml = `<p>${result.replace(/\n/g, '<br>')}</p>`;
+      
+      // Reassemble: rewritten text + signature + thread
+      editorRef.current.innerHTML = rewrittenHtml + signatureHtml + threadHtml;
+      setBody(editorRef.current.innerHTML);
       toast.success(t('compose.aiApplied', lang));
     } catch (err: any) {
       toast.error(err.message || 'AI request failed');

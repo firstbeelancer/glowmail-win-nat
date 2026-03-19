@@ -68,7 +68,12 @@ function MailApp() {
 
   const handleSelectEmail = (email: Email) => {
     setSelectedEmail(email);
-    markAsRead(email.id);
+    const delay = settings.markAsReadDelay ?? 0;
+    if (delay > 0) {
+      setTimeout(() => markAsRead(email.id), delay * 1000);
+    } else {
+      markAsRead(email.id);
+    }
   };
 
   const handleReply = (type: 'reply' | 'replyAll' | 'forward', email: Email, quickReplyText?: string) => {

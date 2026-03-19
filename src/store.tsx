@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useMemo, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, ReactNode, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Email, Folder, Contact, UserSettings, TagDef } from './types';
 import * as mailApi from './lib/mail-api';
 
@@ -165,6 +165,9 @@ type MailContextType = {
   isConnected: boolean;
   connectionError: string | null;
   allFoldersFlat: Folder[];
+  isSearching: boolean;
+  isSearchActive: boolean;
+  searchResultCount: number;
 };
 
 const MailContext = createContext<MailContextType | undefined>(undefined);
@@ -182,6 +185,11 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalEmails, setTotalEmails] = useState(0);
   const [hasMoreEmails, setHasMoreEmails] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSearchActive, setIsSearchActive] = useState(false);
+  const [searchResultCount, setSearchResultCount] = useState(0);
+  const [regularEmails, setRegularEmails] = useState<Email[]>([]);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('glowmail_settings');
     let parsedSettings: Partial<UserSettings> = {};
@@ -420,9 +428,53 @@ export function MailProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const hasCreds = !!localStorage.getItem('glowmail_credentials');
     if (hasCreds) {
+      // Clear search when folder changes
+      setSearchQuery('');
+      setIsSearchActive(false);
       fetchEmails();
     }
   }, [currentFolder]);
+
+  // Server-side search with debounce
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    if (!searchQuery.trim()) {
+      // Restore regular emails when search is cleared
+      if (isSearchActive) {
+        setIsSearchActive(false);
+        setSearchResultCount(0);
+        setEmails(regularEmails);
+      }
+      return;
+    }
+
+    searchTimerRef.current = setTimeout(async () => {
+      const hasCreds = !!localStorage.getItem('glowmail_credentials');
+      if (!hasCreds) return;
+
+      setIsSearching(true);
+      try {
+        // Save current emails before search if not already saved
+        if (!isSearchActive) {
+          setRegularEmails(emails);
+        }
+        const data = await mailApi.searchEmails(currentFolder, searchQuery.trim());
+        const mapped = mapMessages(data, currentFolder);
+        setEmails(mapped);
+        setIsSearchActive(true);
+        setSearchResultCount(data.total || mapped.length);
+      } catch (e: any) {
+        console.error('Search error:', e);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500);
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery]);
 
   // Auto-sync interval
   useEffect(() => {
@@ -430,10 +482,10 @@ export function MailProvider({ children }: { children: ReactNode }) {
     if (interval <= 0) return;
     const timer = setInterval(() => {
       const hasCreds = !!localStorage.getItem('glowmail_credentials');
-      if (hasCreds) fetchEmails();
+      if (hasCreds && !isSearchActive) fetchEmails();
     }, interval * 60 * 1000);
     return () => clearInterval(timer);
-  }, [settings.syncInterval, fetchEmails]);
+  }, [settings.syncInterval, fetchEmails, isSearchActive]);
 
   const markAsRead = (id: string) => {
     const uid = Number(id);
@@ -648,8 +700,11 @@ export function MailProvider({ children }: { children: ReactNode }) {
       isConnected,
       connectionError,
       allFoldersFlat,
+      isSearching,
+      isSearchActive,
+      searchResultCount,
     }),
-    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isLoadingMore, hasMoreEmails, totalEmails, isConnected, connectionError, fetchEmails, loadMoreEmails, allFoldersFlat]
+    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isLoadingMore, hasMoreEmails, totalEmails, isConnected, connectionError, fetchEmails, loadMoreEmails, allFoldersFlat, isSearching, isSearchActive, searchResultCount]
   );
 
   return <MailContext.Provider value={value}>{children}</MailContext.Provider>;

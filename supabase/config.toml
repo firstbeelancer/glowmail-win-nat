@@ -2,3 +2,9 @@ project_id = "mmufrorswifnwxhoizuy"
 
 [functions.email-ai]
 verify_jwt = false
+
+[functions.imap-proxy]
+verify_jwt = false
+
+[functions.smtp-proxy]
+verify_jwt = false

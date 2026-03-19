@@ -94,7 +94,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
           <div className="h-14 border-b border-zinc-800/50 flex items-center justify-between px-6 shrink-0">
             <h3 className="text-sm font-semibold text-zinc-100 capitalize">
               {activeTab === 'account' && t('settings.accountSettings', lang)}

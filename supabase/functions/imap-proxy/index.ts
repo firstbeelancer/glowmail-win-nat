@@ -182,7 +182,7 @@ Deno.serve(async (req) => {
       }
 
       case "fetch": {
-        const { folder = "INBOX", uid } = body;
+        const { folder = "INBOX", uid, includeAttachmentContent = false } = body;
         if (!uid) return err("Missing uid", 400);
 
         await client.selectMailbox(folder);
@@ -190,62 +190,43 @@ Deno.serve(async (req) => {
         const targetUid = Number(uid);
         if (!Number.isFinite(targetUid)) return err("Invalid uid", 400);
 
+        const MAX_RAW_BYTES = 3_000_000;
+        const MAX_ATTACHMENT_INLINE_BYTES = 256_000;
+
         let rawSource: Uint8Array | null = null;
         let envelope: any = null;
         let flags: string[] = [];
+        let messageSize = 0;
 
         let msgSourceType = "undefined";
         let msgSourceConstructor = "undefined";
         let rawSourceOrigin = "none";
 
         const toUint8Array = async (value: unknown): Promise<Uint8Array | null> => {
-          if (value instanceof Uint8Array) return value;
-          if (typeof value === "string") return new TextEncoder().encode(value);
-          if (value instanceof ArrayBuffer) return new Uint8Array(value);
-          // Handle ReadableStream
-          if (value && typeof (value as any).getReader === "function") {
-            try {
-              const reader = (value as ReadableStream).getReader();
-              const chunks: Uint8Array[] = [];
-              while (true) {
-                const { done, value: chunk } = await reader.read();
-                if (done) break;
-                chunks.push(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
-              }
-              const total = chunks.reduce((s, c) => s + c.length, 0);
-              const result = new Uint8Array(total);
-              let offset = 0;
-              for (const c of chunks) { result.set(c, offset); offset += c.length; }
-              return result;
-            } catch { return null; }
+          if (value instanceof Uint8Array) {
+            return value.length > MAX_RAW_BYTES ? value.slice(0, MAX_RAW_BYTES) : value;
           }
-          // Handle async iterables (deno-imap raw can be AsyncIterable<Uint8Array>)
-          if (value && typeof (value as any)[Symbol.asyncIterator] === "function") {
-            try {
-              const chunks: Uint8Array[] = [];
-              for await (const chunk of value as AsyncIterable<Uint8Array>) {
-                chunks.push(chunk instanceof Uint8Array ? chunk : new TextEncoder().encode(String(chunk)));
-              }
-              const total = chunks.reduce((s, c) => s + c.length, 0);
-              const result = new Uint8Array(total);
-              let offset = 0;
-              for (const c of chunks) { result.set(c, offset); offset += c.length; }
-              return result;
-            } catch { return null; }
+          if (typeof value === "string") {
+            const encoded = new TextEncoder().encode(value);
+            return encoded.length > MAX_RAW_BYTES ? encoded.slice(0, MAX_RAW_BYTES) : encoded;
+          }
+          if (value instanceof ArrayBuffer) {
+            const bytes = new Uint8Array(value);
+            return bytes.length > MAX_RAW_BYTES ? bytes.slice(0, MAX_RAW_BYTES) : bytes;
           }
           if (value && typeof value === "object") {
             const maybe = value as { buffer?: unknown; byteOffset?: unknown; byteLength?: unknown };
             if (maybe.buffer instanceof ArrayBuffer) {
               const byteOffset = typeof maybe.byteOffset === "number" ? maybe.byteOffset : 0;
               const byteLength = typeof maybe.byteLength === "number" ? maybe.byteLength : undefined;
-              return new Uint8Array(maybe.buffer, byteOffset, byteLength);
+              const bytes = new Uint8Array(maybe.buffer, byteOffset, byteLength);
+              return bytes.length > MAX_RAW_BYTES ? bytes.slice(0, MAX_RAW_BYTES) : bytes;
             }
-            // Handle plain object with numeric keys like {0: 82, 1: 101, ...}
             const keys = Object.keys(value);
             if (keys.length > 0 && keys.every(k => /^\d+$/.test(k))) {
               const arr = new Uint8Array(keys.length);
               for (let i = 0; i < keys.length; i++) arr[i] = (value as any)[i];
-              return arr;
+              return arr.length > MAX_RAW_BYTES ? arr.slice(0, MAX_RAW_BYTES) : arr;
             }
           }
           return null;
@@ -289,6 +270,7 @@ Deno.serve(async (req) => {
             uid: true,
             envelope: true,
             flags: true,
+            size: true,
             source: true,
           });
 
@@ -298,6 +280,7 @@ Deno.serve(async (req) => {
           if (msg) {
             envelope = msg.envelope;
             flags = msg.flags || [];
+            messageSize = Number(msg.size || 0);
             msgSourceType = typeof msg.source;
             msgSourceConstructor = msg.source?.constructor?.name || "undefined";
 
@@ -329,6 +312,7 @@ Deno.serve(async (req) => {
               uid: true,
               envelope: true,
               flags: true,
+              size: true,
               bodyParts: [""],
             });
 
@@ -338,6 +322,7 @@ Deno.serve(async (req) => {
             if (msg2) {
               if (!envelope) envelope = msg2.envelope;
               if (!flags.length) flags = msg2.flags || [];
+              if (!messageSize) messageSize = Number(msg2.size || 0);
 
               if (!rawSource) await readRawCandidate("msg2.raw", msg2.raw);
               if (!rawSource) await readRawCandidate("msg2.source", msg2.source);
@@ -363,6 +348,40 @@ Deno.serve(async (req) => {
           }
         }
 
+        if (messageSize > MAX_RAW_BYTES && !rawSource) {
+          await client.disconnect();
+          client = null;
+          console.log("Skipping heavy parse for large message uid:", targetUid, "size:", messageSize);
+          return ok({
+            uid: targetUid,
+            flags,
+            subject: envelope?.subject || "",
+            from: envelope?.from?.[0]
+              ? {
+                  name: envelope.from[0].name || envelope.from[0].mailbox,
+                  email: `${envelope.from[0].mailbox}@${envelope.from[0].host}`,
+                }
+              : { name: "Unknown", email: "" },
+            to: (envelope?.to || []).map((a: any) => ({
+              name: a.name || a.mailbox,
+              email: `${a.mailbox}@${a.host}`,
+            })),
+            cc: (envelope?.cc || []).map((a: any) => ({
+              name: a.name || a.mailbox,
+              email: `${a.mailbox}@${a.host}`,
+            })),
+            date: envelope?.date || "",
+            messageId: envelope?.messageId || "",
+            bodyText: "",
+            bodyHtml: "",
+            text: "",
+            html: "",
+            hasBody: false,
+            tooLargeToParse: true,
+            attachments: [],
+          });
+        }
+
         if (!rawSource) {
           await client.disconnect();
           client = null;
@@ -385,15 +404,31 @@ Deno.serve(async (req) => {
           });
         }
 
-        const rawPreview = (() => {
-          try {
-            return new TextDecoder().decode(rawSource.slice(0, 300));
-          } catch {
-            return "[raw preview unavailable]";
-          }
-        })();
-
-        const parsed = await PostalMime.parse(rawSource);
+        let parsed: any;
+        try {
+          parsed = await PostalMime.parse(rawSource);
+        } catch (parseError) {
+          console.error("PostalMime parse failed:", parseError);
+          await client.disconnect();
+          client = null;
+          return ok({
+            uid: targetUid,
+            flags,
+            subject: envelope?.subject || "",
+            from: { name: "Unknown", email: "" },
+            to: [],
+            cc: [],
+            date: envelope?.date || "",
+            messageId: envelope?.messageId || "",
+            bodyText: "",
+            bodyHtml: "",
+            text: "",
+            html: "",
+            hasBody: false,
+            parseError: true,
+            attachments: [],
+          });
+        }
 
         const bodyText = typeof parsed.text === "string" ? parsed.text.trim() : "";
         const bodyHtml = typeof parsed.html === "string" ? parsed.html.trim() : "";
@@ -412,29 +447,31 @@ Deno.serve(async (req) => {
 
         const hasBody = Boolean(bodyText || finalHtml);
 
-        // Extract attachments with base64 content for download
         const attachments = (parsed.attachments || [])
           .filter((a: any) => {
-            const mimeType = (a.mimeType || '').toLowerCase();
-            return mimeType !== 'text/plain' && mimeType !== 'text/html';
+            const mimeType = (a.mimeType || "").toLowerCase();
+            return mimeType !== "text/plain" && mimeType !== "text/html";
           })
           .map((a: any) => {
-            let contentBase64 = '';
-            try {
-              if (a.content) {
-                const bytes = a.content instanceof Uint8Array ? a.content : new Uint8Array(a.content);
-                // Convert to base64
-                let binary = '';
-                for (let i = 0; i < bytes.length; i++) {
-                  binary += String.fromCharCode(bytes[i]);
-                }
+            const bytes = a.content
+              ? (a.content instanceof Uint8Array ? a.content : new Uint8Array(a.content))
+              : null;
+
+            let contentBase64 = "";
+            if (includeAttachmentContent && bytes && bytes.length <= MAX_ATTACHMENT_INLINE_BYTES) {
+              try {
+                let binary = "";
+                for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
                 contentBase64 = btoa(binary);
+              } catch {
+                contentBase64 = "";
               }
-            } catch { /* skip content if encoding fails */ }
+            }
+
             return {
-              name: a.filename || 'unnamed',
-              size: a.content?.length || 0,
-              type: a.mimeType || 'application/octet-stream',
+              name: a.filename || "unnamed",
+              size: bytes?.length || 0,
+              type: a.mimeType || "application/octet-stream",
               contentBase64,
             };
           });
@@ -551,7 +588,7 @@ Deno.serve(async (req) => {
 
         // Sort UIDs descending (newest first) and limit to reasonable amount
         uids.sort((a, b) => b - a);
-        const limitedUids = uids.slice(0, 50);
+        const limitedUids = uids.slice(0, 30);
 
         // Fetch envelope data for found UIDs
         const uidSet = limitedUids.join(",");

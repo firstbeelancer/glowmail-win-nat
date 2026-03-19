@@ -1,5 +1,5 @@
 import React, { useState, ReactNode } from 'react';
-import { Menu, Search, Edit3, Settings, Inbox, Send, File, AlertCircle, Trash2, Briefcase, Plus, RefreshCw, X, Clock, BookUser, ChevronDown, ChevronRight, Mail } from 'lucide-react';
+import { Menu, Search, Edit3, Settings, Inbox, Send, File, AlertCircle, Trash2, Briefcase, Plus, RefreshCw, X, Clock, BookUser, ChevronDown, ChevronRight, Mail, LogOut } from 'lucide-react';
 import { useMail } from '../../store';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';

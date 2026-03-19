@@ -460,6 +460,10 @@ Deno.serve(async (req) => {
           bodyText = decodeContent(bodyText, "quoted-printable", "utf-8");
         }
 
+        // Remove parser artifacts when IMAP server appends BODY[...] fragments in the same literal
+        bodyText = bodyText.replace(/\sBODY\[[\s\S]*$/i, "").trim();
+        bodyHtml = bodyHtml.replace(/\sBODY\[[\s\S]*$/i, "").trim();
+
         // If we got HTML but no plain text, use HTML
         if (!bodyText && bodyHtml) bodyText = bodyHtml;
         // If bodyText looks like HTML, set bodyHtml

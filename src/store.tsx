@@ -481,19 +481,19 @@ export function MailProvider({ children }: { children: ReactNode }) {
   }, [currentFolder, fetchEmails]);
 
   // Server-side search with debounce (metadata-only: subject, from, to, cc)
+  // NO dependency on `emails` or `isSearchActive` to prevent loops/overwrites
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
     const trimmedQuery = searchQuery.trim();
     if (!trimmedQuery) {
       setSearchError(null);
-      if (isSearchActive) {
-        setIsSearchActive(false);
-        setSearchResultCount(0);
-        setEmails(regularEmails);
-        setSearchPage(1);
-        setHasMoreSearchResults(false);
-      }
+      setIsSearching(false);
+      setIsSearchActive(false);
+      setSearchResults([]);
+      setSearchResultCount(0);
+      setSearchPage(1);
+      setHasMoreSearchResults(false);
       return;
     }
 
@@ -501,36 +501,41 @@ export function MailProvider({ children }: { children: ReactNode }) {
       const hasCreds = !!localStorage.getItem('glowmail_credentials');
       if (!hasCreds) return;
 
+      const requestId = ++searchRequestIdRef.current;
+
       setIsSearching(true);
+      setIsSearchActive(true);
       setSearchError(null);
       try {
-        if (!isSearchActive) {
-          setRegularEmails(emails.filter((email) => email.folderId === currentFolder));
-        }
         const data = await mailApi.searchEmails(currentFolder, trimmedQuery, 1, SEARCH_PAGE_SIZE);
+
+        // Stale response guard: ignore if a newer search was triggered
+        if (searchRequestIdRef.current !== requestId) return;
+
         const mapped = mapMessages(data, currentFolder);
-        setEmails(mapped);
-        setIsSearchActive(true);
+        setSearchResults(mapped);
         setSearchPage(1);
         setSearchResultCount(Number.isFinite(Number(data.total)) ? Number(data.total) : mapped.length);
         setHasMoreSearchResults(!!data.hasMore);
       } catch (e: any) {
+        if (searchRequestIdRef.current !== requestId) return;
         console.error('Search error:', e);
-        setIsSearchActive(true);
-        setEmails([]);
+        setSearchResults([]);
         setSearchPage(1);
         setSearchResultCount(0);
         setHasMoreSearchResults(false);
         setSearchError(e.message || 'Search failed');
       } finally {
-        setIsSearching(false);
+        if (searchRequestIdRef.current === requestId) {
+          setIsSearching(false);
+        }
       }
     }, 500);
 
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [searchQuery, currentFolder, mapMessages, isSearchActive, emails]);
+  }, [searchQuery, currentFolder, mapMessages]);
 
   // Auto-sync interval
   useEffect(() => {

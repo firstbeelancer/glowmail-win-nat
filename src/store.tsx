@@ -176,7 +176,8 @@ const MailContext = createContext<MailContextType | undefined>(undefined);
 
 export function MailProvider({ children }: { children: ReactNode }) {
   const [folders, setFolders] = useState<Folder[]>(MOCK_FOLDERS);
-  const [emails, setEmails] = useState<Email[]>([]);
+  const [folderEmails, setFolderEmails] = useState<Email[]>([]);
+  const [searchResults, setSearchResults] = useState<Email[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [currentFolder, setCurrentFolder] = useState<string>('INBOX');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -191,10 +192,13 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchResultCount, setSearchResultCount] = useState(0);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [regularEmails, setRegularEmails] = useState<Email[]>([]);
   const [searchPage, setSearchPage] = useState(1);
   const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRequestIdRef = useRef(0);
+
+  // Derived: UI always reads from `emails`, which switches based on search mode
+  const emails = isSearchActive ? searchResults : folderEmails;
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem('glowmail_settings');
     let parsedSettings: Partial<UserSettings> = {};

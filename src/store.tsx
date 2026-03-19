@@ -154,9 +154,13 @@ type MailContextType = {
   addContact: (contact: Contact) => void;
   updateSettings: (settings: Partial<UserSettings>) => void;
   fetchEmails: () => Promise<void>;
+  loadMoreEmails: () => Promise<void>;
   addFolder: (name: string) => void;
   updateEmailTags: (id: string, tags: string[]) => void;
   isLoading: boolean;
+  isLoadingMore: boolean;
+  hasMoreEmails: boolean;
+  totalEmails: number;
   isConnected: boolean;
   connectionError: string | null;
   allFoldersFlat: Folder[];

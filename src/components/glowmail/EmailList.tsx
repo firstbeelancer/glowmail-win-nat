@@ -380,8 +380,19 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-zinc-500">
-                    {formatDistanceToNow(new Date(email.date), { addSuffix: true })}
+                  <span className="text-xs text-zinc-500" title={new Date(email.date).toLocaleString()}>
+                    {(() => {
+                      const d = new Date(email.date);
+                      const now = new Date();
+                      const isToday = d.toDateString() === now.toDateString();
+                      const yesterday = new Date(now);
+                      yesterday.setDate(yesterday.getDate() - 1);
+                      const isYesterday = d.toDateString() === yesterday.toDateString();
+                      const time = d.toLocaleTimeString(lang === 'ru' ? 'ru-RU' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+                      if (isToday) return time;
+                      if (isYesterday) return `${lang === 'ru' ? 'Вчера' : 'Yesterday'} ${time}`;
+                      return d.toLocaleDateString(lang === 'ru' ? 'ru-RU' : 'en-US', { day: 'numeric', month: 'short', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined }) + ' ' + time;
+                    })()}
                   </span>
                   {/* Tag picker button */}
                   <div className="relative">

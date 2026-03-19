@@ -36,6 +36,8 @@ const translations = {
     'emailList.deleteEmail': 'Delete Email',
     'emailList.save': 'Save',
     'emailList.print': 'Print',
+    'emailList.addTag': 'Add Tag',
+    'emailList.assignTags': 'Assign Tags',
 
     // Email Detail
     'emailDetail.showDetails': 'Show Details',

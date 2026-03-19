@@ -1,0 +1,409 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { useMail } from '../../store';
+import { Email, Contact, Attachment } from '../../types';
+import { X, Send, Paperclip, Sparkles, Loader2, Bold, Italic, Underline, Link, Image as ImageIcon, List, ListOrdered, AlertTriangle, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
+
+export function Compose({
+  onClose,
+  initialData,
+}: {
+  onClose: () => void;
+  initialData?: Partial<Email>;
+}) {
+  const { sendEmail, saveDraft, contacts, settings } = useMail();
+  const [to, setTo] = useState(initialData?.to?.map((c) => c.email).join(', ') || '');
+  const [cc, setCc] = useState(initialData?.cc?.map((c) => c.email).join(', ') || '');
+  const [bcc, setBcc] = useState(initialData?.bcc?.map((c) => c.email).join(', ') || '');
+  const [showCcBcc, setShowCcBcc] = useState(!!initialData?.cc?.length || !!initialData?.bcc?.length);
+  const [subject, setSubject] = useState(initialData?.subject || '');
+  const [body, setBody] = useState(initialData?.body || '');
+  const [importance, setImportance] = useState<'high' | 'normal' | 'low'>(initialData?.importance || 'normal');
+  const [attachments, setAttachments] = useState<Attachment[]>(initialData?.attachments || []);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [showAiMenu, setShowAiMenu] = useState(false);
+  const [selectedSignatureId, setSelectedSignatureId] = useState<string | undefined>(settings.defaultSignatureId || (settings.signatures?.length > 0 ? settings.signatures[0].id : undefined));
+  const editorRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editorRef.current && !editorRef.current.innerHTML && body) {
+      editorRef.current.innerHTML = body;
+    }
+  }, [body]);
+
+  const handleSend = () => {
+    if (!to) {
+      toast.error('Please enter a recipient');
+      return;
+    }
+    
+    const toContacts: Contact[] = to.split(',').map((emailStr) => {
+      const email = emailStr.trim();
+      const existing = contacts.find((c) => c.email === email);
+      return existing || { id: `c${Date.now()}`, name: email.split('@')[0], email };
+    });
+
+    const ccContacts: Contact[] = cc ? cc.split(',').map((emailStr) => {
+      const email = emailStr.trim();
+      const existing = contacts.find((c) => c.email === email);
+      return existing || { id: `c${Date.now()}`, name: email.split('@')[0], email };
+    }) : [];
+
+    const bccContacts: Contact[] = bcc ? bcc.split(',').map((emailStr) => {
+      const email = emailStr.trim();
+      const existing = contacts.find((c) => c.email === email);
+      return existing || { id: `c${Date.now()}`, name: email.split('@')[0], email };
+    }) : [];
+
+    const finalBody = editorRef.current?.innerHTML || '';
+    let selectedSignature = '';
+    if (selectedSignatureId) {
+      selectedSignature = settings.signatures?.find(s => s.id === selectedSignatureId)?.content || '';
+    }
+    const bodyWithSignature = selectedSignature ? `${finalBody}<br><br>${selectedSignature}` : finalBody;
+
+    sendEmail({
+      id: initialData?.id,
+      to: toContacts,
+      cc: ccContacts,
+      bcc: bccContacts,
+      subject,
+      body: bodyWithSignature,
+      importance,
+      attachments,
+    });
+    if (settings.delayedSending && settings.delayedSending > 0) {
+      toast.success(`Email scheduled to be sent in ${settings.delayedSending} minute(s)`);
+    } else {
+      toast.success('Email sent successfully');
+    }
+    onClose();
+  };
+
+  const handleSaveDraft = () => {
+    saveDraft({
+      id: initialData?.id,
+      to: [{ id: 'temp', name: to, email: to }],
+      cc: cc ? [{ id: 'temp_cc', name: cc, email: cc }] : [],
+      bcc: bcc ? [{ id: 'temp_bcc', name: bcc, email: bcc }] : [],
+      subject,
+      body: editorRef.current?.innerHTML || '',
+      importance,
+      attachments,
+    });
+    toast.success('Draft saved');
+    onClose();
+  };
+
+  const handleAttachment = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newAttachments = Array.from(files).map((file: File) => ({
+        id: `a${Date.now()}-${file.name}`,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        url: URL.createObjectURL(file)
+      }));
+      setAttachments(prev => [...prev, ...newAttachments]);
+    }
+  };
+
+  const execCommand = (command: string, value?: string) => {
+    document.execCommand(command, false, value);
+    editorRef.current?.focus();
+  };
+
+  const handleAiAction = async (action: 'rewrite' | 'spellcheck' | 'professional' | 'friendly' | 'translate') => {
+    const currentText = editorRef.current?.innerText || '';
+    if (!currentText.trim()) {
+      toast.error('Please write some text first');
+      return;
+    }
+
+    toast.error('AI features require a Gemini API key');
+    setShowAiMenu(false);
+  };
+
+  return (
+    <motion.div
+      initial={{ y: '100%' }}
+      animate={{ y: 0 }}
+      exit={{ y: '100%' }}
+      transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 pointer-events-none"
+    >
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto" onClick={handleSaveDraft} />
+      
+      <div className="w-full h-full sm:h-auto sm:max-h-[85vh] sm:max-w-3xl bg-zinc-950 sm:rounded-2xl border border-zinc-800/50 shadow-2xl flex flex-col pointer-events-auto overflow-hidden relative">
+        {/* Header */}
+        <div className="h-14 border-b border-zinc-800/50 flex items-center justify-between px-4 bg-zinc-900/50 shrink-0">
+          <h2 className="text-sm font-semibold text-zinc-100">New Message</h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSaveDraft}
+              className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Form Fields */}
+        <div className="flex flex-col shrink-0">
+          <div className="flex items-center px-4 py-3 border-b border-zinc-800/50 focus-within:bg-zinc-900/30 transition-colors relative">
+            <span className="text-zinc-500 text-sm w-12">To:</span>
+            <input
+              type="text"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-100 placeholder:text-zinc-600"
+              placeholder="recipient@example.com"
+              autoFocus
+            />
+            <button 
+              onClick={() => setShowCcBcc(!showCcBcc)}
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors ml-2"
+            >
+              {showCcBcc ? 'Hide CC/BCC' : 'CC/BCC'}
+            </button>
+          </div>
+          
+          {showCcBcc && (
+            <>
+              <div className="flex items-center px-4 py-3 border-b border-zinc-800/50 focus-within:bg-zinc-900/30 transition-colors">
+                <span className="text-zinc-500 text-sm w-12">Cc:</span>
+                <input
+                  type="text"
+                  value={cc}
+                  onChange={(e) => setCc(e.target.value)}
+                  className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-100 placeholder:text-zinc-600"
+                  placeholder="cc@example.com"
+                />
+              </div>
+              <div className="flex items-center px-4 py-3 border-b border-zinc-800/50 focus-within:bg-zinc-900/30 transition-colors">
+                <span className="text-zinc-500 text-sm w-12">Bcc:</span>
+                <input
+                  type="text"
+                  value={bcc}
+                  onChange={(e) => setBcc(e.target.value)}
+                  className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-100 placeholder:text-zinc-600"
+                  placeholder="bcc@example.com"
+                />
+              </div>
+            </>
+          )}
+
+          <div className="flex items-center px-4 py-3 border-b border-zinc-800/50 focus-within:bg-zinc-900/30 transition-colors">
+            <span className="text-zinc-500 text-sm w-12">Subject:</span>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-100 font-medium placeholder:text-zinc-600"
+              placeholder="Email subject"
+            />
+            <div className="flex items-center gap-2 ml-4">
+              <span className="text-xs text-zinc-500">Importance:</span>
+              <select
+                value={importance}
+                onChange={(e) => setImportance(e.target.value as 'high' | 'normal' | 'low')}
+                className={cn(
+                  "bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer transition-colors",
+                  importance === 'high' ? "text-red-400 border-red-500/30 bg-red-500/10" :
+                  importance === 'low' ? "text-zinc-400" : "text-emerald-400"
+                )}
+              >
+                <option value="high">High</option>
+                <option value="normal">Normal</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Toolbar */}
+        <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/30 shrink-0 overflow-x-auto">
+          <select 
+            onChange={(e) => execCommand('fontName', e.target.value)}
+            defaultValue="Inter"
+            className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 outline-none cursor-pointer mr-1"
+          >
+            <option value="Inter">Inter</option>
+            <option value="Arial">Arial</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Courier New">Courier New</option>
+            <option value="Arimo">Arimo</option>
+            {settings.customFonts?.map(font => (
+              <option key={font.name} value={font.name}>{font.name}</option>
+            ))}
+          </select>
+          <select 
+            onChange={(e) => execCommand('fontSize', e.target.value)}
+            defaultValue="3"
+            className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 outline-none cursor-pointer mr-2"
+          >
+            <option value="1">Small</option>
+            <option value="3">Normal</option>
+            <option value="5">Large</option>
+            <option value="7">Huge</option>
+          </select>
+          <div className="w-px h-4 bg-zinc-800 mx-1" />
+          <button onClick={() => execCommand('bold')} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"><Bold className="w-4 h-4" /></button>
+          <button onClick={() => execCommand('italic')} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"><Italic className="w-4 h-4" /></button>
+          <button onClick={() => execCommand('underline')} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"><Underline className="w-4 h-4" /></button>
+          <div className="w-px h-4 bg-zinc-800 mx-1" />
+          <button onClick={() => execCommand('insertUnorderedList')} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"><List className="w-4 h-4" /></button>
+          <button onClick={() => execCommand('insertOrderedList')} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"><ListOrdered className="w-4 h-4" /></button>
+          <div className="w-px h-4 bg-zinc-800 mx-1" />
+          <div className="flex items-center gap-1">
+            <input type="color" onChange={(e) => execCommand('foreColor', e.target.value)} className="w-6 h-6 p-0 border-0 rounded cursor-pointer bg-transparent" title="Text Color" />
+            <input type="color" onChange={(e) => execCommand('hiliteColor', e.target.value)} className="w-6 h-6 p-0 border-0 rounded cursor-pointer bg-transparent" title="Highlight Color" />
+          </div>
+          <div className="w-px h-4 bg-zinc-800 mx-1" />
+          <button onClick={() => {}} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"><Link className="w-4 h-4" /></button>
+          <input
+            type="file"
+            accept="image/*"
+            ref={imageInputRef}
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                  execCommand('insertImage', event.target?.result as string);
+                };
+                reader.readAsDataURL(file);
+              }
+              if (imageInputRef.current) imageInputRef.current.value = '';
+            }}
+          />
+          <button onClick={() => imageInputRef.current?.click()} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors" title="Insert Image"><ImageIcon className="w-4 h-4" /></button>
+          
+          <div className="flex-1" />
+          
+          {/* AI Assistant Button */}
+          <div className="relative">
+            <button
+              onClick={() => setShowAiMenu(!showAiMenu)}
+              disabled={isAiLoading}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
+                isAiLoading
+                  ? "bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                  : "bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-emerald-400 hover:from-emerald-500/30 hover:to-cyan-500/30 border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.15)] hover:shadow-[0_0_20px_rgba(16,185,129,0.25)]"
+              )}
+            >
+              {isAiLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              AI Magic
+            </button>
+
+            {showAiMenu && (
+              <div className="absolute right-0 bottom-full mb-2 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
+                <div className="p-1 flex flex-col">
+                  <button onClick={() => handleAiAction('spellcheck')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">Proofread & Fix</button>
+                  <button onClick={() => handleAiAction('professional')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">Make Professional</button>
+                  <button onClick={() => handleAiAction('friendly')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">Make Friendly</button>
+                  <button onClick={() => handleAiAction('rewrite')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">Rewrite (Concise)</button>
+                  <button onClick={() => handleAiAction('translate')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">Auto-Translate</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Editor */}
+        <div 
+          className="flex-1 overflow-y-auto p-4 cursor-text relative group"
+          style={{ 
+            backgroundColor: settings.emailBackground || 'transparent', 
+            color: settings.fontColor || 'inherit',
+          } as React.CSSProperties}
+        >
+          <div
+            ref={editorRef}
+            contentEditable
+            className="min-h-full outline-none text-sm prose prose-invert prose-zinc max-w-none prose-p:my-1"
+            onInput={(e) => setBody((e.target as HTMLDivElement).innerHTML)}
+          />
+          {!body && (
+            <div className="absolute top-4 left-4 text-sm text-zinc-600 pointer-events-none">
+              Write your message here...
+            </div>
+          )}
+        </div>
+
+        {/* Attachments Preview */}
+        {attachments.length > 0 && (
+          <div className="px-4 py-2 border-t border-zinc-800/50 bg-zinc-900/30 flex flex-wrap gap-2 shrink-0">
+            {attachments.map(att => (
+              <div key={att.id} className="flex items-center gap-2 px-2 py-1 bg-zinc-800 rounded-md text-xs text-zinc-300">
+                <Paperclip className="w-3 h-3 text-zinc-500" />
+                <span className="max-w-[150px] truncate">{att.name}</span>
+                <button 
+                  onClick={() => setAttachments(prev => prev.filter(a => a.id !== att.id))}
+                  className="p-0.5 hover:bg-zinc-700 rounded-full text-zinc-400 hover:text-red-400 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="h-16 border-t border-zinc-800/50 flex items-center justify-between px-4 bg-zinc-950 shrink-0">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleAttachment} 
+            className="hidden" 
+            multiple 
+          />
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+              title="Attach files"
+            >
+              <Paperclip className="w-5 h-5" />
+            </button>
+            {settings.signatures && settings.signatures.length > 0 && (
+              <select
+                value={selectedSignatureId || ''}
+                onChange={(e) => setSelectedSignatureId(e.target.value)}
+                className="bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-300 px-2 py-1.5 focus:outline-none focus:border-emerald-500/50"
+              >
+                <option value="">No Signature</option>
+                {settings.signatures.map(sig => (
+                  <option key={sig.id} value={sig.id}>{sig.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleSaveDraft}
+              className="px-4 py-2.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-sm font-medium transition-colors"
+            >
+              Save Draft
+            </button>
+            <button
+              onClick={handleSend}
+              className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 text-zinc-950 rounded-full font-semibold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] hover:scale-105 transition-all active:scale-95"
+            >
+              <Send className="w-4 h-4" />
+              Send
+            </button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}

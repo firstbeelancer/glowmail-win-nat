@@ -150,12 +150,16 @@ Deno.serve(async (req) => {
           return atts;
         };
 
-        // Debug: log bodyStructure for first 3 messages to understand format
-        normalized.slice(0, 3).forEach((msg: any, i: number) => {
-          if (msg?.bodyStructure) {
+        // Debug: log bodyStructure for multipart messages (likely have attachments)
+        normalized.forEach((msg: any) => {
+          if (!msg?.bodyStructure) return;
+          const bs = msg.bodyStructure;
+          const bsStr = JSON.stringify(bs);
+          // Log structures that are multipart or have children - these are the ones that might have attachments
+          if (bs.childNodes || bs.parts || bs.type?.toLowerCase() === 'multipart' || bsStr.length > 100) {
             try {
-              console.log(`bodyStructure[${i}] uid=${msg.uid}:`, JSON.stringify(msg.bodyStructure).slice(0, 1000));
-            } catch { console.log(`bodyStructure[${i}] uid=${msg.uid}: [not serializable]`, Object.keys(msg.bodyStructure)); }
+              console.log(`BS uid=${msg.uid} size=${msg.size}:`, bsStr.slice(0, 2000));
+            } catch { console.log(`BS uid=${msg.uid}: keys=`, Object.keys(bs)); }
           }
         });
 

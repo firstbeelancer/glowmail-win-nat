@@ -322,6 +322,7 @@ Deno.serve(async (req) => {
             if (msg2) {
               if (!envelope) envelope = msg2.envelope;
               if (!flags.length) flags = msg2.flags || [];
+              if (!messageSize) messageSize = Number(msg2.size || 0);
 
               if (!rawSource) await readRawCandidate("msg2.raw", msg2.raw);
               if (!rawSource) await readRawCandidate("msg2.source", msg2.source);

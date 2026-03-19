@@ -435,16 +435,20 @@ export function MailProvider({ children }: { children: ReactNode }) {
     }
   }, [currentFolder]);
 
-  // Server-side search with debounce
+  // Server-side search with debounce (metadata-only: subject, from, to, cc)
+  const [searchPage, setSearchPage] = useState(1);
+  const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
+
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
 
     if (!searchQuery.trim()) {
-      // Restore regular emails when search is cleared
       if (isSearchActive) {
         setIsSearchActive(false);
         setSearchResultCount(0);
         setEmails(regularEmails);
+        setSearchPage(1);
+        setHasMoreSearchResults(false);
       }
       return;
     }
@@ -455,15 +459,16 @@ export function MailProvider({ children }: { children: ReactNode }) {
 
       setIsSearching(true);
       try {
-        // Save current emails before search if not already saved
         if (!isSearchActive) {
           setRegularEmails(emails);
         }
-        const data = await mailApi.searchEmails(currentFolder, searchQuery.trim());
+        const data = await mailApi.searchEmails(currentFolder, searchQuery.trim(), 1, 30);
         const mapped = mapMessages(data, currentFolder);
         setEmails(mapped);
         setIsSearchActive(true);
+        setSearchPage(1);
         setSearchResultCount(data.total || mapped.length);
+        setHasMoreSearchResults(!!data.hasMore);
       } catch (e: any) {
         console.error('Search error:', e);
       } finally {

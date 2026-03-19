@@ -13,6 +13,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [newTag, setNewTag] = useState('');
   const [newTagColor, setNewTagColor] = useState('#10b981');
   const [isFetchingFolders, setIsFetchingFolders] = useState(false);
+  const [isLoadingLdap, setIsLoadingLdap] = useState(false);
   const lang = localSettings.language;
 
   const handleSave = () => {

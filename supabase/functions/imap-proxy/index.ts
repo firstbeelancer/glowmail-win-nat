@@ -1,4 +1,5 @@
 import { ImapClient } from "deno-imap";
+import PostalMime from "postal-mime";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -138,648 +139,95 @@ Deno.serve(async (req) => {
         const targetUid = Number(uid);
         if (!Number.isFinite(targetUid)) return err("Invalid uid", 400);
 
-        // Helper to decode Uint8Array
-        function decodeData(data: unknown, charset = "utf-8"): string {
-          if (data instanceof Uint8Array) {
-            try { return new TextDecoder(charset).decode(data); } catch { return new TextDecoder("utf-8").decode(data); }
-          }
-          if (typeof data === "string") return data;
-          return "";
-        }
+        // Fetch raw RFC822 source
+        let rawSource: Uint8Array | null = null;
+        let envelope: any = null;
+        let flags: string[] = [];
 
-        function normalizeCharset(charset?: string): string {
-          const raw = (charset || "").trim().toLowerCase().replace(/["']/g, "");
-          const aliases: Record<string, string> = {
-            "cp1251": "windows-1251",
-            "cp-1251": "windows-1251",
-            "windows1251": "windows-1251",
-            "win-1251": "windows-1251",
-            "x-windows-1251": "windows-1251",
-            "cp866": "ibm866",
-            "866": "ibm866",
-            "koi8": "koi8-r",
-            "koi8r": "koi8-r",
-            "utf8": "utf-8",
-          };
-          return aliases[raw] || raw || "utf-8";
-        }
-
-        function extractCharset(header: string): string {
-          const match = header.match(/charset=["']?([^"';\s]+)/i);
-          return normalizeCharset(match ? match[1].trim() : "utf-8");
-        }
-
-        function extractCharsetFromHtmlMeta(value: string): string | null {
-          if (!value) return null;
-          const sample = value.slice(0, 5000);
-          const match = sample.match(/charset\s*=\s*["']?\s*([A-Za-z0-9._-]+)/i);
-          return match ? normalizeCharset(match[1]) : null;
-        }
-
-        function normalizeBase64Input(value: string): string {
-          let compact = value.replace(/\s/g, "").replace(/-/g, "+").replace(/_/g, "/");
-          compact = compact.replace(/^[^A-Za-z0-9+/=]+/, "").replace(/[^A-Za-z0-9+/=]+$/, "");
-          if (!compact) return compact;
-          const remainder = compact.length % 4;
-          if (remainder) compact += "=".repeat(4 - remainder);
-          return compact;
-        }
-
-        function isLikelyBase64(value: string): boolean {
-          const compact = normalizeBase64Input(value);
-          if (compact.length < 24 || compact.length % 4 !== 0) return false;
-          if (/[^A-Za-z0-9+/=]/.test(compact)) return false;
-          const lineBreakCount = (value.match(/\r?\n/g) || []).length;
-          return /^[A-Za-z0-9+/=]+$/.test(compact) && (compact.length > 120 || lineBreakCount > 1);
-        }
-
-        function looksLikeQuotedPrintable(value: string): boolean {
-          if (!value) return false;
-          const softBreaks = (value.match(/=\r?\n/g) || []).length;
-          const hexEscapes = (value.match(/=[0-9A-Fa-f]{2}/g) || []).length;
-          return hexEscapes >= 3 || (softBreaks > 0 && hexEscapes > 0);
-        }
-
-        function extractEncoding(header: string): string {
-          if (header.includes("base64")) return "base64";
-          if (header.includes("quoted-printable")) return "quoted-printable";
-          return "7bit";
-        }
-
-        function stripForScore(value: string): string {
-          return value
-            .replace(/<style[\s\S]*?<\/style>/gi, " ")
-            .replace(/<script[\s\S]*?<\/script>/gi, " ")
-            .replace(/<[^>]+>/g, " ")
-            .replace(/&nbsp;/gi, " ")
-            .replace(/&#\d+;/g, " ")
-            .replace(/&[a-z]+;/gi, " ");
-        }
-
-        function scoreDecodedText(value: string): number {
-          const plain = stripForScore(value).slice(0, 12000);
-          if (!plain.trim()) return -100;
-
-          const controls = (plain.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || []).length;
-          const replacement = (plain.match(/�/g) || []).length;
-          const cyrillic = (plain.match(/[А-Яа-яЁё]/g) || []).length;
-          const latin = (plain.match(/[A-Za-z]/g) || []).length;
-          const digits = (plain.match(/[0-9]/g) || []).length;
-          const weird = (plain.match(/[@`^~|\\]/g) || []).length;
-
-          let score =
-            plain.length * 0.35 +
-            cyrillic * 2.2 +
-            latin * 0.6 +
-            digits * 0.2 -
-            controls * 30 -
-            replacement * 22;
-
-          if (cyrillic === 0 && weird > 10) score -= weird * 3;
-          if (cyrillic < 4 && /[><;@][><;@][><;@]/.test(plain)) score -= 40;
-
-          return score;
-        }
-
-        function looksCorruptedText(value: string): boolean {
-          if (!value) return false;
-          const plain = stripForScore(value).slice(0, 12000);
-          if (!plain.trim()) return false;
-          const controls = (plain.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || []).length;
-          if (controls > 2) return true;
-          return scoreDecodedText(value) < 0;
-        }
-
-        function decodeBytes(bytes: Uint8Array, charset: string): string | null {
-          try {
-            return new TextDecoder(normalizeCharset(charset)).decode(bytes);
-          } catch {
-            return null;
-          }
-        }
-
-        function decodeWithBestCharset(bytes: Uint8Array, charset: string, hints: string[] = []): string {
-          const candidates = Array.from(
-            new Set(
-              [
-                normalizeCharset(charset),
-                ...hints.map(normalizeCharset),
-                "utf-8",
-                "windows-1251",
-                "koi8-r",
-                "ibm866",
-                "iso-8859-5",
-                "windows-1252",
-              ].filter(Boolean),
-            ),
-          );
-
-          let best = "";
-          let bestScore = -Infinity;
-          let bestCharset = normalizeCharset(charset);
-
-          for (const candidate of candidates) {
-            const decoded = decodeBytes(bytes, candidate);
-            if (!decoded) continue;
-            const score = scoreDecodedText(decoded);
-            if (score > bestScore) {
-              best = decoded;
-              bestScore = score;
-              bestCharset = candidate;
-            }
-          }
-
-          if (!best) {
-            try {
-              best = new TextDecoder("utf-8").decode(bytes);
-              bestScore = scoreDecodedText(best);
-              bestCharset = "utf-8";
-            } catch {
-              best = "";
-            }
-          }
-
-          const metaCharset = extractCharsetFromHtmlMeta(best);
-          if (metaCharset && metaCharset !== bestCharset) {
-            const metaDecoded = decodeBytes(bytes, metaCharset);
-            if (metaDecoded) {
-              const metaScore = scoreDecodedText(metaDecoded);
-              if (metaScore >= bestScore - 5 || looksCorruptedText(best)) {
-                best = metaDecoded;
-              }
-            }
-          }
-
-          return best;
-        }
-
-        function decodeContent(body: string, encoding: string, charset: string, hints: string[] = []): string {
-          if (encoding === "base64") {
-            try {
-              const clean = normalizeBase64Input(body);
-              if (!clean || /[^A-Za-z0-9+/=]/.test(clean)) return body;
-              const binary = atob(clean);
-              const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-              return decodeWithBestCharset(bytes, charset, hints);
-            } catch {
-              return body;
-            }
-          }
-
-          if (encoding === "quoted-printable") {
-            const clean = body.replace(/=\r?\n/g, "");
-            const bytes: number[] = [];
-            for (let i = 0; i < clean.length; i++) {
-              if (clean[i] === "=" && /^[0-9A-Fa-f]{2}$/.test(clean.slice(i + 1, i + 3))) {
-                bytes.push(parseInt(clean.slice(i + 1, i + 3), 16));
-                i += 2;
-              } else {
-                bytes.push(clean.charCodeAt(i) & 0xff);
-              }
-            }
-            try {
-              return decodeWithBestCharset(new Uint8Array(bytes), charset, hints);
-            } catch {
-              return clean;
-            }
-          }
-
-          return body;
-        }
-
-        function decodeHeuristically(value: string, charset = "utf-8", hints: string[] = []): string {
-          let current = value;
-          for (let i = 0; i < 3; i++) {
-            let changed = false;
-
-            if (looksLikeQuotedPrintable(current)) {
-              const qpDecoded = decodeContent(current, "quoted-printable", charset, hints);
-              if (qpDecoded && qpDecoded !== current) {
-                current = qpDecoded;
-                changed = true;
-              }
-            }
-
-            if (isLikelyBase64(current)) {
-              const b64Decoded = decodeContent(current, "base64", charset, hints);
-              if (b64Decoded && b64Decoded !== current) {
-                current = b64Decoded;
-                changed = true;
-              }
-            }
-
-            if (!changed) break;
-          }
-
-          return current;
-        }
-
-        // Recursively parse MIME parts from raw RFC822 message
-        function parseMimeParts(rawMessage: string): { text: string; html: string } {
-          const normalized = rawMessage.replace(/\r\n/g, "\n");
-          const trimmed = normalized.trim();
-
-          const boundaryAtStart = trimmed.match(/^--([^\n]+)/);
-          if (boundaryAtStart) {
-            const directBoundary = boundaryAtStart[1].replace(/--\s*$/, "").trim();
-            if (directBoundary) {
-              return parseMultipartBody(trimmed, directBoundary);
-            }
-          }
-
-          const headerEnd = normalized.indexOf("\n\n");
-          if (headerEnd === -1) {
-            return { text: rawMessage, html: "" };
-          }
-
-          return parseMimeBody(normalized.substring(0, headerEnd), normalized.substring(headerEnd + 2));
-        }
-
-        function parseMimeBody(headers: string, body: string): { text: string; html: string } {
-          // Unfold headers (continuation lines)
-          const unfoldedHeaders = headers.replace(/\n[ \t]+/g, " ");
-          const unfoldedLower = unfoldedHeaders.toLowerCase();
-
-          // Check for multipart
-          const boundaryMatch = unfoldedLower.match(/content-type:\s*multipart\/[^;]*;[^]*?boundary=["']?([^"'\s;]+)/i)
-            || unfoldedHeaders.match(/boundary=["']?([^"'\s;]+)/i);
-
-          if (boundaryMatch) {
-            const boundary = boundaryMatch[1];
-            return parseMultipartBody(body, boundary);
-          }
-
-          // Single part
-          const charset = extractCharset(unfoldedLower);
-          const encoding = extractEncoding(unfoldedLower);
-          const decoded = decodeHeuristically(decodeContent(body, encoding, charset), charset);
-
-          if (unfoldedLower.includes("content-type: text/html") || unfoldedLower.includes("content-type:text/html")) {
-            return { text: "", html: decoded };
-          }
-          if (unfoldedLower.includes("content-type: text/plain") || unfoldedLower.includes("content-type:text/plain")) {
-            return { text: decoded, html: "" };
-          }
-          // Default: treat as plain text
-          return { text: decoded, html: "" };
-        }
-
-        function parseMultipartBody(body: string, boundary: string): { text: string; html: string } {
-          let text = "";
-          let html = "";
-          const parts = body.split(`--${boundary}`);
-
-          for (const rawPart of parts) {
-            const part = rawPart.replace(/^\r?\n/, "");
-            if (!part || part.startsWith("--")) continue;
-
-            // Find header/body split
-            let splitIdx = part.indexOf("\n\n");
-            let splitLen = 2;
-            if (splitIdx === -1) {
-              splitIdx = part.indexOf("\r\n\r\n");
-              splitLen = 4;
-            }
-            if (splitIdx === -1) continue;
-
-            const partHeaders = part.substring(0, splitIdx);
-            const partBody = part.substring(splitIdx + splitLen).replace(/\r?\n--$/, "").trimEnd();
-            const partHeadersLower = partHeaders.toLowerCase();
-
-            // Check for nested multipart
-            const nestedBoundary = partHeaders.match(/boundary=["']?([^"'\s;]+)/i);
-            if (nestedBoundary) {
-              const nested = parseMultipartBody(partBody, nestedBoundary[1]);
-              if (!text && nested.text) text = nested.text;
-              if (!html && nested.html) html = nested.html;
-              continue;
-            }
-
-            const isHtml = partHeadersLower.includes("text/html");
-            const isPlain = partHeadersLower.includes("text/plain");
-            if (!isHtml && !isPlain) continue;
-
-            const charset = extractCharset(partHeadersLower);
-            const encoding = extractEncoding(partHeadersLower);
-            const decoded = decodeHeuristically(decodeContent(partBody, encoding, charset), charset);
-
-            if (isHtml && !html) html = decoded;
-            if (isPlain && !text) text = decoded;
-          }
-
-          return { text, html };
-        }
-
-        // Step 1: Try bodyParts + bodyStructure (lightweight, no full source download)
-        let msg: any = null;
         try {
           const messages = await (client as any).fetch(String(targetUid), {
             byUid: true,
             uid: true,
             envelope: true,
             flags: true,
-            bodyStructure: true,
-            bodyParts: ["TEXT", "1", "1.1", "1.2", "2"],
+            source: true,
           });
           const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
-          msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || fetched[0] || null;
-        } catch (e) {
-          console.error("fetch bodyParts failed:", e);
-          try {
-            const messages = await (client as any).fetch(String(targetUid), {
-              byUid: true,
-              uid: true,
-              envelope: true,
-              flags: true,
-              bodyStructure: true,
-              bodyParts: ["TEXT"],
-            });
-            const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
-            msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || fetched[0] || null;
-          } catch (e2) {
-            console.error("fetch TEXT failed:", e2);
+          const msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || fetched[0];
+
+          if (msg) {
+            envelope = msg.envelope;
+            flags = msg.flags || [];
+
+            if (msg.source instanceof Uint8Array) {
+              rawSource = msg.source;
+            } else if (typeof msg.source === "string") {
+              rawSource = new TextEncoder().encode(msg.source);
+            }
           }
+        } catch (e) {
+          console.error("fetch source failed:", e);
         }
 
-        if (!msg) {
+        if (!rawSource) {
           await client.disconnect();
           client = null;
-          return ok({ uid, flags: [], subject: "", from: { name: "Unknown", email: "" }, to: [], cc: [], date: "", messageId: "", bodyText: "", bodyHtml: "", notFound: true });
+          return ok({
+            uid: targetUid,
+            flags: [],
+            subject: "",
+            from: { name: "Unknown", email: "" },
+            to: [],
+            cc: [],
+            date: "",
+            messageId: "",
+            bodyText: "",
+            bodyHtml: "",
+            notFound: true,
+          });
         }
 
-        let bodyText = "";
-        let bodyHtml = "";
+        // Parse with postal-mime
+        const parser = new PostalMime();
+        const parsed = await parser.parse(rawSource);
 
-        // Extract charset/encoding from bodyStructure for each MIME part
-        type PartMeta = { type: string; subtype: string; charset: string; encoding: string; partId: string };
-        function flattenStructure(struct: any, partPrefix = ""): PartMeta[] {
-          const results: PartMeta[] = [];
-          if (!struct) return results;
-          if (struct.childNodes && Array.isArray(struct.childNodes)) {
-            struct.childNodes.forEach((child: any, idx: number) => {
-              const childPart = partPrefix ? `${partPrefix}.${idx + 1}` : String(idx + 1);
-              results.push(...flattenStructure(child, childPart));
-            });
-            return results;
-          }
-          const type = (struct.type || "").toLowerCase();
-          const subtype = (struct.subtype || "").toLowerCase();
-          const params = struct.parameters || struct.params || {};
-          const charset = (params.charset || "utf-8").toLowerCase();
-          const encoding = (struct.encoding || "7bit").toLowerCase();
-          const partId = partPrefix || "1";
-          results.push({ type, subtype, charset, encoding, partId });
-          return results;
-        }
+        const bodyText = parsed.text || "";
+        const bodyHtml = parsed.html || "";
 
-        const structParts = flattenStructure(msg.bodyStructure);
-        console.log("bodyStructure parts:", JSON.stringify(structParts.map(p => ({ id: p.partId, t: `${p.type}/${p.subtype}`, cs: p.charset, enc: p.encoding }))));
+        console.log(
+          "fetch result (postal-mime) - bodyText:",
+          bodyText.length,
+          "bodyHtml:",
+          bodyHtml.length,
+          "attachments:",
+          (parsed.attachments || []).length,
+        );
 
-        function findPartMeta(partKey: string): PartMeta | undefined {
-          if (partKey === "TEXT") return structParts.find(p => p.type === "text");
-          return structParts.find(p => p.partId === partKey);
-        }
-
-        const looksLikeMimeBlob = (value: string): boolean => {
-          if (!value) return false;
-          const lower = value.toLowerCase();
-          return lower.includes("content-type: multipart/") ||
-            lower.includes("content-transfer-encoding:") ||
-            /(?:^|\r?\n)--[^\r\n]{8,}/.test(value);
-        };
-
-        const extractMimeFromBlob = (value: string): { text: string; html: string } => {
-          if (!value) return { text: "", html: "" };
-          const maybeDecoded = decodeHeuristically(value, "utf-8");
-          if (!looksLikeMimeBlob(maybeDecoded)) return { text: "", html: "" };
-          const parsed = parseMimeParts(maybeDecoded);
-          return {
-            text: (parsed.text || "").trim(),
-            html: (parsed.html || "").trim(),
-          };
-        };
-
-        const headersToString = (input: unknown): string => {
-          if (!input) return "";
-          if (typeof input === "string") return input;
-          if (Array.isArray(input)) return input.map((line) => String(line)).join("\n");
-          if (typeof input === "object") {
-            return Object.entries(input as Record<string, unknown>)
-              .map(([key, value]) => {
-                if (Array.isArray(value)) return `${key}: ${value.map((v) => String(v)).join(", ")}`;
-                return `${key}: ${String(value ?? "")}`;
-              })
-              .join("\n");
-          }
-          return String(input);
-        };
-
-        const extractFromParts = (parts: unknown): { text: string; html: string } => {
-          if (!parts || typeof parts !== "object") return { text: "", html: "" };
-          let text = "";
-          let html = "";
-
-          for (const [partKey, partValue] of Object.entries(parts as Record<string, unknown>)) {
-            const value = partValue as any;
-            const rawField = value?.data ?? value?.body ?? value;
-            if (!rawField) continue;
-
-            const meta = findPartMeta(partKey);
-            const headersRaw = headersToString(value?.headers || value?.header || "");
-            const headers = headersRaw.toLowerCase();
-
-            const headerCharset = extractCharset(headersRaw);
-            const charset = normalizeCharset(meta?.charset || headerCharset || "utf-8");
-            const encoding = (meta?.encoding || extractEncoding(headers) || "7bit").toLowerCase();
-            const isHtmlPart = meta ? (meta.subtype === "html") : headers.includes("text/html");
-            const isPlainPart = meta ? (meta.subtype === "plain") : headers.includes("text/plain");
-
-            let rawBytes: Uint8Array;
-            let rawSource = "";
-
-            if (rawField instanceof Uint8Array) {
-              rawBytes = rawField;
-              rawSource = new TextDecoder("latin1").decode(rawField);
-            } else if (typeof rawField === "string") {
-              rawSource = rawField;
-              rawBytes = Uint8Array.from(rawSource, (ch) => ch.charCodeAt(0) & 0xff);
-            } else {
-              continue;
-            }
-
-            const metaCharset = extractCharsetFromHtmlMeta(rawSource) || undefined;
-            const charsetHints = [headerCharset, metaCharset].filter(Boolean) as string[];
-
-            let decoded = rawSource;
-            if (encoding === "base64" || isLikelyBase64(rawSource)) {
-              decoded = decodeContent(rawSource, "base64", charset, charsetHints);
-            } else if (encoding === "quoted-printable" || looksLikeQuotedPrintable(rawSource)) {
-              decoded = decodeContent(rawSource, "quoted-printable", charset, charsetHints);
-            } else {
-              decoded = decodeWithBestCharset(rawBytes, charset, charsetHints);
-            }
-
-            decoded = decodeHeuristically(decoded, charset, charsetHints);
-
-            const recovered = extractMimeFromBlob(decoded);
-            if (recovered.html) {
-              if (!html || scoreDecodedText(recovered.html) > scoreDecodedText(html)) html = recovered.html;
-            }
-            if (recovered.text) {
-              if (!text || scoreDecodedText(recovered.text) > scoreDecodedText(text)) text = recovered.text;
-            }
-            if (recovered.html || recovered.text) continue;
-
-            const candidate = decoded;
-            const looksHtml = /<\/?[a-z][\s\S]*>/i.test(candidate);
-            const hasMimeMarkers = looksLikeMimeBlob(candidate);
-
-            if (!hasMimeMarkers && (isHtmlPart || (!isPlainPart && looksHtml))) {
-              if (!html || scoreDecodedText(candidate) > scoreDecodedText(html)) html = candidate;
-            } else {
-              if (!text || scoreDecodedText(candidate) > scoreDecodedText(text)) text = candidate;
-            }
-          }
-
-          return { text, html };
-        };
-
-        const normalizeBodies = () => {
-          bodyText = decodeHeuristically(bodyText || "", "utf-8", [extractCharsetFromHtmlMeta(bodyText || "") || ""]).trim();
-          bodyHtml = decodeHeuristically(bodyHtml || "", "utf-8", [extractCharsetFromHtmlMeta(bodyHtml || "") || ""]).trim();
-
-          const fromHtmlBlob = extractMimeFromBlob(bodyHtml);
-          if (fromHtmlBlob.html && scoreDecodedText(fromHtmlBlob.html) >= scoreDecodedText(bodyHtml || "")) bodyHtml = fromHtmlBlob.html;
-          if (fromHtmlBlob.text && !bodyText) bodyText = fromHtmlBlob.text;
-
-          const fromTextBlob = extractMimeFromBlob(bodyText);
-          if (fromTextBlob.html && (!bodyHtml || scoreDecodedText(fromTextBlob.html) > scoreDecodedText(bodyHtml) + 10)) bodyHtml = fromTextBlob.html;
-          if (fromTextBlob.text && (!bodyText || looksLikeMimeBlob(bodyText))) bodyText = fromTextBlob.text;
-
-          if (bodyText && isLikelyBase64(bodyText)) {
-            const decodedText = decodeContent(bodyText, "base64", "utf-8", [extractCharsetFromHtmlMeta(bodyText) || ""]);
-            if (/<\/?[a-z][\s\S]*>/i.test(decodedText)) {
-              if (!bodyHtml || scoreDecodedText(decodedText) > scoreDecodedText(bodyHtml) + 8) {
-                bodyHtml = decodedText;
-              }
-            } else if (decodedText !== bodyText) {
-              bodyText = decodedText;
-            }
-          }
-
-          if (bodyHtml && isLikelyBase64(bodyHtml)) {
-            const decodedHtml = decodeContent(bodyHtml, "base64", "utf-8", [extractCharsetFromHtmlMeta(bodyHtml) || ""]);
-            if (/<\/?[a-z][\s\S]*>/i.test(decodedHtml) && scoreDecodedText(decodedHtml) >= scoreDecodedText(bodyHtml) - 5) {
-              bodyHtml = decodedHtml;
-            }
-          }
-
-          const bodyTextLooksHtml = /<\/?[a-z][\s\S]*>/i.test(bodyText);
-          if (bodyTextLooksHtml && (!bodyHtml || looksCorruptedText(bodyHtml)) && !looksCorruptedText(bodyText)) {
-            bodyHtml = bodyText;
-            bodyText = "";
-          }
-
-          if (bodyHtml && looksCorruptedText(bodyHtml) && bodyText && !looksCorruptedText(bodyText)) {
-            if (/<\/?[a-z][\s\S]*>/i.test(bodyText)) {
-              bodyHtml = bodyText;
-              bodyText = "";
-            } else {
-              bodyHtml = "";
-            }
-          }
-
-          if (bodyHtml && !/<\/?[a-z][\s\S]*>/i.test(bodyHtml) && !bodyText) {
-            bodyText = bodyHtml;
-            bodyHtml = "";
-          }
-        };
-
-        // Try parts/bodyParts first
-        const fromParts = extractFromParts(msg.parts);
-        bodyText = fromParts.text;
-        bodyHtml = fromParts.html;
-
-        if (!bodyText && !bodyHtml) {
-          const fromBodyParts = extractFromParts(msg.bodyParts);
-          bodyText = fromBodyParts.text;
-          bodyHtml = fromBodyParts.html;
-        }
-
-        normalizeBodies();
-
-        // If bodyText looks like raw MIME, parse it
-        if (bodyText && bodyText.includes("Content-Type:")) {
-          const parsed = parseMimeParts(bodyText);
-          if (parsed.html && !bodyHtml) bodyHtml = parsed.html;
-          if (parsed.text) bodyText = parsed.text;
-        }
-
-        normalizeBodies();
-
-        // Step 2: If parts yielded nothing, try source but only for small messages (< 500KB)
-        if (!bodyText && !bodyHtml) {
-          const msgSize = Number(msg.size || 0);
-          const sizeLimit = 500_000;
-          if (!msgSize || msgSize < sizeLimit) {
-            try {
-              console.log("Parts empty, falling back to source for uid", targetUid, "size:", msgSize);
-              const srcMessages = await (client as any).fetch(String(targetUid), {
-                byUid: true,
-                uid: true,
-                source: true,
-              });
-              const srcFetched = (Array.isArray(srcMessages) ? srcMessages : [srcMessages]).filter(Boolean);
-              const srcMsg = srcFetched.find((item: any) => Number(item?.uid) === targetUid) || srcFetched[0];
-              if (srcMsg?.source) {
-                const rawStr = decodeData(srcMsg.source, "latin1");
-                if (rawStr) {
-                  const parsed = parseMimeParts(rawStr);
-                  bodyText = parsed.text;
-                  bodyHtml = parsed.html;
-                }
-              }
-            } catch (e) {
-              console.error("source fallback failed:", e);
-            }
-          } else {
-            console.log("Skipping source fallback for large message, size:", msgSize);
-          }
-        }
-
-        normalizeBodies();
-
-        // If no HTML and bodyText looks like HTML
-        if (!bodyHtml && bodyText && (bodyText.includes("<html") || bodyText.includes("<div") || bodyText.includes("<table"))) {
-          bodyHtml = bodyText;
-        }
-
-        console.log("fetch result - bodyText:", bodyText.length, "bodyHtml:", bodyHtml.length);
-
-        const env = msg.envelope || {};
-        const resolvedUid = Number.isFinite(Number(msg.uid)) ? Number(msg.uid) : targetUid;
+        const env = envelope || {};
+        const resolvedUid = targetUid;
 
         await client.disconnect();
         client = null;
 
         return ok({
           uid: resolvedUid,
-          flags: msg.flags || [],
-          subject: env.subject || "",
-          from: env.from?.[0] ? {
-            name: env.from[0].name || env.from[0].mailbox,
-            email: `${env.from[0].mailbox}@${env.from[0].host}`,
-          } : { name: "Unknown", email: "" },
-          to: (env.to || []).map((a: any) => ({
-            name: a.name || a.mailbox,
-            email: `${a.mailbox}@${a.host}`,
+          flags,
+          subject: parsed.subject || env.subject || "",
+          from: parsed.from
+            ? { name: parsed.from.name || parsed.from.address || "Unknown", email: parsed.from.address || "" }
+            : env.from?.[0]
+              ? { name: env.from[0].name || env.from[0].mailbox, email: `${env.from[0].mailbox}@${env.from[0].host}` }
+              : { name: "Unknown", email: "" },
+          to: (parsed.to || []).map((a: any) => ({
+            name: a.name || a.address || "",
+            email: a.address || "",
           })),
-          cc: (env.cc || []).map((a: any) => ({
-            name: a.name || a.mailbox,
-            email: `${a.mailbox}@${a.host}`,
+          cc: (parsed.cc || []).map((a: any) => ({
+            name: a.name || a.address || "",
+            email: a.address || "",
           })),
-          date: env.date || "",
-          messageId: env.messageId || "",
+          date: parsed.date || env.date || "",
+          messageId: parsed.messageId || env.messageId || "",
           bodyText,
           bodyHtml,
         });
@@ -802,7 +250,7 @@ Deno.serve(async (req) => {
         if (!flagUid) return err("Missing uid", 400);
 
         await client.selectMailbox(folder);
-        
+
         if (addFlags?.length) {
           await client.setFlags(String(flagUid), addFlags, "add", true);
         }
@@ -833,7 +281,6 @@ Deno.serve(async (req) => {
 
         await client.selectMailbox(folder);
         await client.setFlags(String(delUid), ["\\Deleted"], "add", true);
-        // Expunge to permanently delete
         await client.expunge();
 
         await client.disconnect();

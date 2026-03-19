@@ -191,12 +191,16 @@ function MailApp() {
   const renderEmailDetail = () => (
     <AnimatePresence mode="wait">
       {selectedEmail ? (
-        <EmailDetail
+         <EmailDetail
           key={selectedEmail.id}
           email={selectedEmail}
           onBack={() => setSelectedEmail(null)}
           onReply={handleReply}
           onEditDraft={handleEditDraft}
+          onNext={handleNextEmail}
+          onPrev={handlePrevEmail}
+          hasNext={hasNext}
+          hasPrev={hasPrev}
         />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full">

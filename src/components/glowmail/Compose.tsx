@@ -110,11 +110,6 @@ export function Compose({
     }) : [];
 
     const finalBody = editorRef.current?.innerHTML || '';
-    let selectedSignature = '';
-    if (selectedSignatureId) {
-      selectedSignature = settings.signatures?.find(s => s.id === selectedSignatureId)?.content || '';
-    }
-    const bodyWithSignature = selectedSignature ? `${finalBody}<br><br>${selectedSignature}` : finalBody;
 
     sendEmail({
       id: initialData?.id,

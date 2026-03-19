@@ -173,7 +173,8 @@ Deno.serve(async (req) => {
               inReplyTo: env.inReplyTo || "",
               attachments,
             };
-          });
+          })
+          .sort((a: any, b: any) => b.uid - a.uid); // newest first
 
         await client.disconnect();
         client = null;

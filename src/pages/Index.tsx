@@ -145,7 +145,7 @@ function MailApp() {
     const hexEscapes = (value.match(/=[0-9A-Fa-f]{2}/g) || []).length;
     return hexEscapes >= 3 || (softBreaks > 0 && hexEscapes > 0);
   };
-...
+
   const decodeStandaloneBlob = (value: string): string => {
     if (!value) return value;
 

@@ -14,7 +14,26 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [composeData, setComposeData] = useState<Partial<Email> | null>(null);
-  const { markAsRead, settings, sendEmail, currentFolder } = useMail();
+  const { markAsRead, settings, sendEmail, currentFolder, emails } = useMail();
+
+  // Get sorted email list for next/prev navigation
+  const folderEmails = emails.filter(e => e.folderId === currentFolder)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const selectedIdx = selectedEmail ? folderEmails.findIndex(e => e.id === selectedEmail.id) : -1;
+  const hasPrev = selectedIdx > 0;
+  const hasNext = selectedIdx >= 0 && selectedIdx < folderEmails.length - 1;
+  const handleNextEmail = () => {
+    if (hasNext) {
+      const next = folderEmails[selectedIdx + 1];
+      handleSelectEmail(next);
+    }
+  };
+  const handlePrevEmail = () => {
+    if (hasPrev) {
+      const prev = folderEmails[selectedIdx - 1];
+      handleSelectEmail(prev);
+    }
+  };
 
   // Listen for messages from detached composer window
   useEffect(() => {

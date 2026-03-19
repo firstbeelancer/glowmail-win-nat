@@ -145,7 +145,7 @@ function SidebarContent({
   onCompose?: (prefill?: { to?: string }) => void;
   lang: 'en' | 'ru';
 }) {
-  const { fetchEmails, addFolder, emails, contacts, addContact } = useMail();
+  const { fetchEmails, addFolder, emails, contacts, addContact, moveEmailToFolder } = useMail();
   const [isFetching, setIsFetching] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ INBOX: true });
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
@@ -154,6 +154,26 @@ function SidebarContent({
   const [showAddContact, setShowAddContact] = useState(false);
   const [newContactName, setNewContactName] = useState('');
   const [newContactEmail, setNewContactEmail] = useState('');
+  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
+
+  const handleFolderDragOver = (e: DragEvent, folderId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverFolder(folderId);
+  };
+
+  const handleFolderDragLeave = () => {
+    setDragOverFolder(null);
+  };
+
+  const handleFolderDrop = (e: DragEvent, folderId: string) => {
+    e.preventDefault();
+    setDragOverFolder(null);
+    const emailId = e.dataTransfer.getData('text/email-id');
+    if (emailId && folderId !== currentFolder) {
+      moveEmailToFolder(emailId, folderId);
+    }
+  };
 
   const getFolderCount = (folderId: string) => {
     const folderEmails = emails.filter(e => e.folderId === folderId);

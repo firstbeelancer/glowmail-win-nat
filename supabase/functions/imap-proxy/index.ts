@@ -104,11 +104,8 @@ Deno.serve(async (req) => {
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
 
-        // Debug first 3 bodyStructures
-        normalized.slice(0, 3).forEach((msg: any) => {
-          const bs = msg?.bodyStructure;
-          console.log(`BS2 uid=${msg?.uid} size=${msg?.size} hasBS=${!!bs} bs=${bs ? JSON.stringify(bs).slice(0, 500) : 'null'}`);
-        });
+
+
 
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))

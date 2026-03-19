@@ -1,5 +1,5 @@
 import React, { useState, ReactNode } from 'react';
-import { Menu, Search, Edit3, Settings, Inbox, Send, File, AlertCircle, Trash2, Briefcase, Plus, RefreshCw, X, Clock, BookUser, ChevronDown, ChevronRight, Mail } from 'lucide-react';
+import { Menu, Search, Edit3, Settings, Inbox, Send, File, AlertCircle, Trash2, Briefcase, Plus, RefreshCw, X, Clock, BookUser, ChevronDown, ChevronRight, Mail, LogOut } from 'lucide-react';
 import { useMail } from '../../store';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -93,8 +93,18 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
             />
           </div>
 
-          <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-full hover:bg-zinc-800 transition-colors">
+          <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-full hover:bg-zinc-800 transition-colors" title={lang === 'ru' ? 'Настройки' : 'Settings'}>
             <Settings className="w-5 h-5 text-zinc-400" />
+          </button>
+          <button
+            onClick={() => {
+              localStorage.removeItem('glowmail_credentials');
+              window.location.reload();
+            }}
+            className="p-2 rounded-full hover:bg-zinc-800 transition-colors"
+            title={lang === 'ru' ? 'Выйти' : 'Log out'}
+          >
+            <LogOut className="w-5 h-5 text-zinc-400" />
           </button>
         </header>
 

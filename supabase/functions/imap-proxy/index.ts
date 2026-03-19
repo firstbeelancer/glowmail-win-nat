@@ -589,31 +589,56 @@ Deno.serve(async (req) => {
 
         console.log(`[search] request folder="${folder}" query="${term}" page=${safePage} pageSize=${safePageSize}`);
 
-        const runCriteriaSearch = async (label: string, criteria: Record<string, string>) => {
-          try {
-            const result = await (client as any).search(criteria);
-            const matches = Array.isArray(result) ? result.map((n: any) => Number(n)).filter(Number.isFinite) : [];
-            console.log(`[search] ${label} matches=${matches.length}`);
-            return matches;
-          } catch (error) {
-            console.error(`[search] ${label} failed:`, error);
-            return [] as number[];
-          }
+        const totalInMailbox = Number((mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0);
+        const termLower = term.toLowerCase();
+        const SCAN_BATCH_SIZE = 150;
+
+        const toAddressString = (list: any[] = []) =>
+          list
+            .map((a: any) => `${a?.name || ""} ${a?.mailbox || ""}@${a?.host || ""}`.trim())
+            .join(" ");
+
+        const matchesMetadata = (env: any) => {
+          const haystack = [
+            env?.subject || "",
+            toAddressString(env?.from || []),
+            toAddressString(env?.to || []),
+            toAddressString(env?.cc || []),
+            env?.messageId || "",
+          ]
+            .join("\n")
+            .toLowerCase();
+
+          return haystack.includes(termLower);
         };
 
-        // Metadata-only search (no TEXT/body search): subject, from, to, cc
-        const [subjectMatches, fromMatches, toMatches, ccMatches] = await Promise.all([
-          runCriteriaSearch("subject", { header: [{ field: "SUBJECT", value: term }] }),
-          runCriteriaSearch("from", { header: [{ field: "FROM", value: term }] }),
-          runCriteriaSearch("to", { header: [{ field: "TO", value: term }] }),
-          runCriteriaSearch("cc", { header: [{ field: "CC", value: term }] }),
-        ]);
+        const matchedMessages: any[] = [];
 
-        const sequenceSet = new Set([...subjectMatches, ...fromMatches, ...toMatches, ...ccMatches]);
-        const sequences = Array.from(sequenceSet).sort((a, b) => b - a);
-        const totalFound = sequences.length;
+        for (let seqEnd = totalInMailbox; seqEnd >= 1; seqEnd -= SCAN_BATCH_SIZE) {
+          const seqStart = Math.max(1, seqEnd - SCAN_BATCH_SIZE + 1);
+          const sequence = `${seqStart}:${seqEnd}`;
 
-        console.log(`[search] unique matches=${totalFound}`);
+          const batch = await (client as any).fetch(sequence, {
+            uid: true,
+            envelope: true,
+            flags: true,
+            bodyStructure: true,
+            size: true,
+          });
+
+          const normalizedBatch = (Array.isArray(batch) ? batch : [batch]).filter(Boolean);
+          const batchMatches = normalizedBatch.filter((msg: any) => {
+            if (!Number.isFinite(Number(msg?.uid))) return false;
+            return matchesMetadata(msg?.envelope || {});
+          });
+
+          matchedMessages.push(...batchMatches);
+        }
+
+        matchedMessages.sort((a: any, b: any) => Number(b.uid) - Number(a.uid));
+        const totalFound = matchedMessages.length;
+
+        console.log(`[search] mailboxTotal=${totalInMailbox} matched=${totalFound}`);
 
         if (totalFound === 0) {
           await client.disconnect();
@@ -623,28 +648,17 @@ Deno.serve(async (req) => {
         }
 
         const startIdx = (safePage - 1) * safePageSize;
-        const paginatedSequences = sequences.slice(startIdx, startIdx + safePageSize);
         const hasMore = startIdx + safePageSize < totalFound;
+        const normalized = matchedMessages.slice(startIdx, startIdx + safePageSize);
 
-        console.log(`[search] page slice start=${startIdx} returned=${paginatedSequences.length} hasMore=${hasMore}`);
+        console.log(`[search] page slice start=${startIdx} returned=${normalized.length} hasMore=${hasMore}`);
 
-        if (paginatedSequences.length === 0) {
+        if (normalized.length === 0) {
           await client.disconnect();
           client = null;
           console.log(`[search] response emails=0 totalFound=${totalFound}`);
           return ok({ emails: [], total: totalFound, page: safePage, pageSize: safePageSize, hasMore: false });
         }
-
-        const sequenceSetStr = paginatedSequences.join(",");
-        const messages = await (client as any).fetch(sequenceSetStr, {
-          uid: true,
-          envelope: true,
-          flags: true,
-          bodyStructure: true,
-          size: true,
-        });
-
-        const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
 
         const extractSearchAttachments = (bs: any): { name: string; size: number; type: string }[] => {
           if (!bs) return [];

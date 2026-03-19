@@ -10,19 +10,11 @@ import { AnimatePresence } from 'framer-motion';
 import Login from './Login';
 import * as mailApi from '../lib/mail-api';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
-import { Columns3, Rows3 } from 'lucide-react';
 
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [composeData, setComposeData] = useState<Partial<Email> | null>(null);
-  const [layoutMode, setLayoutMode] = useState<'vertical' | 'horizontal'>(() => {
-    return (localStorage.getItem('glowmail_layout') as 'vertical' | 'horizontal') || 'vertical';
-  });
-  const { markAsRead, settings, sendEmail, isLoading, connectionError, fetchEmails, currentFolder } = useMail();
-
-  useEffect(() => {
-    localStorage.setItem('glowmail_layout', layoutMode);
-  }, [layoutMode]);
+  const { markAsRead, settings, sendEmail, currentFolder } = useMail();
 
   // Listen for messages from detached composer window
   useEffect(() => {
@@ -63,7 +55,7 @@ function MailApp() {
       styleEl.id = styleId;
       document.head.appendChild(styleEl);
     }
-    
+
     const fontFaces = settings.customFonts?.map(font => `
       @font-face {
         font-family: '${font.name}';
@@ -75,6 +67,144 @@ function MailApp() {
 
     styleEl.innerHTML = fontFaces;
   }, [settings.customFonts]);
+
+  const stripInvisible = (value: string) => value
+    .replace(/[\u200B-\u200D\uFEFF\u2060\u2800]/g, '')
+    .replace(/\u00A0/g, ' ')
+    .trim();
+
+  const hasVisibleText = (value: string) => {
+    const plain = value.replace(/<[^>]*>/g, ' ');
+    return stripInvisible(plain).length > 0;
+  };
+
+  const escapeHtml = (value: string) => value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const decodeQuotedPrintable = (input: string, charset = 'utf-8') => {
+    const clean = input.replace(/=\r?\n/g, '');
+    const bytes: number[] = [];
+
+    for (let i = 0; i < clean.length; i++) {
+      const ch = clean[i];
+      const hex = clean.slice(i + 1, i + 3);
+      if (ch === '=' && /^[0-9A-Fa-f]{2}$/.test(hex)) {
+        bytes.push(parseInt(hex, 16));
+        i += 2;
+      } else {
+        bytes.push(clean.charCodeAt(i) & 0xff);
+      }
+    }
+
+    try {
+      const arr = new Uint8Array(bytes);
+      try {
+        return new TextDecoder(charset).decode(arr);
+      } catch {
+        return new TextDecoder('utf-8').decode(arr);
+      }
+    } catch {
+      return clean;
+    }
+  };
+
+  const decodeBase64 = (input: string, charset = 'utf-8') => {
+    try {
+      const binary = atob(input.replace(/\s/g, ''));
+      const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+      try {
+        return new TextDecoder(charset).decode(bytes);
+      } catch {
+        return new TextDecoder('utf-8').decode(bytes);
+      }
+    } catch {
+      return input;
+    }
+  };
+
+  const parseMultipartBlob = (source: string): { text: string; html: string } => {
+    const normalized = source.replace(/\r\n/g, '\n');
+    const boundaryFromHeader = normalized.match(/boundary="?([^"\n;]+)"?/i)?.[1]?.trim();
+    const boundaryFromBody = normalized.match(/(?:^|\n)--([^\n-][^\n]*)/)?.[1]?.trim();
+    const boundary = boundaryFromHeader || boundaryFromBody;
+
+    if (!boundary) return { text: '', html: '' };
+
+    const parts = normalized.split(`--${boundary}`);
+    let text = '';
+    let html = '';
+
+    for (const partRaw of parts) {
+      const part = partRaw.trim();
+      if (!part || part === '--') continue;
+
+      const splitIdx = part.indexOf('\n\n');
+      if (splitIdx === -1) continue;
+
+      const headersRaw = part.slice(0, splitIdx);
+      const headers = headersRaw.toLowerCase();
+      const bodyRaw = part.slice(splitIdx + 2).replace(/\n--$/, '').trim();
+
+      if (headers.includes('content-type: multipart/')) {
+        const nested = parseMultipartBlob(bodyRaw);
+        if (!text && nested.text) text = nested.text;
+        if (!html && nested.html) html = nested.html;
+        continue;
+      }
+
+      const charset = headers.match(/charset=["']?([^"'\s;]+)/i)?.[1] || 'utf-8';
+      const isHtml = headers.includes('content-type: text/html');
+      const isPlain = headers.includes('content-type: text/plain');
+      if (!isHtml && !isPlain) continue;
+
+      let decoded = bodyRaw;
+      if (headers.includes('content-transfer-encoding: quoted-printable')) {
+        decoded = decodeQuotedPrintable(bodyRaw, charset);
+      } else if (headers.includes('content-transfer-encoding: base64')) {
+        decoded = decodeBase64(bodyRaw, charset);
+      }
+
+      if (isHtml) {
+        html = decoded;
+      } else if (!text) {
+        text = decoded;
+      }
+    }
+
+    return { text: text.trim(), html: html.trim() };
+  };
+
+  const buildRenderableEmailBody = (full: any) => {
+    let bodyHtml = typeof full?.bodyHtml === 'string' ? full.bodyHtml : '';
+    let bodyText = typeof full?.bodyText === 'string' ? full.bodyText : '';
+
+    if (bodyText.includes('Content-Type:') || bodyText.includes('This is a multi-part message')) {
+      const parsed = parseMultipartBlob(bodyText);
+      if (!hasVisibleText(bodyHtml) && parsed.html) bodyHtml = parsed.html;
+      if ((!hasVisibleText(bodyText) || /^this is a multi-part message/i.test(bodyText.trim())) && parsed.text) {
+        bodyText = parsed.text;
+      }
+    }
+
+    if (/=[0-9A-Fa-f]{2}/.test(bodyText)) {
+      bodyText = decodeQuotedPrintable(bodyText, 'utf-8');
+    }
+
+    bodyText = stripInvisible(bodyText);
+
+    if (hasVisibleText(bodyHtml)) return bodyHtml;
+    if (hasVisibleText(bodyText)) {
+      return `<div style="white-space: pre-wrap; line-height: 1.55;">${escapeHtml(bodyText)}</div>`;
+    }
+
+    return settings.language === 'ru'
+      ? '<p style="opacity:0.7">Текст письма не удалось загрузить.</p>'
+      : '<p style="opacity:0.7">Could not load email text.</p>';
+  };
 
   const handleSelectEmail = async (email: Email) => {
     setSelectedEmail(email);
@@ -91,7 +221,7 @@ function MailApp() {
         const full = await mailApi.fetchEmailBody(currentFolder, Number(email.id));
         const enriched = {
           ...email,
-          body: full.bodyHtml || full.bodyText || '',
+          body: buildRenderableEmailBody(full),
           read: true,
         };
         setSelectedEmail(enriched);
@@ -110,14 +240,14 @@ function MailApp() {
     const fromStr = `${email.from.name} &lt;${email.from.email}&gt;`;
     const toStr = email.to.map(c => `${c.name} &lt;${c.email}&gt;`).join(', ');
     const ccStr = email.cc?.length ? email.cc.map(c => `${c.name} &lt;${c.email}&gt;`).join(', ') : '';
-    
+
     let quoteHeader = `<p><b>${settings.language === 'ru' ? 'От' : 'From'}:</b> ${fromStr}<br>`;
     quoteHeader += `<b>${settings.language === 'ru' ? 'Кому' : 'To'}:</b> ${toStr}<br>`;
     if (ccStr) quoteHeader += `<b>${settings.language === 'ru' ? 'Копия' : 'Cc'}:</b> ${ccStr}<br>`;
     quoteHeader += `<b>${settings.language === 'ru' ? 'Дата' : 'Date'}:</b> ${dateStr}<br>`;
     quoteHeader += `<b>${settings.language === 'ru' ? 'Тема' : 'Subject'}:</b> ${email.subject}</p>`;
 
-    let body = quickReplyText
+    const body = quickReplyText
       ? `<p>${quickReplyText}</p><br><br><hr>${quoteHeader}<blockquote>${email.body}</blockquote>`
       : `<br><br><hr>${quoteHeader}<blockquote>${email.body}</blockquote>`;
 
@@ -172,24 +302,7 @@ function MailApp() {
     </AnimatePresence>
   );
 
-  const layoutToggle = (
-    <div className="absolute top-2 right-2 z-30 flex bg-zinc-900 border border-zinc-800 rounded-lg p-0.5">
-      <button
-        onClick={() => setLayoutMode('vertical')}
-        className={`p-1.5 rounded-md transition-colors ${layoutMode === 'vertical' ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'}`}
-        title={settings.language === 'ru' ? 'Вертикальная компоновка' : 'Vertical layout'}
-      >
-        <Columns3 className="w-4 h-4" />
-      </button>
-      <button
-        onClick={() => setLayoutMode('horizontal')}
-        className={`p-1.5 rounded-md transition-colors ${layoutMode === 'horizontal' ? 'bg-emerald-500/20 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'}`}
-        title={settings.language === 'ru' ? 'Горизонтальная компоновка' : 'Horizontal layout'}
-      >
-        <Rows3 className="w-4 h-4" />
-      </button>
-    </div>
-  );
+  const layoutMode = settings.layoutMode || 'vertical';
 
   return (
     <Layout onCompose={(prefill) => {
@@ -202,7 +315,6 @@ function MailApp() {
       <div className="flex h-full relative">
         {/* Desktop layout */}
         <div className="hidden lg:flex flex-1 min-w-0 relative">
-          {layoutToggle}
           {layoutMode === 'vertical' ? (
             <ResizablePanelGroup direction="horizontal" className="h-full">
               <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
@@ -279,7 +391,7 @@ const Index = () => {
   return (
     <MailProvider>
       <MailAppWithCreds />
-      <Toaster 
+      <Toaster
         position="bottom-center"
         toastOptions={{
           style: {
@@ -319,7 +431,9 @@ function MailAppWithCreds() {
             authMethod: 'app-password',
           },
         });
-      } catch {}
+      } catch {
+        // ignore broken stored creds
+      }
     }
   }, []);
 

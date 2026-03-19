@@ -186,6 +186,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     
     const defaultSignature = parsedSettings.signature || '<p><br>--<br>Sent from GlowMail AI</p>';
     const signatures = parsedSettings.signatures || [{ id: 'default', name: 'Default', content: defaultSignature }];
+    const legacyLayout = localStorage.getItem('glowmail_layout');
     
     return {
       account: {
@@ -212,6 +213,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       syncInterval: parsedSettings.syncInterval ?? 5,
       keepFiltersAcrossFolders: parsedSettings.keepFiltersAcrossFolders ?? false,
       groupBy: parsedSettings.groupBy || 'none',
+      layoutMode: parsedSettings.layoutMode || (legacyLayout === 'horizontal' ? 'horizontal' : 'vertical'),
       markAsReadDelay: parsedSettings.markAsReadDelay ?? 0,
       ldapServer: parsedSettings.ldapServer || '',
       ldapBaseDn: parsedSettings.ldapBaseDn || '',

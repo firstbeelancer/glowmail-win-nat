@@ -88,6 +88,7 @@ export type UserSettings = {
   syncInterval: number;
   keepFiltersAcrossFolders: boolean;
   groupBy: 'none' | 'date' | 'sender' | 'tag';
+  layoutMode: 'vertical' | 'horizontal';
   markAsReadDelay: number;
   ldapServer: string;
   ldapBaseDn: string;

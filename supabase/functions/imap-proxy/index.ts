@@ -478,6 +478,115 @@ Deno.serve(async (req) => {
         return ok({ success: true });
       }
 
+      case "search": {
+        const { folder = "INBOX", query: searchQuery } = body;
+        if (!searchQuery || typeof searchQuery !== "string") return err("Missing query", 400);
+
+        await client.selectMailbox(folder);
+
+        // Build IMAP SEARCH criteria — search across subject, from, to, cc, body
+        const term = searchQuery.trim();
+        // Use OR chains: SUBJECT, FROM, TO, CC, BODY, TEXT
+        // deno-imap search accepts criteria objects
+        // We'll use the TEXT criterion which searches entire message (headers + body)
+        // and also OR with specific fields for better coverage
+        let uids: number[] = [];
+        try {
+          // Try TEXT search first (searches entire message including headers and body)
+          const searchResult = await (client as any).search({ text: term }, { byUid: true });
+          uids = Array.isArray(searchResult) ? searchResult.map(Number).filter(Number.isFinite) : [];
+        } catch (e) {
+          console.error("IMAP TEXT search failed, trying OR approach:", e);
+          // Fallback: search by subject only
+          try {
+            const searchResult = await (client as any).search({ subject: term }, { byUid: true });
+            uids = Array.isArray(searchResult) ? searchResult.map(Number).filter(Number.isFinite) : [];
+          } catch (e2) {
+            console.error("IMAP SUBJECT search also failed:", e2);
+          }
+        }
+
+        if (uids.length === 0) {
+          await client.disconnect();
+          client = null;
+          return ok({ emails: [], total: 0 });
+        }
+
+        // Sort UIDs descending (newest first) and limit to reasonable amount
+        uids.sort((a, b) => b - a);
+        const limitedUids = uids.slice(0, 200);
+
+        // Fetch envelope data for found UIDs
+        const uidSet = limitedUids.join(",");
+        const messages = await (client as any).fetch(uidSet, {
+          byUid: true,
+          uid: true,
+          envelope: true,
+          flags: true,
+          bodyStructure: true,
+          size: true,
+        });
+
+        const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+
+        // Reuse extractAttachments helper from list action
+        const extractSearchAttachments = (bs: any): { name: string; size: number; type: string }[] => {
+          if (!bs) return [];
+          const atts: { name: string; size: number; type: string }[] = [];
+          const walk = (node: any) => {
+            if (!node) return;
+            const disposition = (node.disposition || node.contentDisposition || '').toLowerCase();
+            const nodeType = node.type || node.mediaType || '';
+            const nodeSubtype = node.subtype || node.mediaSubtype || '';
+            const mimeType = `${nodeType}/${nodeSubtype}`.toLowerCase();
+            const filename = node.dispositionParameters?.filename
+              || node.parameters?.name
+              || node.contentDispositionParameters?.filename
+              || node.attrs?.name
+              || '';
+            const isTextBody = ['text/plain', 'text/html'].includes(mimeType);
+            const isAttachment = disposition === 'attachment' ||
+              (disposition === 'inline' && node.id && mimeType.startsWith('image/')) ||
+              (filename && !isTextBody) ||
+              (!isTextBody && !mimeType.startsWith('multipart/') && !mimeType.startsWith('message/') && mimeType !== '/' && disposition !== '' && disposition !== 'inline');
+            if (isAttachment) {
+              atts.push({ name: filename || 'unnamed', size: node.size || 0, type: mimeType });
+            }
+            const children = node.childNodes || node.parts || node.body;
+            if (Array.isArray(children)) children.forEach(walk);
+          };
+          walk(bs);
+          return atts;
+        };
+
+        const emails = normalized
+          .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
+          .map((msg: any) => {
+            const env = msg.envelope || {};
+            const attachments = extractSearchAttachments(msg.bodyStructure);
+            return {
+              uid: msg.uid,
+              flags: msg.flags || [],
+              size: msg.size || 0,
+              subject: env.subject || "(No Subject)",
+              from: env.from?.[0]
+                ? { name: env.from[0].name || env.from[0].mailbox, email: `${env.from[0].mailbox}@${env.from[0].host}` }
+                : { name: "Unknown", email: "" },
+              to: (env.to || []).map((a: any) => ({ name: a.name || a.mailbox, email: `${a.mailbox}@${a.host}` })),
+              cc: (env.cc || []).map((a: any) => ({ name: a.name || a.mailbox, email: `${a.mailbox}@${a.host}` })),
+              date: env.date || new Date().toISOString(),
+              messageId: env.messageId || "",
+              inReplyTo: env.inReplyTo || "",
+              attachments,
+            };
+          })
+          .sort((a: any, b: any) => b.uid - a.uid);
+
+        await client.disconnect();
+        client = null;
+        return ok({ emails, total: uids.length });
+      }
+
       case "delete": {
         const { folder = "INBOX", uid: delUid } = body;
         if (!delUid) return err("Missing uid", 400);

@@ -78,6 +78,11 @@ export async function deleteEmail(folder: string, uid: number) {
   return callImap("delete", { folder, uid });
 }
 
+export async function searchEmails(folder: string, query: string) {
+  const data = await callImap("search", { folder, query });
+  return data;
+}
+
 export async function sendEmail(params: {
   to: string[];
   cc?: string[];

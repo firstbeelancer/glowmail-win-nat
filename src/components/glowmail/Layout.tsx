@@ -19,7 +19,7 @@ const iconMap: Record<string, any> = {
 };
 
 export function Layout({ children, onCompose }: { children: ReactNode; onCompose: (prefill?: { to?: string }) => void }) {
-  const { folders, currentFolder, setCurrentFolder, searchQuery, setSearchQuery, settings } = useMail();
+  const { folders, currentFolder, setCurrentFolder, searchQuery, setSearchQuery, settings, fetchEmails } = useMail();
   const lang = settings.language;
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);

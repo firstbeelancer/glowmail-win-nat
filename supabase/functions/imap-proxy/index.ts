@@ -147,13 +147,38 @@ Deno.serve(async (req) => {
           return "";
         }
 
+        function normalizeCharset(charset?: string): string {
+          const raw = (charset || "").trim().toLowerCase().replace(/["']/g, "");
+          const aliases: Record<string, string> = {
+            "cp1251": "windows-1251",
+            "cp-1251": "windows-1251",
+            "windows1251": "windows-1251",
+            "win-1251": "windows-1251",
+            "x-windows-1251": "windows-1251",
+            "cp866": "ibm866",
+            "866": "ibm866",
+            "koi8": "koi8-r",
+            "koi8r": "koi8-r",
+            "utf8": "utf-8",
+          };
+          return aliases[raw] || raw || "utf-8";
+        }
+
         function extractCharset(header: string): string {
           const match = header.match(/charset=["']?([^"';\s]+)/i);
-          return match ? match[1].trim() : "utf-8";
+          return normalizeCharset(match ? match[1].trim() : "utf-8");
+        }
+
+        function extractCharsetFromHtmlMeta(value: string): string | null {
+          if (!value) return null;
+          const sample = value.slice(0, 5000);
+          const match = sample.match(/charset\s*=\s*["']?\s*([A-Za-z0-9._-]+)/i);
+          return match ? normalizeCharset(match[1]) : null;
         }
 
         function normalizeBase64Input(value: string): string {
           let compact = value.replace(/\s/g, "").replace(/-/g, "+").replace(/_/g, "/");
+          compact = compact.replace(/^[^A-Za-z0-9+/=]+/, "").replace(/[^A-Za-z0-9+/=]+$/, "");
           if (!compact) return compact;
           const remainder = compact.length % 4;
           if (remainder) compact += "=".repeat(4 - remainder);
@@ -163,7 +188,9 @@ Deno.serve(async (req) => {
         function isLikelyBase64(value: string): boolean {
           const compact = normalizeBase64Input(value);
           if (compact.length < 24 || compact.length % 4 !== 0) return false;
-          return /^[A-Za-z0-9+/=]+$/.test(compact);
+          if (/[^A-Za-z0-9+/=]/.test(compact)) return false;
+          const lineBreakCount = (value.match(/\r?\n/g) || []).length;
+          return /^[A-Za-z0-9+/=]+$/.test(compact) && (compact.length > 120 || lineBreakCount > 1);
         }
 
         function looksLikeQuotedPrintable(value: string): boolean {
@@ -179,14 +206,124 @@ Deno.serve(async (req) => {
           return "7bit";
         }
 
-        function decodeContent(body: string, encoding: string, charset: string): string {
+        function stripForScore(value: string): string {
+          return value
+            .replace(/<style[\s\S]*?<\/style>/gi, " ")
+            .replace(/<script[\s\S]*?<\/script>/gi, " ")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/&nbsp;/gi, " ")
+            .replace(/&#\d+;/g, " ")
+            .replace(/&[a-z]+;/gi, " ");
+        }
+
+        function scoreDecodedText(value: string): number {
+          const plain = stripForScore(value).slice(0, 12000);
+          if (!plain.trim()) return -100;
+
+          const controls = (plain.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || []).length;
+          const replacement = (plain.match(/�/g) || []).length;
+          const cyrillic = (plain.match(/[А-Яа-яЁё]/g) || []).length;
+          const latin = (plain.match(/[A-Za-z]/g) || []).length;
+          const digits = (plain.match(/[0-9]/g) || []).length;
+          const weird = (plain.match(/[@`^~|\\]/g) || []).length;
+
+          let score =
+            plain.length * 0.35 +
+            cyrillic * 2.2 +
+            latin * 0.6 +
+            digits * 0.2 -
+            controls * 30 -
+            replacement * 22;
+
+          if (cyrillic === 0 && weird > 10) score -= weird * 3;
+          if (cyrillic < 4 && /[><;@][><;@][><;@]/.test(plain)) score -= 40;
+
+          return score;
+        }
+
+        function looksCorruptedText(value: string): boolean {
+          if (!value) return false;
+          const plain = stripForScore(value).slice(0, 12000);
+          if (!plain.trim()) return false;
+          const controls = (plain.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || []).length;
+          if (controls > 2) return true;
+          return scoreDecodedText(value) < 0;
+        }
+
+        function decodeBytes(bytes: Uint8Array, charset: string): string | null {
+          try {
+            return new TextDecoder(normalizeCharset(charset)).decode(bytes);
+          } catch {
+            return null;
+          }
+        }
+
+        function decodeWithBestCharset(bytes: Uint8Array, charset: string, hints: string[] = []): string {
+          const candidates = Array.from(
+            new Set(
+              [
+                normalizeCharset(charset),
+                ...hints.map(normalizeCharset),
+                "utf-8",
+                "windows-1251",
+                "koi8-r",
+                "ibm866",
+                "iso-8859-5",
+                "windows-1252",
+              ].filter(Boolean),
+            ),
+          );
+
+          let best = "";
+          let bestScore = -Infinity;
+          let bestCharset = normalizeCharset(charset);
+
+          for (const candidate of candidates) {
+            const decoded = decodeBytes(bytes, candidate);
+            if (!decoded) continue;
+            const score = scoreDecodedText(decoded);
+            if (score > bestScore) {
+              best = decoded;
+              bestScore = score;
+              bestCharset = candidate;
+            }
+          }
+
+          if (!best) {
+            try {
+              best = new TextDecoder("utf-8").decode(bytes);
+              bestScore = scoreDecodedText(best);
+              bestCharset = "utf-8";
+            } catch {
+              best = "";
+            }
+          }
+
+          const metaCharset = extractCharsetFromHtmlMeta(best);
+          if (metaCharset && metaCharset !== bestCharset) {
+            const metaDecoded = decodeBytes(bytes, metaCharset);
+            if (metaDecoded) {
+              const metaScore = scoreDecodedText(metaDecoded);
+              if (metaScore >= bestScore - 5 || looksCorruptedText(best)) {
+                best = metaDecoded;
+              }
+            }
+          }
+
+          return best;
+        }
+
+        function decodeContent(body: string, encoding: string, charset: string, hints: string[] = []): string {
           if (encoding === "base64") {
             try {
               const clean = normalizeBase64Input(body);
+              if (!clean || /[^A-Za-z0-9+/=]/.test(clean)) return body;
               const binary = atob(clean);
               const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-              try { return new TextDecoder(charset).decode(bytes); } catch { return new TextDecoder("utf-8").decode(bytes); }
-            } catch { return body; }
+              return decodeWithBestCharset(bytes, charset, hints);
+            } catch {
+              return body;
+            }
           }
 
           if (encoding === "quoted-printable") {
@@ -201,21 +338,22 @@ Deno.serve(async (req) => {
               }
             }
             try {
-              const byteArray = new Uint8Array(bytes);
-              try { return new TextDecoder(charset).decode(byteArray); } catch { return new TextDecoder("utf-8").decode(byteArray); }
-            } catch { return clean; }
+              return decodeWithBestCharset(new Uint8Array(bytes), charset, hints);
+            } catch {
+              return clean;
+            }
           }
 
           return body;
         }
 
-        function decodeHeuristically(value: string, charset = "utf-8"): string {
+        function decodeHeuristically(value: string, charset = "utf-8", hints: string[] = []): string {
           let current = value;
           for (let i = 0; i < 3; i++) {
             let changed = false;
 
             if (looksLikeQuotedPrintable(current)) {
-              const qpDecoded = decodeContent(current, "quoted-printable", charset);
+              const qpDecoded = decodeContent(current, "quoted-printable", charset, hints);
               if (qpDecoded && qpDecoded !== current) {
                 current = qpDecoded;
                 changed = true;
@@ -223,7 +361,7 @@ Deno.serve(async (req) => {
             }
 
             if (isLikelyBase64(current)) {
-              const b64Decoded = decodeContent(current, "base64", charset);
+              const b64Decoded = decodeContent(current, "base64", charset, hints);
               if (b64Decoded && b64Decoded !== current) {
                 current = b64Decoded;
                 changed = true;
@@ -421,6 +559,21 @@ Deno.serve(async (req) => {
           };
         };
 
+        const headersToString = (input: unknown): string => {
+          if (!input) return "";
+          if (typeof input === "string") return input;
+          if (Array.isArray(input)) return input.map((line) => String(line)).join("\n");
+          if (typeof input === "object") {
+            return Object.entries(input as Record<string, unknown>)
+              .map(([key, value]) => {
+                if (Array.isArray(value)) return `${key}: ${value.map((v) => String(v)).join(", ")}`;
+                return `${key}: ${String(value ?? "")}`;
+              })
+              .join("\n");
+          }
+          return String(input);
+        };
+
         const extractFromParts = (parts: unknown): { text: string; html: string } => {
           if (!parts || typeof parts !== "object") return { text: "", html: "" };
           let text = "";
@@ -432,15 +585,16 @@ Deno.serve(async (req) => {
             if (!rawField) continue;
 
             const meta = findPartMeta(partKey);
-            const headersRaw = String(value?.headers || value?.header || "");
+            const headersRaw = headersToString(value?.headers || value?.header || "");
             const headers = headersRaw.toLowerCase();
 
-            const charset = meta?.charset || extractCharset(headers) || "utf-8";
-            const encoding = meta?.encoding || extractEncoding(headers) || "7bit";
+            const headerCharset = extractCharset(headersRaw);
+            const charset = normalizeCharset(meta?.charset || headerCharset || "utf-8");
+            const encoding = (meta?.encoding || extractEncoding(headers) || "7bit").toLowerCase();
             const isHtmlPart = meta ? (meta.subtype === "html") : headers.includes("text/html");
             const isPlainPart = meta ? (meta.subtype === "plain") : headers.includes("text/plain");
 
-            let rawBytes: Uint8Array | null = null;
+            let rawBytes: Uint8Array;
             let rawSource = "";
 
             if (rawField instanceof Uint8Array) {
@@ -448,38 +602,42 @@ Deno.serve(async (req) => {
               rawSource = new TextDecoder("latin1").decode(rawField);
             } else if (typeof rawField === "string") {
               rawSource = rawField;
+              rawBytes = Uint8Array.from(rawSource, (ch) => ch.charCodeAt(0) & 0xff);
             } else {
               continue;
             }
 
+            const metaCharset = extractCharsetFromHtmlMeta(rawSource) || undefined;
+            const charsetHints = [headerCharset, metaCharset].filter(Boolean) as string[];
+
             let decoded = rawSource;
-            if (encoding === "base64") {
-              decoded = decodeContent(rawSource, "base64", charset);
-            } else if (encoding === "quoted-printable") {
-              decoded = decodeContent(rawSource, "quoted-printable", charset);
-            } else if (rawBytes) {
-              try {
-                decoded = new TextDecoder(charset).decode(rawBytes);
-              } catch {
-                try { decoded = new TextDecoder("utf-8").decode(rawBytes); } catch { decoded = rawSource; }
-              }
+            if (encoding === "base64" || isLikelyBase64(rawSource)) {
+              decoded = decodeContent(rawSource, "base64", charset, charsetHints);
+            } else if (encoding === "quoted-printable" || looksLikeQuotedPrintable(rawSource)) {
+              decoded = decodeContent(rawSource, "quoted-printable", charset, charsetHints);
+            } else {
+              decoded = decodeWithBestCharset(rawBytes, charset, charsetHints);
             }
 
-            decoded = decodeHeuristically(decoded, charset);
+            decoded = decodeHeuristically(decoded, charset, charsetHints);
 
             const recovered = extractMimeFromBlob(decoded);
-            if (recovered.html && !html) html = recovered.html;
-            if (recovered.text && !text) text = recovered.text;
+            if (recovered.html) {
+              if (!html || scoreDecodedText(recovered.html) > scoreDecodedText(html)) html = recovered.html;
+            }
+            if (recovered.text) {
+              if (!text || scoreDecodedText(recovered.text) > scoreDecodedText(text)) text = recovered.text;
+            }
             if (recovered.html || recovered.text) continue;
 
             const candidate = decoded;
             const looksHtml = /<\/?[a-z][\s\S]*>/i.test(candidate);
             const hasMimeMarkers = looksLikeMimeBlob(candidate);
 
-            if (!hasMimeMarkers && (isHtmlPart || (!isPlainPart && looksHtml)) && !html) {
-              html = candidate;
-            } else if (!text) {
-              text = candidate;
+            if (!hasMimeMarkers && (isHtmlPart || (!isPlainPart && looksHtml))) {
+              if (!html || scoreDecodedText(candidate) > scoreDecodedText(html)) html = candidate;
+            } else {
+              if (!text || scoreDecodedText(candidate) > scoreDecodedText(text)) text = candidate;
             }
           }
 
@@ -487,29 +645,48 @@ Deno.serve(async (req) => {
         };
 
         const normalizeBodies = () => {
-          bodyText = decodeHeuristically(bodyText || "", "utf-8").trim();
-          bodyHtml = decodeHeuristically(bodyHtml || "", "utf-8").trim();
+          bodyText = decodeHeuristically(bodyText || "", "utf-8", [extractCharsetFromHtmlMeta(bodyText || "") || ""]).trim();
+          bodyHtml = decodeHeuristically(bodyHtml || "", "utf-8", [extractCharsetFromHtmlMeta(bodyHtml || "") || ""]).trim();
 
           const fromHtmlBlob = extractMimeFromBlob(bodyHtml);
-          if (fromHtmlBlob.html) bodyHtml = fromHtmlBlob.html;
+          if (fromHtmlBlob.html && scoreDecodedText(fromHtmlBlob.html) >= scoreDecodedText(bodyHtml || "")) bodyHtml = fromHtmlBlob.html;
           if (fromHtmlBlob.text && !bodyText) bodyText = fromHtmlBlob.text;
 
           const fromTextBlob = extractMimeFromBlob(bodyText);
-          if (fromTextBlob.html && !bodyHtml) bodyHtml = fromTextBlob.html;
+          if (fromTextBlob.html && (!bodyHtml || scoreDecodedText(fromTextBlob.html) > scoreDecodedText(bodyHtml) + 10)) bodyHtml = fromTextBlob.html;
           if (fromTextBlob.text && (!bodyText || looksLikeMimeBlob(bodyText))) bodyText = fromTextBlob.text;
 
-          if (bodyText && !bodyHtml && isLikelyBase64(bodyText)) {
-            const decodedText = decodeContent(bodyText, "base64", "utf-8");
+          if (bodyText && isLikelyBase64(bodyText)) {
+            const decodedText = decodeContent(bodyText, "base64", "utf-8", [extractCharsetFromHtmlMeta(bodyText) || ""]);
             if (/<\/?[a-z][\s\S]*>/i.test(decodedText)) {
-              bodyHtml = decodedText;
+              if (!bodyHtml || scoreDecodedText(decodedText) > scoreDecodedText(bodyHtml) + 8) {
+                bodyHtml = decodedText;
+              }
             } else if (decodedText !== bodyText) {
               bodyText = decodedText;
             }
           }
 
           if (bodyHtml && isLikelyBase64(bodyHtml)) {
-            const decodedHtml = decodeContent(bodyHtml, "base64", "utf-8");
-            if (/<\/?[a-z][\s\S]*>/i.test(decodedHtml)) bodyHtml = decodedHtml;
+            const decodedHtml = decodeContent(bodyHtml, "base64", "utf-8", [extractCharsetFromHtmlMeta(bodyHtml) || ""]);
+            if (/<\/?[a-z][\s\S]*>/i.test(decodedHtml) && scoreDecodedText(decodedHtml) >= scoreDecodedText(bodyHtml) - 5) {
+              bodyHtml = decodedHtml;
+            }
+          }
+
+          const bodyTextLooksHtml = /<\/?[a-z][\s\S]*>/i.test(bodyText);
+          if (bodyTextLooksHtml && (!bodyHtml || looksCorruptedText(bodyHtml)) && !looksCorruptedText(bodyText)) {
+            bodyHtml = bodyText;
+            bodyText = "";
+          }
+
+          if (bodyHtml && looksCorruptedText(bodyHtml) && bodyText && !looksCorruptedText(bodyText)) {
+            if (/<\/?[a-z][\s\S]*>/i.test(bodyText)) {
+              bodyHtml = bodyText;
+              bodyText = "";
+            } else {
+              bodyHtml = "";
+            }
           }
 
           if (bodyHtml && !/<\/?[a-z][\s\S]*>/i.test(bodyHtml) && !bodyText) {
@@ -555,7 +732,7 @@ Deno.serve(async (req) => {
               const srcFetched = (Array.isArray(srcMessages) ? srcMessages : [srcMessages]).filter(Boolean);
               const srcMsg = srcFetched.find((item: any) => Number(item?.uid) === targetUid) || srcFetched[0];
               if (srcMsg?.source) {
-                const rawStr = decodeData(srcMsg.source);
+                const rawStr = decodeData(srcMsg.source, "latin1");
                 if (rawStr) {
                   const parsed = parseMimeParts(rawStr);
                   bodyText = parsed.text;

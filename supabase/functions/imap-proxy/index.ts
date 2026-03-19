@@ -356,7 +356,7 @@ Deno.serve(async (req) => {
                 Object.keys(msg2).join(","),
               );
 
-              if (!rawSource) readRawCandidate("msg2.body[]", bodyContent);
+              if (!rawSource) await readRawCandidate("msg2.body[]", bodyContent);
             }
           } catch (e2) {
             console.error("fetch bodyParts fallback failed:", e2);

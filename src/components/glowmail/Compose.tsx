@@ -269,15 +269,19 @@ export function Compose({
                       .toolbar button:hover, .toolbar select:hover { background: #3f3f46; color: #f4f4f5; }
                       .toolbar .sep { width: 1px; height: 16px; background: #3f3f46; margin: 0 4px; }
                       .toolbar input[type=color] { width: 24px; height: 24px; border: none; padding: 0; cursor: pointer; background: transparent; border-radius: 4px; }
-                      .footer-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-                      .footer-bar select { background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 6px 28px 6px 10px; color: #a1a1aa; font-size: 13px; outline: none; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; }
-                      .footer-bar select:focus { border-color: rgba(16,185,129,0.5); }
-                      .ai-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid rgba(16,185,129,0.3); background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.15)); color: #34d399; position: relative; }
-                      .ai-btn:hover { background: linear-gradient(135deg, rgba(16,185,129,0.25), rgba(6,182,212,0.25)); }
-                      .ai-menu { display: none; position: absolute; right: 0; bottom: 100%; margin-bottom: 4px; width: 180px; background: #18181b; border: 1px solid #27272a; border-radius: 12px; overflow: hidden; z-index: 100; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+                      .toolbar .ai-btn { background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(6,182,212,0.15)); border: 1px solid rgba(16,185,129,0.3); border-radius: 999px; padding: 5px 12px; color: #34d399; font-weight: 600; font-size: 12px; cursor: pointer; position: relative; display: inline-flex; align-items: center; gap: 5px; }
+                      .toolbar .ai-btn:hover { background: linear-gradient(135deg, rgba(16,185,129,0.25), rgba(6,182,212,0.25)); }
+                      .toolbar .ai-btn svg { width: 14px; height: 14px; }
+                      .ai-menu { display: none; position: absolute; right: 0; top: 100%; margin-top: 4px; width: 180px; background: #18181b; border: 1px solid #27272a; border-radius: 12px; overflow: hidden; z-index: 100; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
                       .ai-menu.show { display: block; }
                       .ai-menu button { display: block; width: 100%; text-align: left; padding: 8px 12px; font-size: 13px; color: #a1a1aa; background: none; border: none; cursor: pointer; }
                       .ai-menu button:hover { background: #27272a; color: #34d399; }
+                      .toolbar .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; }
+                      .toolbar .icon-btn svg { width: 14px; height: 14px; }
+                      .att-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+                      .att-item { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: #27272a; border-radius: 6px; font-size: 12px; color: #a1a1aa; }
+                      .att-item button { background: none; border: none; color: #71717a; cursor: pointer; padding: 0 2px; font-size: 14px; }
+                      .att-item button:hover { color: #f87171; }
                     </style></head><body>
                     <h2 style="margin-bottom:16px;font-size:18px;">${t('compose.newMessage', lang)}</h2>
                     <div class="field"><label>${t('compose.to', lang)}</label><input id="to" value="${to}" /></div>
@@ -302,11 +306,11 @@ export function Compose({
                       <input type="color" onchange="document.execCommand('foreColor',false,this.value)" title="${t('compose.textColor', lang)}" />
                       <input type="color" onchange="document.execCommand('hiliteColor',false,this.value)" title="${t('compose.highlightColor', lang)}" />
                       <span class="sep"></span>
-                      <button onclick="var url=prompt('URL:');if(url)document.execCommand('createLink',false,url)" title="Link">🔗</button>
-                      <button onclick="var input=document.createElement('input');input.type='file';input.accept='image/*';input.onchange=function(e){var r=new FileReader();r.onload=function(ev){document.execCommand('insertImage',false,ev.target.result)};r.readAsDataURL(e.target.files[0])};input.click()" title="${t('compose.insertImage', lang)}">🖼</button>
+                      <button class="icon-btn" onclick="var url=prompt('URL:');if(url)document.execCommand('createLink',false,url)" title="Link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
+                      <button class="icon-btn" onclick="var input=document.createElement('input');input.type='file';input.accept='image/*';input.onchange=function(e){var r=new FileReader();r.onload=function(ev){document.execCommand('insertImage',false,ev.target.result)};r.readAsDataURL(e.target.files[0])};input.click()" title="${t('compose.insertImage', lang)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></button>
                       <span class="sep"></span>
                       <div style="position:relative;display:inline-flex;">
-                        <button class="ai-btn" onclick="var m=document.getElementById('ai-menu');m.classList.toggle('show');">✨ ${t('compose.aiMagic', lang)}</button>
+                        <button class="ai-btn" onclick="var m=document.getElementById('ai-menu');m.classList.toggle('show');"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg> ${t('compose.aiMagic', lang)}</button>
                         <div class="ai-menu" id="ai-menu">
                           <button onclick="doAI('spellcheck')">${t('compose.proofread', lang)}</button>
                           <button onclick="doAI('professional')">${t('compose.makeProfessional', lang)}</button>
@@ -316,9 +320,14 @@ export function Compose({
                         </div>
                       </div>
                     </div>
+                    <div id="att-list" class="att-list"></div>
                     <div class="editor" contenteditable="true" id="body">${editorRef.current?.innerHTML || body}</div>
                     <div class="footer-bar">
                       <div style="display:flex;align-items:center;gap:8px;">
+                        <button class="btn-draft" onclick="document.getElementById('file-attach').click();" style="padding:8px 12px;border-radius:8px;">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                        </button>
+                        <input type="file" id="file-attach" multiple style="display:none;" onchange="addAttachments(this.files);this.value='';" />
                         <select id="sig-select" onchange="applySig(this.value)">
                           <option value="">${t('compose.noSignature', lang)}</option>
                           ${sigOptions}
@@ -329,7 +338,8 @@ export function Compose({
                           ${t('compose.saveDraft', lang)}
                         </button>
                         <button class="btn" onclick="window.opener.postMessage({type:'glowmail-compose',to:document.getElementById('to').value,cc:document.getElementById('cc').value,bcc:document.getElementById('bcc').value,subject:document.getElementById('subject').value,body:document.getElementById('body').innerHTML},'*');window.close();">
-                          ✉ ${t('compose.send', lang)}
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                          ${t('compose.send', lang)}
                         </button>
                       </div>
                     </div>

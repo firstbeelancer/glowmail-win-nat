@@ -269,7 +269,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       date: new Date().toISOString(),
       read: true,
       starred: false,
-      tags: [],
+      tags: email.tags || [],
       attachments: email.attachments || [],
       headers: { messageId: `<${Date.now()}@example.com>` },
     };

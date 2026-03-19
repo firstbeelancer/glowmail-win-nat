@@ -66,16 +66,13 @@ Deno.serve(async (req) => {
       case "list": {
         const { folder = "INBOX", page = 1, pageSize = 50 } = body;
         await client.selectMailbox(folder);
-        
-        // Search all messages to get UIDs
+
         const uids = await client.search({ all: true }, true);
-        
         const total = uids.length;
-        // Get latest messages first
         const sortedUids = [...uids].sort((a, b) => b - a);
         const start = (page - 1) * pageSize;
         const pageUids = sortedUids.slice(start, start + pageSize);
-        
+
         if (pageUids.length === 0) {
           await client.disconnect();
           client = null;
@@ -83,38 +80,43 @@ Deno.serve(async (req) => {
         }
 
         const sequence = pageUids.join(",");
-        const messages = await client.fetch(sequence, {
+        const messages = await (client as any).fetch(sequence, {
           uid: true,
           envelope: true,
           flags: true,
           bodyStructure: true,
           size: true,
-        });
+        }, true);
 
-        const emails = (Array.isArray(messages) ? messages : [messages]).map((msg: any) => {
-          const env = msg.envelope || {};
-          return {
-            uid: msg.uid,
-            flags: msg.flags || [],
-            size: msg.size || 0,
-            subject: env.subject || "(No Subject)",
-            from: env.from?.[0] ? {
-              name: env.from[0].name || env.from[0].mailbox,
-              email: `${env.from[0].mailbox}@${env.from[0].host}`,
-            } : { name: "Unknown", email: "" },
-            to: (env.to || []).map((a: any) => ({
-              name: a.name || a.mailbox,
-              email: `${a.mailbox}@${a.host}`,
-            })),
-            cc: (env.cc || []).map((a: any) => ({
-              name: a.name || a.mailbox,
-              email: `${a.mailbox}@${a.host}`,
-            })),
-            date: env.date || new Date().toISOString(),
-            messageId: env.messageId || "",
-            inReplyTo: env.inReplyTo || "",
-          };
-        });
+        const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+        const emails = normalized
+          .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
+          .map((msg: any) => {
+            const env = msg.envelope || {};
+            return {
+              uid: msg.uid,
+              flags: msg.flags || [],
+              size: msg.size || 0,
+              subject: env.subject || "(No Subject)",
+              from: env.from?.[0]
+                ? {
+                    name: env.from[0].name || env.from[0].mailbox,
+                    email: `${env.from[0].mailbox}@${env.from[0].host}`,
+                  }
+                : { name: "Unknown", email: "" },
+              to: (env.to || []).map((a: any) => ({
+                name: a.name || a.mailbox,
+                email: `${a.mailbox}@${a.host}`,
+              })),
+              cc: (env.cc || []).map((a: any) => ({
+                name: a.name || a.mailbox,
+                email: `${a.mailbox}@${a.host}`,
+              })),
+              date: env.date || new Date().toISOString(),
+              messageId: env.messageId || "",
+              inReplyTo: env.inReplyTo || "",
+            };
+          });
 
         await client.disconnect();
         client = null;
@@ -127,9 +129,16 @@ Deno.serve(async (req) => {
 
         await client.selectMailbox(folder);
 
+        const targetUid = Number(uid);
+        if (!Number.isFinite(targetUid)) return err("Invalid uid", 400);
+
+        const fetchWithMode = async (query: Record<string, unknown>) => {
+          return (client as any).fetch(String(targetUid), query, true);
+        };
+
         let messages;
         try {
-          messages = await client.fetch(String(uid), {
+          messages = await fetchWithMode({
             uid: true,
             envelope: true,
             flags: true,
@@ -139,7 +148,7 @@ Deno.serve(async (req) => {
         } catch (fetchErr) {
           console.error("fetch with bodyParts failed, retrying with full only:", fetchErr);
           try {
-            messages = await client.fetch(String(uid), {
+            messages = await fetchWithMode({
               uid: true,
               envelope: true,
               flags: true,
@@ -147,7 +156,7 @@ Deno.serve(async (req) => {
             });
           } catch (fetchErr2) {
             console.error("fetch with full failed too:", fetchErr2);
-            messages = await client.fetch(String(uid), {
+            messages = await fetchWithMode({
               uid: true,
               envelope: true,
               flags: true,
@@ -155,8 +164,29 @@ Deno.serve(async (req) => {
           }
         }
 
-        const msg = Array.isArray(messages) ? messages[0] : messages;
-        
+        const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+        let msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || null;
+
+        if (!msg) {
+          try {
+            const allUids = await client.search({ all: true }, true);
+            const sequenceNumber = allUids.indexOf(targetUid) + 1;
+            if (sequenceNumber > 0) {
+              const fallbackMessages = await client.fetch(String(sequenceNumber), {
+                uid: true,
+                envelope: true,
+                flags: true,
+                bodyParts: ["HEADER", "TEXT"],
+                full: true,
+              });
+              const fallbackList = (Array.isArray(fallbackMessages) ? fallbackMessages : [fallbackMessages]).filter(Boolean);
+              msg = fallbackList.find((item: any) => Number(item?.uid) === targetUid) || null;
+            }
+          } catch (fallbackErr) {
+            console.error("fallback sequence fetch failed:", fallbackErr);
+          }
+        }
+
         if (!msg) {
           await client.disconnect();
           client = null;

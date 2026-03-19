@@ -134,6 +134,12 @@ const translations = {
     'settings.languageLabel': 'Interface Language',
     'settings.english': 'English',
     'settings.russian': 'Русский',
+    'settings.syncInterval': 'Sync Interval',
+    'settings.minutes': 'min',
+    'settings.syncManual': 'Manual only',
+    'settings.syncDesc': 'How often to automatically check for new mail.',
+    'settings.keepFilters': 'Keep filters across folders',
+    'settings.keepFiltersDesc': 'Preserve sort order and filters when switching between folders.',
   },
   ru: {
     // Layout

@@ -117,6 +117,9 @@ type MailContextType = {
   fetchEmails: () => Promise<void>;
   addFolder: (name: string) => void;
   updateEmailTags: (id: string, tags: string[]) => void;
+  isLoading: boolean;
+  isConnected: boolean;
+  connectionError: string | null;
 };
 
 const MailContext = createContext<MailContextType | undefined>(undefined);

@@ -12,6 +12,39 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
   const [isGeneratingReplies, setIsGeneratingReplies] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+    const generateReplies = async () => {
+      setIsGeneratingReplies(true);
+      setQuickReplies([]);
+      try {
+        const { callEmailAI } = await import('@/lib/ai');
+        const result = await callEmailAI({
+          action: 'quick_replies',
+          emailBody: email.body,
+          emailSubject: email.subject,
+          emailFrom: email.from.name,
+        });
+        if (!cancelled) {
+          try {
+            const parsed = JSON.parse(result);
+            if (Array.isArray(parsed)) setQuickReplies(parsed);
+          } catch {
+            setQuickReplies([]);
+          }
+        }
+      } catch {
+        // silently fail
+      } finally {
+        if (!cancelled) setIsGeneratingReplies(false);
+      }
+    };
+    if (email.folderId !== 'drafts' && email.folderId !== 'sent') {
+      generateReplies();
+    }
+    return () => { cancelled = true; };
+  }, [email.id]);
+
   const getTagColor = (tagName: string) => {
     const tagDef = settings.availableTags.find(t => t.name === tagName);
     return tagDef ? tagDef.color : '#10b981';
@@ -296,7 +329,7 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
                 </button>
               ))}
               {!isGeneratingReplies && quickReplies.length === 0 && (
-                <span className="text-sm text-zinc-500">No suggestions available (API key not configured).</span>
+                <span className="text-sm text-zinc-500">Generating suggestions...</span>
               )}
             </div>
           </div>

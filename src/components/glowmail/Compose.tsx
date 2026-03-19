@@ -125,8 +125,21 @@ export function Compose({
       return;
     }
 
-    toast.error('AI features require a Gemini API key');
+    setIsAiLoading(true);
     setShowAiMenu(false);
+    try {
+      const { callEmailAI } = await import('@/lib/ai');
+      const result = await callEmailAI({ action, text: currentText });
+      if (editorRef.current) {
+        editorRef.current.innerHTML = `<p>${result.replace(/\n/g, '<br>')}</p>`;
+        setBody(editorRef.current.innerHTML);
+      }
+      toast.success('AI applied successfully');
+    } catch (err: any) {
+      toast.error(err.message || 'AI request failed');
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   return (

@@ -1,22 +1,27 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useMail } from '../../store';
-import { ChevronDown as ChevronDownIcon } from 'lucide-react';
+import { ChevronDown as ChevronDownIcon, Filter } from 'lucide-react';
 import { Email } from '../../types';
 import { formatDistanceToNow } from 'date-fns';
-import { Star, Paperclip, Tag, Inbox, AlertTriangle, ArrowDownAZ, ArrowUpAZ, Calendar, User, Type, Trash2, MoreVertical, Download, Printer, ChevronDown } from 'lucide-react';
+import { Star, Paperclip, Tag, Inbox, AlertTriangle, ArrowDownAZ, ArrowUpAZ, Calendar, User, Type, Trash2, MoreVertical, Download, Printer, ChevronDown, Mail, MailOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { t } from '@/lib/i18n';
 
+type FilterMode = 'all' | 'unread' | 'attachments' | 'to_me' | 'from_me';
+
 export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect: (email: Email) => void, onEditDraft?: (email: Email) => void, selectedEmailId?: string }) {
-  const { emails, currentFolder, searchQuery, toggleStar, deleteEmail, settings, updateEmailTags, isLoading, isLoadingMore, hasMoreEmails, totalEmails, connectionError, fetchEmails, loadMoreEmails } = useMail();
+  const { emails, currentFolder, searchQuery, toggleStar, deleteEmail, settings, updateEmailTags, isLoading, isLoadingMore, hasMoreEmails, totalEmails, connectionError, fetchEmails, loadMoreEmails, markAsRead, markAsUnread } = useMail();
   const lang = settings.language;
   const [sortBy, setSortBy] = useState<'date' | 'sender' | 'subject' | 'tags' | 'unread'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [starredOnly, setStarredOnly] = useState(false);
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [tagPickerOpenId, setTagPickerOpenId] = useState<string | null>(null);
   const prevFolderRef = useRef(currentFolder);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Reset sort when folder changes, unless keepFiltersAcrossFolders is on
   useEffect(() => {
@@ -25,6 +30,8 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
       if (!settings.keepFiltersAcrossFolders) {
         setSortBy('date');
         setSortOrder('desc');
+        setFilterMode('all');
+        setStarredOnly(false);
       }
     }
   }, [currentFolder, settings.keepFiltersAcrossFolders]);
@@ -122,7 +129,16 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
       email.attachments.some((att) => att.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return matchesFolder && matchesSearch;
-  }).filter(email => !starredOnly || email.starred);
+  })
+  .filter(email => !starredOnly || email.starred)
+  .filter(email => {
+    if (filterMode === 'all') return true;
+    if (filterMode === 'unread') return !email.read;
+    if (filterMode === 'attachments') return email.attachments.length > 0;
+    if (filterMode === 'to_me') return email.to.some(c => c.email === settings.account.email);
+    if (filterMode === 'from_me') return email.from.email === settings.account.email;
+    return true;
+  });
 
   const sortedEmails = [...filteredEmails].sort((a, b) => {
     let comparison = 0;
@@ -165,12 +181,69 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
     Object.entries(groups).forEach(([label, emails]) => groupedEmails.push({ label, emails }));
   }
 
+  // Infinite scroll handler
+  const handleScroll = useCallback(() => {
+    if (!listRef.current || isLoadingMore || !hasMoreEmails) return;
+    const { scrollTop, scrollHeight, clientHeight } = listRef.current;
+    if (scrollHeight - scrollTop - clientHeight < 200) {
+      loadMoreEmails();
+    }
+  }, [isLoadingMore, hasMoreEmails, loadMoreEmails]);
+
+  const filterLabel = filterMode === 'all' ? '' :
+    filterMode === 'unread' ? (lang === 'ru' ? 'Непрочитанные' : 'Unread') :
+    filterMode === 'attachments' ? (lang === 'ru' ? 'С вложениями' : 'With attachments') :
+    filterMode === 'to_me' ? (lang === 'ru' ? 'Мне' : 'To me') :
+    filterMode === 'from_me' ? (lang === 'ru' ? 'От меня' : 'From me') : '';
+
   return (
     <div className="flex flex-col h-full bg-zinc-950">
-      {/* Sort Toolbar */}
+      {/* Sort & Filter Toolbar */}
       <div className="px-4 py-2 border-b border-zinc-800/50 flex items-center justify-between bg-zinc-900/30 shrink-0">
-        <span className="text-xs font-medium text-zinc-500">{t('emailList.sortBy', lang)}</span>
         <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-zinc-500">{t('emailList.sortBy', lang)}</span>
+          {filterLabel && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+              {filterLabel}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Filter dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowFilterMenu(!showFilterMenu)}
+              className={cn("p-1.5 rounded-md text-zinc-400 hover:text-zinc-200 transition-colors bg-zinc-900 border border-zinc-800", filterMode !== 'all' && "bg-emerald-500/10 text-emerald-400 border-emerald-500/30")}
+              title={lang === 'ru' ? 'Фильтр' : 'Filter'}
+            >
+              <Filter className="w-3.5 h-3.5" />
+            </button>
+            {showFilterMenu && (
+              <div className="absolute right-0 top-full mt-1 w-44 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
+                <div className="p-1 flex flex-col">
+                  {([
+                    ['all', lang === 'ru' ? 'Все' : 'All', null],
+                    ['unread', lang === 'ru' ? 'Непрочитанные' : 'Unread', Mail],
+                    ['attachments', lang === 'ru' ? 'С вложениями' : 'With attachments', Paperclip],
+                    ['to_me', lang === 'ru' ? 'Мне' : 'To me', Inbox],
+                    ['from_me', lang === 'ru' ? 'От меня' : 'From me', User],
+                  ] as [FilterMode, string, any][]).map(([mode, label, Icon]) => (
+                    <button
+                      key={mode}
+                      onClick={() => { setFilterMode(mode); setShowFilterMenu(false); }}
+                      className={cn(
+                        "flex items-center gap-2 text-left px-3 py-2 text-sm rounded-lg transition-colors",
+                        filterMode === mode ? "bg-zinc-800 text-emerald-400" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                      )}
+                    >
+                      {Icon && <Icon className="w-3.5 h-3.5" />}
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           <div className="flex bg-zinc-900 border border-zinc-800 rounded-lg p-0.5">
             <button
               onClick={() => handleSort('unread')}
@@ -247,9 +320,14 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
             <Inbox className="w-8 h-8 opacity-50" />
           </div>
           <p>{t('emailList.noEmails', lang)}</p>
+          {filterMode !== 'all' && (
+            <button onClick={() => setFilterMode('all')} className="text-xs text-emerald-400 hover:underline mt-2">
+              {lang === 'ru' ? 'Сбросить фильтр' : 'Clear filter'}
+            </button>
+          )}
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto">
+        <div ref={listRef} className="flex-1 overflow-y-auto" onScroll={handleScroll}>
           {groupedEmails.map((group, gi) => (
             <div key={gi}>
               {group.label && (
@@ -261,7 +339,7 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
+              transition={{ delay: Math.min(index * 0.02, 0.5) }}
               key={email.id}
               draggable
               onDragStart={(e: any) => {
@@ -283,14 +361,22 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
             >
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
+                  {/* Unread indicator dot */}
+                  {!email.read && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_6px_rgba(16,185,129,0.6)]" />
+                  )}
                   {email.importance === 'high' && (
                     <AlertTriangle className="w-3.5 h-3.5 text-red-400 drop-shadow-[0_0_5px_rgba(248,113,113,0.5)]" />
                   )}
                   <span className={cn("font-semibold text-sm", !email.read ? "text-zinc-100" : "text-zinc-300")}>
                     {email.from.name}
                   </span>
+                  {/* Attachment indicator */}
                   {email.attachments.length > 0 && (
-                    <Paperclip className="w-3 h-3 text-zinc-500" />
+                    <span className="inline-flex items-center gap-0.5 text-zinc-500" title={`${email.attachments.length} ${lang === 'ru' ? 'вложени' + (email.attachments.length === 1 ? 'е' : 'я') : 'attachment' + (email.attachments.length > 1 ? 's' : '')}`}>
+                      <Paperclip className="w-3 h-3" />
+                      {email.attachments.length > 1 && <span className="text-[10px]">{email.attachments.length}</span>}
+                    </span>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
@@ -362,11 +448,29 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
                       }}
                       className="p-1 -mr-1 rounded-full hover:bg-zinc-800 text-zinc-600 hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100"
                     >
-                      <MoreVertical className="w-4 h-4" />
+                      <MoreVertical className="w-3.5 h-3.5" />
                     </button>
                     {menuOpenId === email.id && (
-                      <div className="absolute right-0 top-full mt-1 w-40 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
+                      <div
+                        className="absolute right-0 top-full mt-1 w-44 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="p-1 flex flex-col">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (email.read) {
+                                markAsUnread(email.id);
+                              } else {
+                                markAsRead(email.id);
+                              }
+                              setMenuOpenId(null);
+                            }}
+                            className="flex items-center gap-2 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                          >
+                            {email.read ? <Mail className="w-4 h-4" /> : <MailOpen className="w-4 h-4" />}
+                            {email.read ? (lang === 'ru' ? 'Непрочитанное' : 'Mark unread') : (lang === 'ru' ? 'Прочитанное' : 'Mark read')}
+                          </button>
                           <button
                             onClick={(e) => handleSaveEmail(email, e)}
                             className="flex items-center gap-2 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
@@ -381,13 +485,14 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
                             <Printer className="w-4 h-4" />
                             {t('emailList.print', lang)}
                           </button>
+                          <div className="h-px bg-zinc-800 my-1" />
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setMenuOpenId(null);
                               deleteEmail(email.id);
+                              setMenuOpenId(null);
                             }}
-                            className="flex items-center gap-2 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-red-400 rounded-lg transition-colors"
+                            className="flex items-center gap-2 text-left px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
                             {t('emailList.deleteEmail', lang)}
@@ -413,8 +518,8 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
                 {email.snippet}
               </p>
 
-              {email.tags.length > 0 && (
-                <div className="flex items-center gap-2 mt-1">
+              {(email.tags.length > 0 || email.attachments.length > 0) && (
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
                   {email.tags.map((tag) => (
                     <span
                       key={tag}
@@ -424,34 +529,39 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
                       {tag}
                     </span>
                   ))}
+                  {/* Show attachment names preview on desktop */}
+                  {email.attachments.length > 0 && email.attachments.length <= 3 && (
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-800/60 text-zinc-500 border border-zinc-700/30">
+                      <Paperclip className="w-2.5 h-2.5" />
+                      {email.attachments.map(a => a.name).join(', ')}
+                    </span>
+                  )}
                 </div>
               )}
             </motion.div>
           ))}
             </div>
           ))}
+          {/* Load more / infinite scroll indicator */}
           {hasMoreEmails && (
             <div className="p-4 flex flex-col items-center gap-1">
-              <button
-                onClick={() => loadMoreEmails()}
-                disabled={isLoadingMore}
-                className="w-full py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm font-medium hover:bg-zinc-800 hover:text-zinc-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {isLoadingMore ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                    </svg>
-                    {lang === 'ru' ? 'Загрузка...' : 'Loading...'}
-                  </>
-                ) : (
-                  <>
-                    <ChevronDownIcon className="w-4 h-4" />
-                    {lang === 'ru' ? `Загрузить ещё (${emails.filter(e => e.folderId === currentFolder).length} из ${totalEmails})` : `Load more (${emails.filter(e => e.folderId === currentFolder).length} of ${totalEmails})`}
-                  </>
-                )}
-              </button>
+              {isLoadingMore ? (
+                <div className="flex items-center gap-2 text-zinc-500 text-sm py-2">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                  </svg>
+                  {lang === 'ru' ? 'Загрузка...' : 'Loading...'}
+                </div>
+              ) : (
+                <button
+                  onClick={() => loadMoreEmails()}
+                  className="w-full py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm font-medium hover:bg-zinc-800 hover:text-zinc-100 transition-colors flex items-center justify-center gap-2"
+                >
+                  <ChevronDownIcon className="w-4 h-4" />
+                  {lang === 'ru' ? `Загрузить ещё (${emails.filter(e => e.folderId === currentFolder).length} из ${totalEmails})` : `Load more (${emails.filter(e => e.folderId === currentFolder).length} of ${totalEmails})`}
+                </button>
+              )}
             </div>
           )}
         </div>

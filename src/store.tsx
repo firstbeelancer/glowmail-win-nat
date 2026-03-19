@@ -448,7 +448,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       const data = await mailApi.fetchEmailList(currentFolder, nextPage, PAGE_SIZE);
       const mapped = mapMessages(data, currentFolder);
 
-      setEmails(prev => {
+      setFolderEmails(prev => {
         const existingIds = new Set(prev.map(e => e.id));
         const newEmails = mapped.filter(e => !existingIds.has(e.id));
         return [...prev, ...newEmails];

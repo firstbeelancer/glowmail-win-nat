@@ -93,8 +93,18 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
             />
           </div>
 
-          <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-full hover:bg-zinc-800 transition-colors">
+          <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-full hover:bg-zinc-800 transition-colors" title={lang === 'ru' ? 'Настройки' : 'Settings'}>
             <Settings className="w-5 h-5 text-zinc-400" />
+          </button>
+          <button
+            onClick={() => {
+              localStorage.removeItem('glowmail_credentials');
+              window.location.reload();
+            }}
+            className="p-2 rounded-full hover:bg-zinc-800 transition-colors"
+            title={lang === 'ru' ? 'Выйти' : 'Log out'}
+          >
+            <LogOut className="w-5 h-5 text-zinc-400" />
           </button>
         </header>
 

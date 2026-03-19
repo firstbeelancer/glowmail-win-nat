@@ -210,6 +210,7 @@ const translations = {
     'emailList.print': 'Печать',
     'emailList.addTag': 'Добавить тег',
     'emailList.assignTags': 'Назначить теги',
+    'emailList.starredOnly': 'Только избранные',
 
     // Email Detail
     'emailDetail.showDetails': 'Показать детали',

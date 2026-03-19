@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
         if (!Number.isFinite(targetUid)) return err("Invalid uid", 400);
 
         const fetchWithMode = async (query: Record<string, unknown>) => {
-          return (client as any).fetch(String(targetUid), query, true);
+          return (client as any).fetch(String(targetUid), { ...query, byUid: true });
         };
 
         let messages;

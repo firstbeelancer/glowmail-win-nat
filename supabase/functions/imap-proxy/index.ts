@@ -120,7 +120,21 @@ Deno.serve(async (req) => {
         // Debug first 3
         normalized.slice(0, 3).forEach((msg: any) => {
           const ct = getContentType(msg);
-          console.log(`CT uid=${msg?.uid} size=${msg?.size} contentType="${ct}" keys=${Object.keys(msg||{}).join(',')}`);
+          const hdrs = msg?.headers;
+          let hdrsInfo = 'null';
+          if (hdrs instanceof Map) hdrsInfo = `Map(${[...hdrs.keys()].join(',')})`;
+          else if (hdrs) hdrsInfo = `obj(${Object.keys(hdrs).join(',')})`;
+          const raw = msg?.raw;
+          let rawInfo = typeof raw;
+          if (raw instanceof Uint8Array) rawInfo = `Uint8Array(${raw.length})`;
+          // Try to extract Content-Type from raw header portion (first 2KB)
+          let rawCT = '';
+          if (raw instanceof Uint8Array && raw.length > 0) {
+            const slice = new TextDecoder().decode(raw.slice(0, 2000));
+            const m = slice.match(/^Content-Type:\s*([^\r\n]+)/im);
+            if (m) rawCT = m[1].trim();
+          }
+          console.log(`CT uid=${msg?.uid} size=${msg?.size} ct="${ct}" hdrs=${hdrsInfo} raw=${rawInfo} rawCT="${rawCT}"`);
         });
 
         const emails = normalized

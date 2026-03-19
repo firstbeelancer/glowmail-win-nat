@@ -178,7 +178,8 @@ function SidebarContent({
   onCompose?: (prefill?: { to?: string }) => void;
   lang: 'en' | 'ru';
 }) {
-  const { fetchEmails, addFolder, emails, contacts, addContact, moveEmailToFolder } = useMail();
+  const { fetchEmails, addFolder, emails, contacts, addContact, moveEmailToFolder, settings: mailSettings } = useMail();
+  const folderColors = mailSettings.folderColors || {};
   const [isFetching, setIsFetching] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ INBOX: true });
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);

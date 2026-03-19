@@ -32,6 +32,7 @@ function detectPreset(email: string) {
 export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [name, setName] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [imapHost, setImapHost] = useState('');

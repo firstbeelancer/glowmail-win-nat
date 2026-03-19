@@ -19,7 +19,7 @@ const iconMap: Record<string, any> = {
 };
 
 export function Layout({ children, onCompose }: { children: ReactNode; onCompose: (prefill?: { to?: string }) => void }) {
-  const { folders, currentFolder, setCurrentFolder, searchQuery, setSearchQuery, settings } = useMail();
+  const { folders, currentFolder, setCurrentFolder, searchQuery, setSearchQuery, settings, fetchEmails } = useMail();
   const lang = settings.language;
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -115,6 +115,13 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
             className="p-2 -ml-2 rounded-full hover:bg-zinc-800 md:hidden transition-colors"
           >
             <Menu className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => fetchEmails()}
+            className="p-2 rounded-full hover:bg-zinc-800 md:hidden transition-colors"
+            title={lang === 'ru' ? 'Получить письма' : 'Get mail'}
+          >
+            <RefreshCw className="w-5 h-5 text-zinc-400" />
           </button>
           
           <div className="flex-1 max-w-2xl relative group">

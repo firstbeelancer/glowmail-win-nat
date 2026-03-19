@@ -420,7 +420,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
         const data = await mailApi.searchEmails(currentFolder, searchQuery.trim(), nextPage, SEARCH_PAGE_SIZE);
         const mapped = mapMessages(data, currentFolder);
 
-        setEmails(prev => {
+        setSearchResults(prev => {
           const existingIds = new Set(prev.map(e => e.id));
           const newEmails = mapped.filter(e => !existingIds.has(e.id));
           return [...prev, ...newEmails];

@@ -163,6 +163,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
       delayedSending: parsedSettings.delayedSending || 0,
       syncInterval: parsedSettings.syncInterval ?? 5,
       keepFiltersAcrossFolders: parsedSettings.keepFiltersAcrossFolders ?? false,
+      groupBy: parsedSettings.groupBy || 'none',
       language: parsedSettings.language || 'en',
       availableTags: parsedSettings.availableTags || [
         { id: '1', name: 'work', color: '#3b82f6' },

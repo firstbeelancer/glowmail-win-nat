@@ -3,7 +3,7 @@ import { useMail } from '../../store';
 import { ChevronDown as ChevronDownIcon, Filter } from 'lucide-react';
 import { Email } from '../../types';
 import { formatDistanceToNow } from 'date-fns';
-import { Star, Paperclip, Tag, Inbox, AlertTriangle, ArrowDownAZ, ArrowUpAZ, Calendar, User, Type, Trash2, MoreVertical, Download, Printer, ChevronDown, Mail, MailOpen } from 'lucide-react';
+import { Star, Paperclip, Tag, Inbox, AlertTriangle, ArrowDownAZ, ArrowUpAZ, Calendar, User, Type, Trash2, MoreVertical, Download, Printer, ChevronDown, Mail, MailOpen, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { t } from '@/lib/i18n';

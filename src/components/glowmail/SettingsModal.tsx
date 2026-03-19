@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import { t } from '@/lib/i18n';
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { settings, updateSettings, addFolder } = useMail();
+  const { settings, updateSettings, addFolder, addContact } = useMail();
   const [activeTab, setActiveTab] = useState<'account' | 'server' | 'appearance' | 'signature' | 'tags'>('account');
   const [localSettings, setLocalSettings] = useState(settings);
   const [newTag, setNewTag] = useState('');

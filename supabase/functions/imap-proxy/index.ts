@@ -67,16 +67,22 @@ Deno.serve(async (req) => {
         const { folder = "INBOX", page = 1, pageSize = 50 } = body;
         await client.selectMailbox(folder);
 
-        const uids = await client.search({ all: true }, true);
+        const uidResults = await client.search({ all: true });
+        const uids = (Array.isArray(uidResults) ? uidResults : [uidResults])
+          .map((value: unknown) => Number(value))
+          .filter((value) => Number.isFinite(value) && value > 0);
+
         const total = uids.length;
         const sortedUids = [...uids].sort((a, b) => b - a);
-        const start = (page - 1) * pageSize;
-        const pageUids = sortedUids.slice(start, start + pageSize);
+        const safePage = Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 1;
+        const safePageSize = Number.isFinite(Number(pageSize)) && Number(pageSize) > 0 ? Number(pageSize) : 50;
+        const start = (safePage - 1) * safePageSize;
+        const pageUids = sortedUids.slice(start, start + safePageSize);
 
         if (pageUids.length === 0) {
           await client.disconnect();
           client = null;
-          return ok({ emails: [], total, page, pageSize });
+          return ok({ emails: [], total, page: safePage, pageSize: safePageSize });
         }
 
         const sequence = pageUids.join(",");
@@ -86,7 +92,7 @@ Deno.serve(async (req) => {
           flags: true,
           bodyStructure: true,
           size: true,
-        }, true);
+        });
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
         const emails = normalized
@@ -120,7 +126,7 @@ Deno.serve(async (req) => {
 
         await client.disconnect();
         client = null;
-        return ok({ emails, total, page, pageSize });
+        return ok({ emails, total, page: safePage, pageSize: safePageSize });
       }
 
       case "fetch": {
@@ -133,7 +139,7 @@ Deno.serve(async (req) => {
         if (!Number.isFinite(targetUid)) return err("Invalid uid", 400);
 
         const fetchWithMode = async (query: Record<string, unknown>) => {
-          return (client as any).fetch(String(targetUid), query, true);
+          return (client as any).fetch(String(targetUid), { ...query, byUid: true });
         };
 
         let messages;
@@ -142,8 +148,8 @@ Deno.serve(async (req) => {
             uid: true,
             envelope: true,
             flags: true,
-            bodyParts: ["HEADER", "TEXT"],
-            full: true,
+            size: true,
+            bodyParts: ["HEADER", "TEXT", "1", "1.1", "1.2", "2", "2.1"],
           });
         } catch (fetchErr) {
           console.error("fetch with bodyParts failed, retrying with full only:", fetchErr);
@@ -152,7 +158,8 @@ Deno.serve(async (req) => {
               uid: true,
               envelope: true,
               flags: true,
-              full: true,
+              allHeaders: true,
+              bodyParts: ["TEXT", "1", "1.1", "2", "2.1"],
             });
           } catch (fetchErr2) {
             console.error("fetch with full failed too:", fetchErr2);
@@ -165,22 +172,26 @@ Deno.serve(async (req) => {
         }
 
         const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
-        let msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || null;
+        let msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || (fetched.length === 1 ? fetched[0] : null);
 
         if (!msg) {
           try {
-            const allUids = await client.search({ all: true }, true);
-            const sequenceNumber = allUids.indexOf(targetUid) + 1;
+            const allUidResults = await client.search({ all: true });
+            const allUids = (Array.isArray(allUidResults) ? allUidResults : [allUidResults])
+              .map((value: unknown) => Number(value))
+              .filter((value) => Number.isFinite(value) && value > 0);
+            const sequenceNumber = allUids.findIndex((value) => value === targetUid) + 1;
+
             if (sequenceNumber > 0) {
               const fallbackMessages = await client.fetch(String(sequenceNumber), {
                 uid: true,
                 envelope: true,
                 flags: true,
-                bodyParts: ["HEADER", "TEXT"],
-                full: true,
+                allHeaders: true,
+                bodyParts: ["TEXT", "1", "1.1", "2", "2.1"],
               });
               const fallbackList = (Array.isArray(fallbackMessages) ? fallbackMessages : [fallbackMessages]).filter(Boolean);
-              msg = fallbackList.find((item: any) => Number(item?.uid) === targetUid) || null;
+              msg = fallbackList.find((item: any) => Number(item?.uid) === targetUid) || fallbackList[0] || null;
             }
           } catch (fallbackErr) {
             console.error("fallback sequence fetch failed:", fallbackErr);
@@ -332,17 +343,31 @@ Deno.serve(async (req) => {
         let bodyText = "";
         let bodyHtml = "";
         
-        // Method 1: parts.TEXT (from bodyParts)
-        if (msg.parts?.TEXT?.data) {
-          bodyText = decodeData(msg.parts.TEXT.data);
-          const parsed = parseMultipartBlob(bodyText);
-          if (parsed.text || parsed.html) {
-            bodyText = parsed.text || bodyText;
-            bodyHtml = parsed.html;
+        // Method 1: body parts (from BODY[...] fetch)
+        if (msg.parts && typeof msg.parts === "object") {
+          const partsEntries = Object.entries(msg.parts as Record<string, unknown>);
+
+          for (const [partKey, partValue] of partsEntries) {
+            const dataCandidate = (partValue as any)?.data ?? partValue;
+            const decodedPart = decodeData(dataCandidate);
+            if (!decodedPart) continue;
+
+            const parsed = parseMultipartBlob(decodedPart);
+            if (!bodyText && parsed.text) bodyText = parsed.text;
+            if (!bodyHtml && parsed.html) bodyHtml = parsed.html;
+
+            const keyLower = partKey.toLowerCase();
+            const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(decodedPart);
+            if (!bodyHtml && (keyLower.includes("html") || looksLikeHtml)) {
+              bodyHtml = decodedPart;
+            }
+            if (!bodyText && !looksLikeHtml) {
+              bodyText = decodedPart;
+            }
           }
         }
         // Method 2: raw message - parse MIME
-        else if (msg.raw) {
+        if ((!bodyText && !bodyHtml) && msg.raw) {
           const rawText = decodeData(msg.raw);
           const headerBodySplit = rawText.indexOf("\r\n\r\n");
           if (headerBodySplit > -1) {
@@ -435,6 +460,10 @@ Deno.serve(async (req) => {
           bodyText = decodeContent(bodyText, "quoted-printable", "utf-8");
         }
 
+        // Remove parser artifacts when IMAP server appends BODY[...] fragments in the same literal
+        bodyText = bodyText.replace(/\sBODY\[[\s\S]*$/i, "").trim();
+        bodyHtml = bodyHtml.replace(/\sBODY\[[\s\S]*$/i, "").trim();
+
         // If we got HTML but no plain text, use HTML
         if (!bodyText && bodyHtml) bodyText = bodyHtml;
         // If bodyText looks like HTML, set bodyHtml
@@ -445,12 +474,13 @@ Deno.serve(async (req) => {
         console.log("fetch result - bodyText length:", bodyText.length, "bodyHtml length:", bodyHtml.length, "has parts:", !!msg.parts, "has raw:", !!msg.raw);
 
         const env = msg.envelope || {};
-        
+        const resolvedUid = Number.isFinite(Number(msg.uid)) ? Number(msg.uid) : targetUid;
+
         await client.disconnect();
         client = null;
 
         return ok({
-          uid: msg.uid,
+          uid: resolvedUid,
           flags: msg.flags || [],
           subject: env.subject || "",
           from: env.from?.[0] ? {

@@ -404,15 +404,31 @@ Deno.serve(async (req) => {
           });
         }
 
-        const rawPreview = (() => {
-          try {
-            return new TextDecoder().decode(rawSource.slice(0, 300));
-          } catch {
-            return "[raw preview unavailable]";
-          }
-        })();
-
-        const parsed = await PostalMime.parse(rawSource);
+        let parsed: any;
+        try {
+          parsed = await PostalMime.parse(rawSource);
+        } catch (parseError) {
+          console.error("PostalMime parse failed:", parseError);
+          await client.disconnect();
+          client = null;
+          return ok({
+            uid: targetUid,
+            flags,
+            subject: envelope?.subject || "",
+            from: { name: "Unknown", email: "" },
+            to: [],
+            cc: [],
+            date: envelope?.date || "",
+            messageId: envelope?.messageId || "",
+            bodyText: "",
+            bodyHtml: "",
+            text: "",
+            html: "",
+            hasBody: false,
+            parseError: true,
+            attachments: [],
+          });
+        }
 
         const bodyText = typeof parsed.text === "string" ? parsed.text.trim() : "";
         const bodyHtml = typeof parsed.html === "string" ? parsed.html.trim() : "";
@@ -431,29 +447,31 @@ Deno.serve(async (req) => {
 
         const hasBody = Boolean(bodyText || finalHtml);
 
-        // Extract attachments with base64 content for download
         const attachments = (parsed.attachments || [])
           .filter((a: any) => {
-            const mimeType = (a.mimeType || '').toLowerCase();
-            return mimeType !== 'text/plain' && mimeType !== 'text/html';
+            const mimeType = (a.mimeType || "").toLowerCase();
+            return mimeType !== "text/plain" && mimeType !== "text/html";
           })
           .map((a: any) => {
-            let contentBase64 = '';
-            try {
-              if (a.content) {
-                const bytes = a.content instanceof Uint8Array ? a.content : new Uint8Array(a.content);
-                // Convert to base64
-                let binary = '';
-                for (let i = 0; i < bytes.length; i++) {
-                  binary += String.fromCharCode(bytes[i]);
-                }
+            const bytes = a.content
+              ? (a.content instanceof Uint8Array ? a.content : new Uint8Array(a.content))
+              : null;
+
+            let contentBase64 = "";
+            if (includeAttachmentContent && bytes && bytes.length <= MAX_ATTACHMENT_INLINE_BYTES) {
+              try {
+                let binary = "";
+                for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
                 contentBase64 = btoa(binary);
+              } catch {
+                contentBase64 = "";
               }
-            } catch { /* skip content if encoding fails */ }
+            }
+
             return {
-              name: a.filename || 'unnamed',
-              size: a.content?.length || 0,
-              type: a.mimeType || 'application/octet-stream',
+              name: a.filename || "unnamed",
+              size: bytes?.length || 0,
+              type: a.mimeType || "application/octet-stream",
               contentBase64,
             };
           });

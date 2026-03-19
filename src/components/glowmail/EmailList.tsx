@@ -215,7 +215,14 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
-          {sortedEmails.map((email, index) => (
+          {groupedEmails.map((group, gi) => (
+            <div key={gi}>
+              {group.label && (
+                <div className="px-4 py-2 bg-zinc-900/50 border-b border-zinc-800/50 sticky top-0 z-10">
+                  <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">{group.label}</span>
+                </div>
+              )}
+              {group.emails.map((email, index) => (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -337,6 +344,8 @@ export function EmailList({ onSelect, onEditDraft }: { onSelect: (email: Email) 
                 </div>
               )}
             </motion.div>
+          ))}
+            </div>
           ))}
         </div>
       )}

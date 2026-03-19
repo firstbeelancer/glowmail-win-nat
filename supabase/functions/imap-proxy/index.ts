@@ -182,7 +182,7 @@ Deno.serve(async (req) => {
       }
 
       case "fetch": {
-        const { folder = "INBOX", uid } = body;
+        const { folder = "INBOX", uid, includeAttachmentContent = false } = body;
         if (!uid) return err("Missing uid", 400);
 
         await client.selectMailbox(folder);
@@ -190,9 +190,13 @@ Deno.serve(async (req) => {
         const targetUid = Number(uid);
         if (!Number.isFinite(targetUid)) return err("Invalid uid", 400);
 
+        const MAX_RAW_BYTES = 3_000_000;
+        const MAX_ATTACHMENT_INLINE_BYTES = 256_000;
+
         let rawSource: Uint8Array | null = null;
         let envelope: any = null;
         let flags: string[] = [];
+        let messageSize = 0;
 
         let msgSourceType = "undefined";
         let msgSourceConstructor = "undefined";

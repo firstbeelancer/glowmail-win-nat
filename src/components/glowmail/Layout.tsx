@@ -116,6 +116,13 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
           >
             <Menu className="w-5 h-5" />
           </button>
+          <button
+            onClick={() => fetchEmails()}
+            className="p-2 rounded-full hover:bg-zinc-800 md:hidden transition-colors"
+            title={lang === 'ru' ? 'Получить письма' : 'Get mail'}
+          >
+            <RefreshCw className="w-5 h-5 text-zinc-400" />
+          </button>
           
           <div className="flex-1 max-w-2xl relative group">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />

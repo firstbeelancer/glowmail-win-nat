@@ -294,7 +294,7 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
         </div>
       </div>
 
-      {isSearching ? (
+      {isSearching && sortedEmails.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 h-full">
           <svg className="w-8 h-8 animate-spin text-primary mb-3" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

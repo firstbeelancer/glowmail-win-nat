@@ -59,13 +59,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-black/60 backdrop-blur-sm"
     >
       <motion.div
         initial={{ scale: 0.95, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.95, y: 20 }}
-        className="w-full max-w-3xl bg-zinc-950 border border-zinc-800/50 rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[85vh]"
+        className="w-full max-w-3xl bg-zinc-950 border border-zinc-800/50 rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[90dvh] md:max-h-[85vh]"
       >
         {/* Sidebar */}
         <div className="w-full md:w-64 bg-zinc-900/50 border-r border-zinc-800/50 p-4 flex flex-row md:flex-col gap-2 overflow-x-auto shrink-0">

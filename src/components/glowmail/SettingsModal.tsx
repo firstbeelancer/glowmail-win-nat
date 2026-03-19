@@ -185,6 +185,22 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   <p className="text-xs text-zinc-500">{t('settings.markAsReadDelayDesc', lang)}</p>
                 </div>
 
+                <div className="pt-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.aiEnabled}
+                      onChange={(e) => setLocalSettings({ ...localSettings, aiEnabled: e.target.checked })}
+                      className="w-4 h-4 rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500/50 bg-zinc-900"
+                    />
+                    <span className="text-sm text-zinc-300 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      {t('settings.aiEnabled', lang)}
+                    </span>
+                  </label>
+                  <p className="text-xs text-zinc-500 ml-7 mt-1">{t('settings.aiEnabledDesc', lang)}</p>
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
                     <Layers className="w-4 h-4" />

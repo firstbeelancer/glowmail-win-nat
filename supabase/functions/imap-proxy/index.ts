@@ -645,29 +645,48 @@ Deno.serve(async (req) => {
         };
 
         const normalizeBodies = () => {
-          bodyText = decodeHeuristically(bodyText || "", "utf-8").trim();
-          bodyHtml = decodeHeuristically(bodyHtml || "", "utf-8").trim();
+          bodyText = decodeHeuristically(bodyText || "", "utf-8", [extractCharsetFromHtmlMeta(bodyText || "") || ""]).trim();
+          bodyHtml = decodeHeuristically(bodyHtml || "", "utf-8", [extractCharsetFromHtmlMeta(bodyHtml || "") || ""]).trim();
 
           const fromHtmlBlob = extractMimeFromBlob(bodyHtml);
-          if (fromHtmlBlob.html) bodyHtml = fromHtmlBlob.html;
+          if (fromHtmlBlob.html && scoreDecodedText(fromHtmlBlob.html) >= scoreDecodedText(bodyHtml || "")) bodyHtml = fromHtmlBlob.html;
           if (fromHtmlBlob.text && !bodyText) bodyText = fromHtmlBlob.text;
 
           const fromTextBlob = extractMimeFromBlob(bodyText);
-          if (fromTextBlob.html && !bodyHtml) bodyHtml = fromTextBlob.html;
+          if (fromTextBlob.html && (!bodyHtml || scoreDecodedText(fromTextBlob.html) > scoreDecodedText(bodyHtml) + 10)) bodyHtml = fromTextBlob.html;
           if (fromTextBlob.text && (!bodyText || looksLikeMimeBlob(bodyText))) bodyText = fromTextBlob.text;
 
-          if (bodyText && !bodyHtml && isLikelyBase64(bodyText)) {
-            const decodedText = decodeContent(bodyText, "base64", "utf-8");
+          if (bodyText && isLikelyBase64(bodyText)) {
+            const decodedText = decodeContent(bodyText, "base64", "utf-8", [extractCharsetFromHtmlMeta(bodyText) || ""]);
             if (/<\/?[a-z][\s\S]*>/i.test(decodedText)) {
-              bodyHtml = decodedText;
+              if (!bodyHtml || scoreDecodedText(decodedText) > scoreDecodedText(bodyHtml) + 8) {
+                bodyHtml = decodedText;
+              }
             } else if (decodedText !== bodyText) {
               bodyText = decodedText;
             }
           }
 
           if (bodyHtml && isLikelyBase64(bodyHtml)) {
-            const decodedHtml = decodeContent(bodyHtml, "base64", "utf-8");
-            if (/<\/?[a-z][\s\S]*>/i.test(decodedHtml)) bodyHtml = decodedHtml;
+            const decodedHtml = decodeContent(bodyHtml, "base64", "utf-8", [extractCharsetFromHtmlMeta(bodyHtml) || ""]);
+            if (/<\/?[a-z][\s\S]*>/i.test(decodedHtml) && scoreDecodedText(decodedHtml) >= scoreDecodedText(bodyHtml) - 5) {
+              bodyHtml = decodedHtml;
+            }
+          }
+
+          const bodyTextLooksHtml = /<\/?[a-z][\s\S]*>/i.test(bodyText);
+          if (bodyTextLooksHtml && (!bodyHtml || looksCorruptedText(bodyHtml)) && !looksCorruptedText(bodyText)) {
+            bodyHtml = bodyText;
+            bodyText = "";
+          }
+
+          if (bodyHtml && looksCorruptedText(bodyHtml) && bodyText && !looksCorruptedText(bodyText)) {
+            if (/<\/?[a-z][\s\S]*>/i.test(bodyText)) {
+              bodyHtml = bodyText;
+              bodyText = "";
+            } else {
+              bodyHtml = "";
+            }
           }
 
           if (bodyHtml && !/<\/?[a-z][\s\S]*>/i.test(bodyHtml) && !bodyText) {

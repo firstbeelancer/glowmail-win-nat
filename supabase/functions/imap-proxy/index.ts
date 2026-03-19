@@ -188,40 +188,14 @@ Deno.serve(async (req) => {
           return "";
         }
 
+        function normalizeNewlines(value: string): string {
+          return value.replace(/\r\n/g, "\n");
+        }
+
         // Extract charset from Content-Type header
         function extractCharset(header: string): string {
           const match = header.match(/charset=["']?([^"';\s]+)/i);
           return match ? match[1].trim() : "utf-8";
-        }
-
-        // Decode content based on encoding and charset
-        function decodeContent(body: string, encoding: string, charset: string): string {
-          let decoded = body;
-          if (encoding === "base64") {
-            try {
-              const clean = body.replace(/\s/g, "");
-              const binary = atob(clean);
-              const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-              try {
-                decoded = new TextDecoder(charset).decode(bytes);
-              } catch {
-                decoded = new TextDecoder("utf-8").decode(bytes);
-              }
-            } catch { decoded = body; }
-          } else if (encoding === "quoted-printable") {
-            decoded = body
-              .replace(/=\r?\n/g, "")
-              .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-            try {
-              const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
-              try {
-                decoded = new TextDecoder(charset).decode(bytes);
-              } catch {
-                decoded = new TextDecoder("utf-8").decode(bytes);
-              }
-            } catch { /* keep as is */ }
-          }
-          return decoded;
         }
 
         // Detect encoding from header
@@ -231,6 +205,99 @@ Deno.serve(async (req) => {
           return "7bit";
         }
 
+        // Decode content based on encoding and charset
+        function decodeContent(body: string, encoding: string, charset: string): string {
+          let decoded = body;
+
+          if (encoding === "base64") {
+            try {
+              const clean = body.replace(/\s/g, "");
+              const binary = atob(clean);
+              const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+              try {
+                decoded = new TextDecoder(charset).decode(bytes);
+              } catch {
+                decoded = new TextDecoder("utf-8").decode(bytes);
+              }
+            } catch {
+              decoded = body;
+            }
+          } else if (encoding === "quoted-printable") {
+            const clean = body.replace(/=\r?\n/g, "");
+            const bytes: number[] = [];
+            for (let i = 0; i < clean.length; i++) {
+              const ch = clean[i];
+              const hex = clean.slice(i + 1, i + 3);
+              if (ch === "=" && /^[0-9A-Fa-f]{2}$/.test(hex)) {
+                bytes.push(parseInt(hex, 16));
+                i += 2;
+              } else {
+                bytes.push(clean.charCodeAt(i) & 0xff);
+              }
+            }
+
+            try {
+              const byteArray = new Uint8Array(bytes);
+              try {
+                decoded = new TextDecoder(charset).decode(byteArray);
+              } catch {
+                decoded = new TextDecoder("utf-8").decode(byteArray);
+              }
+            } catch {
+              decoded = clean;
+            }
+          }
+
+          return decoded;
+        }
+
+        // Parse multipart text blob when body already contains MIME boundaries
+        function parseMultipartBlob(source: string): { text: string; html: string } {
+          const normalized = normalizeNewlines(source);
+          const boundaryMatch = normalized.match(/(?:^|\n)--([^\n-][^\n]*)/);
+          if (!boundaryMatch) return { text: "", html: "" };
+
+          const boundary = boundaryMatch[1].trim();
+          const parts = normalized.split("--" + boundary);
+          let text = "";
+          let html = "";
+
+          for (const rawPart of parts) {
+            const part = rawPart.trim();
+            if (!part || part === "--") continue;
+
+            const partSplit = part.indexOf("\n\n");
+            if (partSplit === -1) continue;
+
+            const partHeaderRaw = part.substring(0, partSplit);
+            const partHeaderLower = partHeaderRaw.toLowerCase();
+            const partBody = part.substring(partSplit + 2).replace(/\n--$/, "").trim();
+
+            if (partHeaderLower.includes("multipart/")) {
+              const nested = parseMultipartBlob(partBody);
+              if (!text && nested.text) text = nested.text;
+              if (!html && nested.html) html = nested.html;
+              continue;
+            }
+
+            const isText = partHeaderLower.includes("content-type: text/plain");
+            const isHtml = partHeaderLower.includes("content-type: text/html");
+            if (!isText && !isHtml) continue;
+
+            const charset = extractCharset(partHeaderLower);
+            const encoding = extractEncoding(partHeaderLower);
+            const decoded = decodeContent(partBody, encoding, charset);
+
+            if (isHtml) {
+              html = decoded;
+            } else if (!text) {
+              text = decoded;
+            }
+          }
+
+          return { text: text.trim(), html: html.trim() };
+        }
+
         // Try to extract body text from different sources
         let bodyText = "";
         let bodyHtml = "";
@@ -238,6 +305,11 @@ Deno.serve(async (req) => {
         // Method 1: parts.TEXT (from bodyParts)
         if (msg.parts?.TEXT?.data) {
           bodyText = decodeData(msg.parts.TEXT.data);
+          const parsed = parseMultipartBlob(bodyText);
+          if (parsed.text || parsed.html) {
+            bodyText = parsed.text || bodyText;
+            bodyHtml = parsed.html;
+          }
         }
         // Method 2: raw message - parse MIME
         else if (msg.raw) {
@@ -315,8 +387,24 @@ Deno.serve(async (req) => {
               if (keys.length > 0) bodyText = String(msg.body[keys[0]] || "");
             }
           }
+
+          const parsed = parseMultipartBlob(bodyText);
+          if (parsed.text || parsed.html) {
+            bodyText = parsed.text || bodyText;
+            bodyHtml = parsed.html;
+          }
         }
         
+        const reparsedBody = parseMultipartBlob(bodyText);
+        if (!bodyHtml && reparsedBody.html) bodyHtml = reparsedBody.html;
+        if ((!bodyText || /^this is a multi-part message/i.test(bodyText.trim())) && reparsedBody.text) {
+          bodyText = reparsedBody.text;
+        }
+
+        if (!bodyHtml && /=[0-9A-Fa-f]{2}/.test(bodyText)) {
+          bodyText = decodeContent(bodyText, "quoted-printable", "utf-8");
+        }
+
         // If we got HTML but no plain text, use HTML
         if (!bodyText && bodyHtml) bodyText = bodyHtml;
         // If bodyText looks like HTML, set bodyHtml

@@ -181,12 +181,12 @@ export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) 
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-500 mb-1">Порт</label>
+                    <label className="block text-xs text-neutral-500 mb-1">Порт</label>
                     <input
                       type="number"
                       value={smtpHost ? smtpPort : (preset?.smtpPort || 465)}
                       onChange={(e) => setSmtpPort(Number(e.target.value))}
-                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-zinc-100 focus:outline-none focus:border-primary/50 transition"
+                      className="w-full h-9 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-white focus:outline-none focus:border-primary/50 transition"
                     />
                   </div>
                 </div>

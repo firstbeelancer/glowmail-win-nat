@@ -207,6 +207,8 @@ const translations = {
     'emailList.deleteEmail': 'Удалить письмо',
     'emailList.save': 'Сохранить',
     'emailList.print': 'Печать',
+    'emailList.addTag': 'Добавить тег',
+    'emailList.assignTags': 'Назначить теги',
 
     // Email Detail
     'emailDetail.showDetails': 'Показать детали',

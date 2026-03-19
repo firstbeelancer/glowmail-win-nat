@@ -147,6 +147,8 @@ type MailContextType = {
   markAsRead: (id: string) => void;
   toggleStar: (id: string) => void;
   deleteEmail: (id: string) => void;
+  moveEmailToFolder: (id: string, targetFolder: string) => void;
+  copyEmailToFolder: (id: string, targetFolder: string) => void;
   sendEmail: (email: Partial<Email>) => void;
   saveDraft: (email: Partial<Email>) => void;
   addContact: (contact: Contact) => void;
@@ -157,6 +159,7 @@ type MailContextType = {
   isLoading: boolean;
   isConnected: boolean;
   connectionError: string | null;
+  allFoldersFlat: Folder[];
 };
 
 const MailContext = createContext<MailContextType | undefined>(undefined);

@@ -269,6 +269,10 @@ function MailApp() {
                 onBack={() => setSelectedEmail(null)}
                 onReply={handleReply}
                 onEditDraft={handleEditDraft}
+                onNext={handleNextEmail}
+                onPrev={handlePrevEmail}
+                hasNext={hasNext}
+                hasPrev={hasPrev}
               />
             )}
           </AnimatePresence>

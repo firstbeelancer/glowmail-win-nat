@@ -313,7 +313,8 @@ function SidebarContent({
                     {count}
                   </span>
                 )}
-              </button>
+                </button>
+              </div>
               {hasChildren && isExpanded && (
                 <div className="ml-4 mt-0.5 space-y-0.5 border-l border-zinc-800/50 pl-2">
                   {folder.children!.map((child) => {

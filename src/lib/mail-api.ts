@@ -70,6 +70,10 @@ export async function moveEmail(folder: string, uid: number, targetFolder: strin
   return callImap("move", { folder, uid, targetFolder });
 }
 
+export async function copyEmail(folder: string, uid: number, targetFolder: string) {
+  return callImap("copy", { folder, uid, targetFolder });
+}
+
 export async function deleteEmail(folder: string, uid: number) {
   return callImap("delete", { folder, uid });
 }

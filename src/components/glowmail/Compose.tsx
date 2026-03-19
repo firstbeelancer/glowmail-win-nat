@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useMail } from '../../store';
 import { Email, Contact, Attachment } from '../../types';
-import { X, Send, Paperclip, Sparkles, Loader2, Bold, Italic, Underline, Link, Image as ImageIcon, List, ListOrdered, AlertTriangle, Trash2, ExternalLink, Tag, ChevronDown, Code } from 'lucide-react';
+import { X, Send, Paperclip, Sparkles, Loader2, Bold, Italic, Underline, Link, Image as ImageIcon, List, ListOrdered, AlertTriangle, Trash2, ExternalLink, Tag, ChevronDown, Code, Terminal, Braces } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -28,6 +28,7 @@ export function Compose({
   const [showAiMenu, setShowAiMenu] = useState(false);
   const [emailTags, setEmailTags] = useState<string[]>(initialData?.tags || []);
   const [showTagPicker, setShowTagPicker] = useState(false);
+  const [showCodeMenu, setShowCodeMenu] = useState(false);
   const [selectedSignatureId, setSelectedSignatureId] = useState<string | undefined>(settings.defaultSignatureId || (settings.signatures?.length > 0 ? settings.signatures[0].id : undefined));
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -165,6 +166,30 @@ export function Compose({
   const execCommand = (command: string, value?: string) => {
     document.execCommand(command, false, value);
     editorRef.current?.focus();
+  };
+
+  const insertCodeElement = (type: 'inline' | 'block' | 'log') => {
+    if (!editorRef.current) return;
+    const sel = window.getSelection();
+    const selectedText = sel?.toString() || '';
+    setShowCodeMenu(false);
+
+    if (type === 'inline') {
+      const html = `<code style="background-color:#f4f4f5;color:#18181b;padding:2px 6px;border-radius:4px;font-family:'JetBrains Mono','Fira Code',Consolas,'Courier New',monospace;font-size:0.9em;border:1px solid #e4e4e7;">${selectedText || (lang === 'ru' ? 'код' : 'code')}</code>&nbsp;`;
+      editorRef.current.focus();
+      document.execCommand('insertHTML', false, html);
+    } else if (type === 'block') {
+      const placeholder = selectedText || (lang === 'ru' ? '// ваш код здесь' : '// your code here');
+      const html = `<div style="margin:12px 0;"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr><td style="background-color:#1e1e2e;border:1px solid #313244;border-radius:8px;padding:16px;font-family:'JetBrains Mono','Fira Code',Consolas,'Courier New',monospace;font-size:13px;line-height:1.5;color:#cdd6f4;white-space:pre-wrap;word-break:break-all;overflow-x:auto;" data-code-block="true">${placeholder}</td></tr></table></div><p><br></p>`;
+      editorRef.current.focus();
+      document.execCommand('insertHTML', false, html);
+    } else if (type === 'log') {
+      const placeholder = selectedText || (lang === 'ru' ? '$ команда или лог здесь' : '$ command or log output here');
+      const html = `<div style="margin:12px 0;"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr><td style="background-color:#0c0c0c;border:1px solid #333333;border-radius:8px;padding:16px;font-family:'JetBrains Mono','Fira Code',Consolas,'Courier New',monospace;font-size:13px;line-height:1.5;color:#00ff41;white-space:pre-wrap;word-break:break-all;overflow-x:auto;" data-code-block="log">${placeholder}</td></tr></table></div><p><br></p>`;
+      editorRef.current.focus();
+      document.execCommand('insertHTML', false, html);
+    }
+    setBody(editorRef.current.innerHTML);
   };
 
   const handleAiAction = async (action: 'rewrite' | 'spellcheck' | 'professional' | 'friendly' | 'translate') => {
@@ -320,7 +345,14 @@ export function Compose({
                       <button class="icon-btn" onclick="var url=prompt('URL:');if(url)document.execCommand('createLink',false,url)" title="Link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></button>
                       <button class="icon-btn" onclick="var input=document.createElement('input');input.type='file';input.accept='image/*';input.onchange=function(e){var r=new FileReader();r.onload=function(ev){document.execCommand('insertImage',false,ev.target.result)};r.readAsDataURL(e.target.files[0])};input.click()" title="${t('compose.insertImage', lang)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></button>
                       <span class="sep"></span>
-                      <button class="icon-btn" onclick="var sel=window.getSelection();var txt=sel?sel.toString():'';var code='<pre style=\\'background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:12px 16px;font-family:JetBrains Mono,Fira Code,Consolas,monospace;font-size:13px;overflow-x:auto;margin:8px 0;border:1px solid #313244;white-space:pre-wrap;word-break:break-all;\\'><code>'+(txt||'// code')+'</code></pre><p><br></p>';document.getElementById('body').focus();document.execCommand('insertHTML',false,code);" title="${lang === 'ru' ? 'Блок кода' : 'Code block'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
+                      <div style="position:relative;display:inline-flex;">
+                        <button class="icon-btn" onclick="var m=document.getElementById('code-menu');m.classList.toggle('show');" title="${lang === 'ru' ? 'Код' : 'Code'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
+                        <div class="ai-menu" id="code-menu">
+                          <button onclick="insertCode('inline')">Inline code</button>
+                          <button onclick="insertCode('block')">Code block</button>
+                          <button onclick="insertCode('log')">${lang === 'ru' ? 'Лог / Терминал' : 'Log / Terminal'}</button>
+                        </div>
+                      </div>
                       <span class="sep"></span>
                       <div style="position:relative;display:inline-flex;">
                         <button class="ai-btn" onclick="var m=document.getElementById('ai-menu');m.classList.toggle('show');"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg> ${t('compose.aiMagic', lang)}</button>
@@ -382,6 +414,20 @@ export function Compose({
                           var hr = ed.querySelector('hr');
                           if(hr) ed.insertBefore(d, hr);
                           else ed.appendChild(d);
+                        }
+                      }
+                      function insertCode(type) {
+                        document.getElementById('code-menu').classList.remove('show');
+                        var ed = document.getElementById('body');
+                        var sel = window.getSelection();
+                        var txt = sel ? sel.toString() : '';
+                        ed.focus();
+                        if (type === 'inline') {
+                          document.execCommand('insertHTML', false, '<code style="background-color:#f4f4f5;color:#18181b;padding:2px 6px;border-radius:4px;font-family:JetBrains Mono,Fira Code,Consolas,Courier New,monospace;font-size:0.9em;border:1px solid #e4e4e7;">' + (txt || 'code') + '</code>&nbsp;');
+                        } else if (type === 'block') {
+                          document.execCommand('insertHTML', false, '<div style="margin:12px 0;"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr><td style="background-color:#1e1e2e;border:1px solid #313244;border-radius:8px;padding:16px;font-family:JetBrains Mono,Fira Code,Consolas,Courier New,monospace;font-size:13px;line-height:1.5;color:#cdd6f4;white-space:pre-wrap;word-break:break-all;">' + (txt || '// code here') + '</td></tr></table></div><p><br></p>');
+                        } else {
+                          document.execCommand('insertHTML', false, '<div style="margin:12px 0;"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr><td style="background-color:#0c0c0c;border:1px solid #333;border-radius:8px;padding:16px;font-family:JetBrains Mono,Fira Code,Consolas,Courier New,monospace;font-size:13px;line-height:1.5;color:#00ff41;white-space:pre-wrap;word-break:break-all;">' + (txt || '$ output here') + '</td></tr></table></div><p><br></p>');
                         }
                       }
                       async function doAI(action) {
@@ -608,21 +654,53 @@ export function Compose({
           />
           <button onClick={() => imageInputRef.current?.click()} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors" title={t('compose.insertImage', lang)}><ImageIcon className="w-4 h-4" /></button>
           <div className="w-px h-4 bg-zinc-800 mx-1" />
-          <button
-            onClick={() => {
-              if (!editorRef.current) return;
-              const sel = window.getSelection();
-              const selectedText = sel?.toString() || '';
-              const codeHtml = `<pre style="background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:12px 16px;font-family:'JetBrains Mono','Fira Code',Consolas,monospace;font-size:13px;overflow-x:auto;margin:8px 0;border:1px solid #313244;white-space:pre-wrap;word-break:break-all;"><code>${selectedText || (lang === 'ru' ? '// ваш код здесь' : '// your code here')}</code></pre><p><br></p>`;
-              editorRef.current.focus();
-              document.execCommand('insertHTML', false, codeHtml);
-              setBody(editorRef.current.innerHTML);
-            }}
-            className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"
-            title={lang === 'ru' ? 'Вставить блок кода' : 'Insert code block'}
-          >
-            <Code className="w-4 h-4" />
-          </button>
+          {/* Code insertion dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => { setShowCodeMenu(!showCodeMenu); setShowAiMenu(false); }}
+              className={cn("p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors", showCodeMenu && "bg-zinc-800 text-zinc-200")}
+              title={lang === 'ru' ? 'Вставить код' : 'Insert code'}
+            >
+              <Code className="w-4 h-4" />
+            </button>
+            {showCodeMenu && (
+              <div className="absolute left-0 bottom-full mb-2 w-52 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-[60]">
+                <div className="p-1 flex flex-col">
+                  <span className="px-3 py-1.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{lang === 'ru' ? 'Вставить код' : 'Insert Code'}</span>
+                  <button
+                    onClick={() => insertCodeElement('inline')}
+                    className="flex items-center gap-2.5 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                  >
+                    <Braces className="w-4 h-4 text-zinc-500" />
+                    <div>
+                      <div className="font-medium">Inline code</div>
+                      <div className="text-[11px] text-zinc-500">{lang === 'ru' ? 'Код внутри строки' : 'Code within text'}</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => insertCodeElement('block')}
+                    className="flex items-center gap-2.5 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                  >
+                    <Code className="w-4 h-4 text-zinc-500" />
+                    <div>
+                      <div className="font-medium">Code block</div>
+                      <div className="text-[11px] text-zinc-500">{lang === 'ru' ? 'Многострочный код' : 'Multi-line code'}</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => insertCodeElement('log')}
+                    className="flex items-center gap-2.5 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                  >
+                    <Terminal className="w-4 h-4 text-zinc-500" />
+                    <div>
+                      <div className="font-medium">{lang === 'ru' ? 'Лог / Терминал' : 'Log / Terminal'}</div>
+                      <div className="text-[11px] text-zinc-500">{lang === 'ru' ? 'Логи, конфиги, вывод' : 'Logs, configs, output'}</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           
           <div className="flex-1" />
           

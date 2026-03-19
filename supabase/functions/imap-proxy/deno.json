@@ -1,6 +1,6 @@
 {
   "imports": {
-    "deno-imap": "jsr:@bobbyg603/deno-imap@0.2.1",
+    "deno-imap": "jsr:@workingdevshero/deno-imap@1.0.0",
     "postal-mime": "npm:postal-mime@2.4.1"
   }
 }

@@ -1,4 +1,4 @@
-import { ImapClient } from "deno-imap";
+import { ImapClient, hasAttachments as imapHasAttachments } from "deno-imap";
 import PostalMime from "postal-mime";
 
 const corsHeaders = {
@@ -98,76 +98,22 @@ Deno.serve(async (req) => {
           uid: true,
           envelope: true,
           flags: true,
-          bodyStructure: true,
           size: true,
+          bodyStructure: true,
         });
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
 
-        // Helper: extract attachment info from bodyStructure
-        const extractAttachments = (bs: any): { name: string; size: number; type: string }[] => {
-          if (!bs) return [];
-          const atts: { name: string; size: number; type: string }[] = [];
-          const walk = (node: any, depth = 0) => {
-            if (!node) return;
-            // Handle both possible field names from different IMAP libs
-            const rawDisposition = node.disposition || node.contentDisposition || '';
-            const disposition = (typeof rawDisposition === 'string' ? rawDisposition : rawDisposition?.type || '').toString().toLowerCase();
-            const nodeType = (node.type || node.mediaType || '').toString();
-            const nodeSubtype = (node.subtype || node.mediaSubtype || '').toString();
-            const mimeType = `${nodeType}/${nodeSubtype}`.toLowerCase();
-            
-            // Extract filename from various possible locations
-            const filename = node.dispositionParameters?.filename 
-              || node.parameters?.name 
-              || node.contentDispositionParameters?.filename
-              || node.attrs?.name
-              || (typeof rawDisposition === 'object' && rawDisposition?.params?.filename)
-              || '';
 
-            const isTextBody = ['text/plain', 'text/html'].includes(mimeType);
-            const isMultipart = mimeType.startsWith('multipart/') || mimeType.startsWith('message/');
-            
-            const isAttachment = disposition === 'attachment' ||
-              (disposition === 'inline' && node.id && mimeType.startsWith('image/')) ||
-              (filename && !isTextBody) ||
-              (!isTextBody && !isMultipart && mimeType !== '/' && nodeType !== '' && disposition !== '' && disposition !== 'inline');
 
-            if (isAttachment) {
-              atts.push({
-                name: filename || 'unnamed',
-                size: node.size || 0,
-                type: mimeType,
-              });
-            }
-            // Walk children in various structures
-            const children = node.childNodes || node.parts || node.body;
-            if (Array.isArray(children)) {
-              children.forEach((c: any) => walk(c, depth + 1));
-            }
-          };
-          walk(bs);
-          return atts;
-        };
-
-        // Debug: log bodyStructure for multipart messages (likely have attachments)
-        normalized.forEach((msg: any) => {
-          if (!msg?.bodyStructure) return;
-          const bs = msg.bodyStructure;
-          const bsStr = JSON.stringify(bs);
-          // Log structures that are multipart or have children - these are the ones that might have attachments
-          if (bs.childNodes || bs.parts || bs.type?.toLowerCase() === 'multipart' || bsStr.length > 100) {
-            try {
-              console.log(`BS uid=${msg.uid} size=${msg.size}:`, bsStr.slice(0, 2000));
-            } catch { console.log(`BS uid=${msg.uid}: keys=`, Object.keys(bs)); }
-          }
-        });
 
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
           .map((msg: any) => {
             const env = msg.envelope || {};
-            const attachments = extractAttachments(msg.bodyStructure);
+            let hasAtt = false;
+            try { hasAtt = msg.bodyStructure ? imapHasAttachments(msg.bodyStructure) : false; } catch {}
+
             return {
               uid: msg.uid,
               flags: msg.flags || [],
@@ -190,7 +136,8 @@ Deno.serve(async (req) => {
               date: env.date || new Date().toISOString(),
               messageId: env.messageId || "",
               inReplyTo: env.inReplyTo || "",
-              attachments,
+              hasAttachments: hasAtt,
+              attachments: [],
             };
           })
           .sort((a: any, b: any) => b.uid - a.uid); // newest first

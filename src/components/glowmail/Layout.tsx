@@ -105,7 +105,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
 
         {/* Floating Action Button (Mobile) */}
         <button
-          onClick={onCompose}
+          onClick={() => onCompose()}
           className="md:hidden absolute bottom-6 right-6 w-14 h-14 bg-emerald-500 rounded-full flex items-center justify-center text-zinc-950 shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] hover:scale-105 transition-all active:scale-95 z-30"
         >
           <Edit3 className="w-6 h-6" />

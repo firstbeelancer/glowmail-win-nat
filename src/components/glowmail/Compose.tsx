@@ -260,8 +260,9 @@ export function Compose({
                   const subtleBg = isLight ? '#e4e4e7' : '#27272a';
                   w.document.write(`<!DOCTYPE html><html><head><title>${t('compose.newMessage', lang)}</title>
                     <style>
-                      * { margin: 0; padding: 0; box-sizing: border-box; }
-                      body { font-family: 'Involve', system-ui, sans-serif; background: ${bg}; color: ${fg}; padding: 24px; }
+                       * { margin: 0; padding: 0; box-sizing: border-box; }
+                       @font-face { font-family: 'Involve'; src: url('${window.location.origin}/fonts/Involve-VF.ttf') format('truetype'); font-weight: 100 900; font-display: swap; }
+                       body { font-family: '${settings.composerFont || 'Involve'}', 'Inter', system-ui, sans-serif; background: ${bg}; color: ${fg}; padding: 24px; }
                       .field { margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
                       .field label { color: ${mutedText}; font-size: 14px; min-width: 60px; }
                       .field input, .field select { flex: 1; background: ${inputBg}; border: 1px solid ${borderColor}; border-radius: 8px; padding: 8px 12px; color: ${fg}; font-size: 14px; outline: none; appearance: none; background-image: none; }

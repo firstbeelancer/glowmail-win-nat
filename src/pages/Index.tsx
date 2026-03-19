@@ -10,9 +10,6 @@ import { AnimatePresence } from 'framer-motion';
 import Login from './Login';
 import * as mailApi from '../lib/mail-api';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
-import { AnimatePresence } from 'framer-motion';
-import Login from './Login';
-import * as mailApi from '../lib/mail-api';
 
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);

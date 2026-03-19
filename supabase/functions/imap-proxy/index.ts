@@ -138,340 +138,216 @@ Deno.serve(async (req) => {
         const targetUid = Number(uid);
         if (!Number.isFinite(targetUid)) return err("Invalid uid", 400);
 
-        const fetchWithMode = async (query: Record<string, unknown>) => {
-          return (client as any).fetch(String(targetUid), { ...query, byUid: true });
-        };
-
-        let messages;
-        try {
-          messages = await fetchWithMode({
-            uid: true,
-            envelope: true,
-            flags: true,
-            size: true,
-            bodyParts: ["HEADER", "TEXT", "1", "1.1", "1.2", "2", "2.1"],
-          });
-        } catch (fetchErr) {
-          console.error("fetch with bodyParts failed, retrying with full only:", fetchErr);
-          try {
-            messages = await fetchWithMode({
-              uid: true,
-              envelope: true,
-              flags: true,
-              allHeaders: true,
-              bodyParts: ["TEXT", "1", "1.1", "2", "2.1"],
-            });
-          } catch (fetchErr2) {
-            console.error("fetch with full failed too:", fetchErr2);
-            messages = await fetchWithMode({
-              uid: true,
-              envelope: true,
-              flags: true,
-            });
-          }
-        }
-
-        const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
-        let msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || (fetched.length === 1 ? fetched[0] : null);
-
-        if (!msg) {
-          try {
-            const allUidResults = await client.search({ all: true });
-            const allUids = (Array.isArray(allUidResults) ? allUidResults : [allUidResults])
-              .map((value: unknown) => Number(value))
-              .filter((value) => Number.isFinite(value) && value > 0);
-            const sequenceNumber = allUids.findIndex((value) => value === targetUid) + 1;
-
-            if (sequenceNumber > 0) {
-              const fallbackMessages = await client.fetch(String(sequenceNumber), {
-                uid: true,
-                envelope: true,
-                flags: true,
-                allHeaders: true,
-                bodyParts: ["TEXT", "1", "1.1", "2", "2.1"],
-              });
-              const fallbackList = (Array.isArray(fallbackMessages) ? fallbackMessages : [fallbackMessages]).filter(Boolean);
-              msg = fallbackList.find((item: any) => Number(item?.uid) === targetUid) || fallbackList[0] || null;
-            }
-          } catch (fallbackErr) {
-            console.error("fallback sequence fetch failed:", fallbackErr);
-          }
-        }
-
-        if (!msg) {
-          await client.disconnect();
-          client = null;
-          return ok({
-            uid,
-            flags: [],
-            subject: "",
-            from: { name: "Unknown", email: "" },
-            to: [],
-            cc: [],
-            date: "",
-            messageId: "",
-            bodyText: "",
-            bodyHtml: "",
-            notFound: true,
-          });
-        }
-
         // Helper to decode Uint8Array
         function decodeData(data: unknown, charset = "utf-8"): string {
           if (data instanceof Uint8Array) {
-            try {
-              return new TextDecoder(charset).decode(data);
-            } catch {
-              return new TextDecoder("utf-8").decode(data);
-            }
+            try { return new TextDecoder(charset).decode(data); } catch { return new TextDecoder("utf-8").decode(data); }
           }
           if (typeof data === "string") return data;
           return "";
         }
 
-        function normalizeNewlines(value: string): string {
-          return value.replace(/\r\n/g, "\n");
-        }
-
-        // Extract charset from Content-Type header
         function extractCharset(header: string): string {
           const match = header.match(/charset=["']?([^"';\s]+)/i);
           return match ? match[1].trim() : "utf-8";
         }
 
-        // Detect encoding from header
         function extractEncoding(header: string): string {
           if (header.includes("base64")) return "base64";
           if (header.includes("quoted-printable")) return "quoted-printable";
           return "7bit";
         }
 
-        // Decode content based on encoding and charset
         function decodeContent(body: string, encoding: string, charset: string): string {
-          let decoded = body;
-
           if (encoding === "base64") {
             try {
               const clean = body.replace(/\s/g, "");
               const binary = atob(clean);
               const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
-              try {
-                decoded = new TextDecoder(charset).decode(bytes);
-              } catch {
-                decoded = new TextDecoder("utf-8").decode(bytes);
-              }
-            } catch {
-              decoded = body;
-            }
+              try { return new TextDecoder(charset).decode(bytes); } catch { return new TextDecoder("utf-8").decode(bytes); }
+            } catch { return body; }
           } else if (encoding === "quoted-printable") {
             const clean = body.replace(/=\r?\n/g, "");
             const bytes: number[] = [];
             for (let i = 0; i < clean.length; i++) {
-              const ch = clean[i];
-              const hex = clean.slice(i + 1, i + 3);
-              if (ch === "=" && /^[0-9A-Fa-f]{2}$/.test(hex)) {
-                bytes.push(parseInt(hex, 16));
+              if (clean[i] === "=" && /^[0-9A-Fa-f]{2}$/.test(clean.slice(i + 1, i + 3))) {
+                bytes.push(parseInt(clean.slice(i + 1, i + 3), 16));
                 i += 2;
               } else {
                 bytes.push(clean.charCodeAt(i) & 0xff);
               }
             }
-
             try {
               const byteArray = new Uint8Array(bytes);
-              try {
-                decoded = new TextDecoder(charset).decode(byteArray);
-              } catch {
-                decoded = new TextDecoder("utf-8").decode(byteArray);
-              }
-            } catch {
-              decoded = clean;
-            }
+              try { return new TextDecoder(charset).decode(byteArray); } catch { return new TextDecoder("utf-8").decode(byteArray); }
+            } catch { return clean; }
           }
-
-          return decoded;
+          return body;
         }
 
-        // Parse multipart text blob when body already contains MIME boundaries
-        function parseMultipartBlob(source: string): { text: string; html: string } {
-          const normalized = normalizeNewlines(source);
-          const boundaryMatch = normalized.match(/(?:^|\n)--([^\n-][^\n]*)/);
-          if (!boundaryMatch) return { text: "", html: "" };
-
-          const boundary = boundaryMatch[1].trim();
-          const parts = normalized.split("--" + boundary);
+        // Recursively parse MIME parts from raw RFC822 message
+        function parseMimeParts(rawMessage: string): { text: string; html: string } {
           let text = "";
           let html = "";
 
+          // Split header from body
+          const headerEnd = rawMessage.indexOf("\r\n\r\n");
+          if (headerEnd === -1) {
+            const headerEnd2 = rawMessage.indexOf("\n\n");
+            if (headerEnd2 === -1) return { text: rawMessage, html: "" };
+            return parseMimeBody(rawMessage.substring(0, headerEnd2), rawMessage.substring(headerEnd2 + 2));
+          }
+          return parseMimeBody(rawMessage.substring(0, headerEnd), rawMessage.substring(headerEnd + 4));
+        }
+
+        function parseMimeBody(headers: string, body: string): { text: string; html: string } {
+          const headersLower = headers.toLowerCase();
+          // Unfold headers (continuation lines)
+          const unfoldedHeaders = headers.replace(/\r?\n[ \t]+/g, " ");
+          const unfoldedLower = unfoldedHeaders.toLowerCase();
+
+          // Check for multipart
+          const boundaryMatch = unfoldedLower.match(/content-type:\s*multipart\/[^;]*;[^]*?boundary=["']?([^"'\s;]+)/i)
+            || unfoldedHeaders.match(/boundary=["']?([^"'\s;]+)/i);
+
+          if (boundaryMatch) {
+            const boundary = boundaryMatch[1];
+            return parseMultipartBody(body, boundary);
+          }
+
+          // Single part
+          const charset = extractCharset(unfoldedLower);
+          const encoding = extractEncoding(unfoldedLower);
+          const decoded = decodeContent(body, encoding, charset);
+
+          if (unfoldedLower.includes("content-type: text/html") || unfoldedLower.includes("content-type:text/html")) {
+            return { text: "", html: decoded };
+          }
+          if (unfoldedLower.includes("content-type: text/plain") || unfoldedLower.includes("content-type:text/plain")) {
+            return { text: decoded, html: "" };
+          }
+          // Default: treat as plain text
+          return { text: decoded, html: "" };
+        }
+
+        function parseMultipartBody(body: string, boundary: string): { text: string; html: string } {
+          let text = "";
+          let html = "";
+          const parts = body.split("--" + boundary);
+
           for (const rawPart of parts) {
-            const part = rawPart.trim();
-            if (!part || part === "--") continue;
+            const part = rawPart.replace(/^\r?\n/, "");
+            if (!part || part.startsWith("--")) continue;
 
-            const partSplit = part.indexOf("\n\n");
-            if (partSplit === -1) continue;
+            // Find header/body split
+            let splitIdx = part.indexOf("\r\n\r\n");
+            let splitLen = 4;
+            if (splitIdx === -1) {
+              splitIdx = part.indexOf("\n\n");
+              splitLen = 2;
+            }
+            if (splitIdx === -1) continue;
 
-            const partHeaderRaw = part.substring(0, partSplit);
-            const partHeaderLower = partHeaderRaw.toLowerCase();
-            const partBody = part.substring(partSplit + 2).replace(/\n--$/, "").trim();
+            const partHeaders = part.substring(0, splitIdx);
+            const partBody = part.substring(splitIdx + splitLen).replace(/\r?\n--$/, "").trimEnd();
+            const partHeadersLower = partHeaders.toLowerCase();
 
-            if (partHeaderLower.includes("multipart/")) {
-              const nested = parseMultipartBlob(partBody);
+            // Check for nested multipart
+            const nestedBoundary = partHeaders.match(/boundary=["']?([^"'\s;]+)/i);
+            if (nestedBoundary) {
+              const nested = parseMultipartBody(partBody, nestedBoundary[1]);
               if (!text && nested.text) text = nested.text;
               if (!html && nested.html) html = nested.html;
               continue;
             }
 
-            const isText = partHeaderLower.includes("content-type: text/plain");
-            const isHtml = partHeaderLower.includes("content-type: text/html");
-            if (!isText && !isHtml) continue;
+            const isHtml = partHeadersLower.includes("text/html");
+            const isPlain = partHeadersLower.includes("text/plain");
+            if (!isHtml && !isPlain) continue;
 
-            const charset = extractCharset(partHeaderLower);
-            const encoding = extractEncoding(partHeaderLower);
+            const charset = extractCharset(partHeadersLower);
+            const encoding = extractEncoding(partHeadersLower);
             const decoded = decodeContent(partBody, encoding, charset);
 
-            if (isHtml) {
-              html = decoded;
-            } else if (!text) {
-              text = decoded;
-            }
+            if (isHtml && !html) html = decoded;
+            if (isPlain && !text) text = decoded;
           }
 
-          return { text: text.trim(), html: html.trim() };
+          return { text, html };
         }
 
-        // Try to extract body text from different sources
+        // Fetch raw RFC822 message (source: true) for reliable parsing
+        let msg: any = null;
+        try {
+          const messages = await (client as any).fetch(String(targetUid), {
+            byUid: true,
+            uid: true,
+            envelope: true,
+            flags: true,
+            source: true,
+          });
+          const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+          msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || fetched[0] || null;
+        } catch (e) {
+          console.error("fetch with source failed:", e);
+          // Fallback: try without source
+          try {
+            const messages = await (client as any).fetch(String(targetUid), {
+              byUid: true,
+              uid: true,
+              envelope: true,
+              flags: true,
+              bodyParts: ["TEXT", "1", "1.1", "1.2", "2"],
+            });
+            const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+            msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || fetched[0] || null;
+          } catch (e2) {
+            console.error("fallback fetch also failed:", e2);
+          }
+        }
+
+        if (!msg) {
+          await client.disconnect();
+          client = null;
+          return ok({ uid, flags: [], subject: "", from: { name: "Unknown", email: "" }, to: [], cc: [], date: "", messageId: "", bodyText: "", bodyHtml: "", notFound: true });
+        }
+
         let bodyText = "";
         let bodyHtml = "";
-        
-        // Method 1: body parts (from BODY[...] fetch)
-        if (msg.parts && typeof msg.parts === "object") {
-          const partsEntries = Object.entries(msg.parts as Record<string, unknown>);
 
-          for (const [partKey, partValue] of partsEntries) {
-            const dataCandidate = (partValue as any)?.data ?? partValue;
-            const decodedPart = decodeData(dataCandidate);
-            if (!decodedPart) continue;
-
-            const parsed = parseMultipartBlob(decodedPart);
-            if (!bodyText && parsed.text) bodyText = parsed.text;
-            if (!bodyHtml && parsed.html) bodyHtml = parsed.html;
-
-            const keyLower = partKey.toLowerCase();
-            const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(decodedPart);
-            if (!bodyHtml && (keyLower.includes("html") || looksLikeHtml)) {
-              bodyHtml = decodedPart;
-            }
-            if (!bodyText && !looksLikeHtml) {
-              bodyText = decodedPart;
-            }
-          }
-        }
-        // Method 2: raw message - parse MIME
-        if ((!bodyText && !bodyHtml) && msg.raw) {
-          const rawText = decodeData(msg.raw);
-          const headerBodySplit = rawText.indexOf("\r\n\r\n");
-          if (headerBodySplit > -1) {
-            const headerPart = rawText.substring(0, headerBodySplit);
-            const bodyPart = rawText.substring(headerBodySplit + 4);
-            
-            // Check for multipart
-            const boundaryMatch = headerPart.match(/boundary="?([^";\s]+)"?/i);
-            if (boundaryMatch) {
-              const boundary = boundaryMatch[1];
-              const parts = bodyPart.split("--" + boundary);
-              for (const part of parts) {
-                if (part.trim() === "--" || part.trim() === "") continue;
-                const partSplit = part.indexOf("\r\n\r\n");
-                if (partSplit === -1) continue;
-                const partHeaderRaw = part.substring(0, partSplit);
-                const partHeaderLower = partHeaderRaw.toLowerCase();
-                const partBody = part.substring(partSplit + 4).replace(/--$/, "").trim();
-                
-                // Check for nested multipart (e.g. multipart/alternative inside multipart/mixed)
-                const nestedBoundaryMatch = partHeaderRaw.match(/boundary="?([^";\s]+)"?/i);
-                if (nestedBoundaryMatch) {
-                  const nestedBoundary = nestedBoundaryMatch[1];
-                  const nestedParts = partBody.split("--" + nestedBoundary);
-                  for (const np of nestedParts) {
-                    if (np.trim() === "--" || np.trim() === "") continue;
-                    const npSplit = np.indexOf("\r\n\r\n");
-                    if (npSplit === -1) continue;
-                    const npHeaderRaw = np.substring(0, npSplit);
-                    const npHeaderLower = npHeaderRaw.toLowerCase();
-                    const npBody = np.substring(npSplit + 4).replace(/--$/, "").trim();
-                    const npCharset = extractCharset(npHeaderLower);
-                    const npEncoding = extractEncoding(npHeaderLower);
-                    const npDecoded = decodeContent(npBody, npEncoding, npCharset);
-                    
-                    if (npHeaderLower.includes("text/html")) {
-                      bodyHtml = npDecoded;
-                    } else if (npHeaderLower.includes("text/plain") && !bodyText) {
-                      bodyText = npDecoded;
-                    }
-                  }
-                  continue;
-                }
-                
-                const charset = extractCharset(partHeaderLower);
-                const encoding = extractEncoding(partHeaderLower);
-                const decoded = decodeContent(partBody, encoding, charset);
-                
-                if (partHeaderLower.includes("text/html")) {
-                  bodyHtml = decoded;
-                } else if (partHeaderLower.includes("text/plain") && !bodyText) {
-                  bodyText = decoded;
-                }
-              }
-            } else {
-              // Single part message
-              const charset = extractCharset(headerPart.toLowerCase());
-              const encoding = extractEncoding(headerPart.toLowerCase());
-              const decoded = decodeContent(bodyPart, encoding, charset);
-              bodyText = decoded;
-            }
-          }
-        }
-        // Method 3: body property (legacy fallback)
-        else if (msg.body) {
-          if (typeof msg.body === "string") {
-            bodyText = msg.body;
-          } else if (typeof msg.body === "object") {
-            bodyText = msg.body["1"] || msg.body["TEXT"] || msg.body["text"] || "";
-            if (!bodyText) {
-              const keys = Object.keys(msg.body);
-              if (keys.length > 0) bodyText = String(msg.body[keys[0]] || "");
-            }
-          }
-
-          const parsed = parseMultipartBlob(bodyText);
-          if (parsed.text || parsed.html) {
-            bodyText = parsed.text || bodyText;
+        // Primary: parse from raw source (most reliable)
+        if (msg.source) {
+          const rawStr = decodeData(msg.source);
+          if (rawStr) {
+            const parsed = parseMimeParts(rawStr);
+            bodyText = parsed.text;
             bodyHtml = parsed.html;
           }
         }
-        
-        const reparsedBody = parseMultipartBlob(bodyText);
-        if (!bodyHtml && reparsedBody.html) bodyHtml = reparsedBody.html;
-        if ((!bodyText || /^this is a multi-part message/i.test(bodyText.trim())) && reparsedBody.text) {
-          bodyText = reparsedBody.text;
+
+        // Fallback: parts object
+        if (!bodyText && !bodyHtml && msg.parts && typeof msg.parts === "object") {
+          for (const [, partValue] of Object.entries(msg.parts as Record<string, unknown>)) {
+            const raw = decodeData((partValue as any)?.data ?? partValue);
+            if (!raw) continue;
+            if (!bodyHtml && /<\/?[a-z][\s\S]*>/i.test(raw)) bodyHtml = raw;
+            else if (!bodyText) bodyText = raw;
+          }
         }
 
-        if (!bodyHtml && /=[0-9A-Fa-f]{2}/.test(bodyText)) {
-          bodyText = decodeContent(bodyText, "quoted-printable", "utf-8");
+        // If bodyText looks like raw MIME, parse it
+        if (bodyText && !bodyHtml && bodyText.includes("Content-Type:")) {
+          const parsed = parseMimeParts(bodyText);
+          if (parsed.html) bodyHtml = parsed.html;
+          if (parsed.text) bodyText = parsed.text;
         }
 
-        // Remove parser artifacts when IMAP server appends BODY[...] fragments in the same literal
-        bodyText = bodyText.replace(/\sBODY\[[\s\S]*$/i, "").trim();
-        bodyHtml = bodyHtml.replace(/\sBODY\[[\s\S]*$/i, "").trim();
-
-        // If we got HTML but no plain text, use HTML
-        if (!bodyText && bodyHtml) bodyText = bodyHtml;
-        // If bodyText looks like HTML, set bodyHtml
-        if (!bodyHtml && bodyText && (bodyText.includes("<html") || bodyText.includes("<div") || bodyText.includes("<p") || bodyText.includes("<table"))) {
+        // If no HTML and bodyText looks like HTML
+        if (!bodyHtml && bodyText && (bodyText.includes("<html") || bodyText.includes("<div") || bodyText.includes("<table"))) {
           bodyHtml = bodyText;
         }
 
-        console.log("fetch result - bodyText length:", bodyText.length, "bodyHtml length:", bodyHtml.length, "has parts:", !!msg.parts, "has raw:", !!msg.raw);
+        console.log("fetch result - bodyText length:", bodyText.length, "bodyHtml length:", bodyHtml.length, "has source:", !!msg.source, "has parts:", !!msg.parts);
 
         const env = msg.envelope || {};
         const resolvedUid = Number.isFinite(Number(msg.uid)) ? Number(msg.uid) : targetUid;

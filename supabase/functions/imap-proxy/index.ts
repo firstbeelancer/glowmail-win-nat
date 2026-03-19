@@ -551,7 +551,7 @@ Deno.serve(async (req) => {
 
         // Sort UIDs descending (newest first) and limit to reasonable amount
         uids.sort((a, b) => b - a);
-        const limitedUids = uids.slice(0, 200);
+        const limitedUids = uids.slice(0, 50);
 
         // Fetch envelope data for found UIDs
         const uidSet = limitedUids.join(",");

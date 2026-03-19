@@ -150,6 +150,8 @@ export function MailProvider({ children }: { children: ReactNode }) {
         smtpHost: 'smtp.example.com',
         smtpPort: 465,
         secure: true,
+        authMethod: parsedSettings.server?.authMethod || 'password',
+        oauthProvider: parsedSettings.server?.oauthProvider || '',
       },
       signature: defaultSignature,
       signatures,

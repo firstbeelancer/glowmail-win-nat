@@ -168,6 +168,30 @@ export function Compose({
     editorRef.current?.focus();
   };
 
+  const insertCodeElement = (type: 'inline' | 'block' | 'log') => {
+    if (!editorRef.current) return;
+    const sel = window.getSelection();
+    const selectedText = sel?.toString() || '';
+    setShowCodeMenu(false);
+
+    if (type === 'inline') {
+      const html = `<code style="background-color:#f4f4f5;color:#18181b;padding:2px 6px;border-radius:4px;font-family:'JetBrains Mono','Fira Code',Consolas,'Courier New',monospace;font-size:0.9em;border:1px solid #e4e4e7;">${selectedText || (lang === 'ru' ? 'код' : 'code')}</code>&nbsp;`;
+      editorRef.current.focus();
+      document.execCommand('insertHTML', false, html);
+    } else if (type === 'block') {
+      const placeholder = selectedText || (lang === 'ru' ? '// ваш код здесь' : '// your code here');
+      const html = `<div style="margin:12px 0;"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr><td style="background-color:#1e1e2e;border:1px solid #313244;border-radius:8px;padding:16px;font-family:'JetBrains Mono','Fira Code',Consolas,'Courier New',monospace;font-size:13px;line-height:1.5;color:#cdd6f4;white-space:pre-wrap;word-break:break-all;overflow-x:auto;" data-code-block="true">${placeholder}</td></tr></table></div><p><br></p>`;
+      editorRef.current.focus();
+      document.execCommand('insertHTML', false, html);
+    } else if (type === 'log') {
+      const placeholder = selectedText || (lang === 'ru' ? '$ команда или лог здесь' : '$ command or log output here');
+      const html = `<div style="margin:12px 0;"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr><td style="background-color:#0c0c0c;border:1px solid #333333;border-radius:8px;padding:16px;font-family:'JetBrains Mono','Fira Code',Consolas,'Courier New',monospace;font-size:13px;line-height:1.5;color:#00ff41;white-space:pre-wrap;word-break:break-all;overflow-x:auto;" data-code-block="log">${placeholder}</td></tr></table></div><p><br></p>`;
+      editorRef.current.focus();
+      document.execCommand('insertHTML', false, html);
+    }
+    setBody(editorRef.current.innerHTML);
+  };
+
   const handleAiAction = async (action: 'rewrite' | 'spellcheck' | 'professional' | 'friendly' | 'translate') => {
     if (!editorRef.current) return;
     const fullHtml = editorRef.current.innerHTML;

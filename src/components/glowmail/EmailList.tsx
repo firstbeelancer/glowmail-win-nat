@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMail } from '../../store';
+import { ChevronDown as ChevronDownIcon } from 'lucide-react';
 import { Email } from '../../types';
 import { formatDistanceToNow } from 'date-fns';
 import { Star, Paperclip, Tag, Inbox, AlertTriangle, ArrowDownAZ, ArrowUpAZ, Calendar, User, Type, Trash2, MoreVertical, Download, Printer, ChevronDown } from 'lucide-react';

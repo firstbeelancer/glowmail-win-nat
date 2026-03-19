@@ -241,7 +241,7 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
               <MoreVertical className="w-5 h-5" />
             </button>
             {showMoreMenu && (
-              <div className="absolute right-0 top-full mt-1 w-44 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
+              <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50">
                 <div className="p-1 flex flex-col">
                   <button
                     onClick={() => { handleSave(); setShowMoreMenu(false); }}
@@ -257,6 +257,64 @@ export const EmailDetail: React.FC<{ email: Email; onBack: () => void; onReply: 
                     <Printer className="w-4 h-4" />
                     {t('emailList.print', lang)}
                   </button>
+                  <div className="h-px bg-zinc-800 my-1" />
+                  <div className="relative">
+                    <button
+                      onClick={() => { setShowMovePicker(!showMovePicker); setShowCopyPicker(false); }}
+                      className="flex items-center gap-2 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors w-full"
+                    >
+                      <FolderInput className="w-4 h-4" />
+                      {lang === 'ru' ? 'Переместить' : 'Move to'}
+                    </button>
+                    {showMovePicker && (
+                      <div className="absolute right-full top-0 mr-1 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50 max-h-60 overflow-y-auto">
+                        <div className="p-1 flex flex-col">
+                          {allFoldersFlat.filter(f => f.id !== currentFolder).map(f => (
+                            <button
+                              key={f.id}
+                              onClick={() => {
+                                moveEmailToFolder(email.id, f.id);
+                                setShowMoreMenu(false);
+                                setShowMovePicker(false);
+                                onBack();
+                              }}
+                              className="flex items-center gap-2 text-left px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                            >
+                              {translateFolderName(f.id, f.name, lang)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <button
+                      onClick={() => { setShowCopyPicker(!showCopyPicker); setShowMovePicker(false); }}
+                      className="flex items-center gap-2 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors w-full"
+                    >
+                      <Copy className="w-4 h-4" />
+                      {lang === 'ru' ? 'Копировать' : 'Copy to'}
+                    </button>
+                    {showCopyPicker && (
+                      <div className="absolute right-full top-0 mr-1 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50 max-h-60 overflow-y-auto">
+                        <div className="p-1 flex flex-col">
+                          {allFoldersFlat.filter(f => f.id !== currentFolder).map(f => (
+                            <button
+                              key={f.id}
+                              onClick={() => {
+                                copyEmailToFolder(email.id, f.id);
+                                setShowMoreMenu(false);
+                                setShowCopyPicker(false);
+                              }}
+                              className="flex items-center gap-2 text-left px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                            >
+                              {translateFolderName(f.id, f.name, lang)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

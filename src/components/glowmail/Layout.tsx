@@ -230,6 +230,93 @@ function SidebarContent({
         })}
       </div>
 
+      {/* Address Book */}
+      <div className="px-3 py-2 border-t border-zinc-800/50">
+        <button
+          onClick={() => setShowAddressBook(!showAddressBook)}
+          className="flex items-center gap-2 w-full px-3 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider hover:text-zinc-300 transition-colors"
+        >
+          <BookUser className="w-3.5 h-3.5" />
+          <span className="flex-1 text-left">{t('layout.addressBook', lang)}</span>
+          {showAddressBook ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        </button>
+        {showAddressBook && (
+          <div className="mt-1 space-y-1 max-h-40 overflow-y-auto glow-scrollbar">
+            {contacts.length === 0 && (
+              <p className="px-3 py-2 text-xs text-zinc-600">{t('layout.noContacts', lang)}</p>
+            )}
+            {contacts.map(c => (
+              <div key={c.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-zinc-800/50 transition-colors">
+                <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold text-zinc-400 shrink-0">
+                  {c.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-medium text-zinc-300 truncate">{c.name}</div>
+                  <div className="text-[10px] text-zinc-500 truncate">{c.email}</div>
+                </div>
+              </div>
+            ))}
+            <button
+              onClick={() => setShowAddContact(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-500 hover:text-emerald-400 transition-colors w-full"
+            >
+              <Plus className="w-3 h-3" /> {t('layout.addContact', lang)}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Add Contact Modal */}
+      <AnimatePresence>
+        {showAddContact && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-4 border-b border-zinc-800/50 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-zinc-100">{t('layout.addContact', lang)}</h2>
+                <button onClick={() => setShowAddContact(false)} className="p-2 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-zinc-200 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                if (newContactName.trim() && newContactEmail.trim()) {
+                  addContact({ id: `c${Date.now()}`, name: newContactName.trim(), email: newContactEmail.trim() });
+                  setNewContactName('');
+                  setNewContactEmail('');
+                  setShowAddContact(false);
+                }
+              }} className="p-4 space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">{t('layout.contactName', lang)}</label>
+                  <input type="text" value={newContactName} onChange={e => setNewContactName(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all glow-input"
+                    autoFocus />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-400 mb-1">{t('layout.contactEmail', lang)}</label>
+                  <input type="email" value={newContactEmail} onChange={e => setNewContactEmail(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all glow-input" />
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={() => setShowAddContact(false)} className="px-4 py-2 text-sm font-medium text-zinc-300 hover:text-zinc-100 transition-colors">
+                    {t('layout.cancel', lang)}
+                  </button>
+                  <button type="submit" disabled={!newContactName.trim() || !newContactEmail.trim()}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 rounded-xl text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    {t('layout.create', lang)}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {showNewFolderModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

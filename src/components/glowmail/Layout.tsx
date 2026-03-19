@@ -148,6 +148,7 @@ function SidebarContent({
   const { fetchEmails, addFolder, emails, contacts, addContact } = useMail();
   const [isFetching, setIsFetching] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ INBOX: true });
+  const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [showAddressBook, setShowAddressBook] = useState(false);
   const [showAddContact, setShowAddContact] = useState(false);

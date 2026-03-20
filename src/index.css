@@ -26,18 +26,18 @@
     --zinc-900: 240 6% 10%;
     --zinc-950: 240 10% 4%;
     
-    --emerald-400: #34d399;
-    --emerald-500: #10b981;
+    --emerald-400: #1CA88E;
+    --emerald-500: #1CA88E;
 
     --background: 0 0% 3.5%;
     --foreground: 240 5% 96%;
-    --primary: 160 84% 39%;
+    --primary: 163 73% 38%;
     --primary-foreground: 0 0% 3.5%;
     --card: 240 6% 10%;
     --card-foreground: 240 5% 96%;
     --border: 240 4% 16%;
     --input: 240 4% 16%;
-    --ring: 160 84% 39%;
+    --ring: 163 73% 38%;
     --radius: 0.75rem;
   }
 
@@ -54,8 +54,8 @@
     --zinc-900: 240 5% 96%;
     --zinc-950: 0 0% 98%;
     
-    --emerald-400: #348E70;
-    --emerald-500: #348E70;
+    --emerald-400: #1CA88E;
+    --emerald-500: #1CA88E;
 
     --background: 0 0% 98%;
     --foreground: 240 10% 4%;

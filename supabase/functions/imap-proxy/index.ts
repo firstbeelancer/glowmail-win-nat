@@ -950,25 +950,26 @@ Deno.serve(async (req) => {
         matchedUids = [...matchedUidSet];
         const shouldForceContentScan = !term.includes("@");
 
-        if (!anySearchWorked || matchedUids.length === 0 || shouldForceContentScan) {
+        // Only do content scan if we have very few results AND it's not an email search
+        // Limit scan to last 200 messages to stay within CPU limits
+        if ((!anySearchWorked || matchedUids.length === 0) && shouldForceContentScan) {
           console.log(
-            `[search] falling back to content scan anySearchWorked=${anySearchWorked} preMatched=${matchedUids.length} force=${shouldForceContentScan}`,
+            `[search] falling back to envelope-only scan anySearchWorked=${anySearchWorked} preMatched=${matchedUids.length}`,
           );
           const mailboxStatus = await client.selectMailbox(folder);
           const totalMessages = Number((mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0);
-          const batchSize = 200;
-          const scannedMatches: any[] = [];
+          const scanLimit = Math.min(totalMessages, 200);
+          const seqStart = Math.max(1, totalMessages - scanLimit + 1);
+          const sequence = `${seqStart}:${totalMessages}`;
 
-          for (let seqEnd = totalMessages; seqEnd >= 1; seqEnd -= batchSize) {
-            const seqStart = Math.max(1, seqEnd - batchSize + 1);
-            const sequence = `${seqStart}:${seqEnd}`;
-            const batch = await fetchEnvelopeBatch(client, sequence, false, true);
-            for (const msg of batch) {
-              if (!Number.isFinite(Number(msg?.uid))) continue;
-              if (await searchMessageContent(msg, normalizedTerm)) {
-                scannedMatches.push(msg);
-                matchedUidSet.add(Number(msg.uid));
-              }
+          // Envelope-only scan (no source) to stay within CPU limits
+          const batch = await fetchEnvelopeBatch(client, sequence, false, false);
+          const scannedMatches: any[] = [];
+          for (const msg of batch) {
+            if (!Number.isFinite(Number(msg?.uid))) continue;
+            if (searchEmailFromEnvelope(msg, normalizedTerm)) {
+              scannedMatches.push(msg);
+              matchedUidSet.add(Number(msg.uid));
             }
           }
 

@@ -910,24 +910,35 @@ Deno.serve(async (req) => {
         const cachedMatchedUids = await querySearchCacheByTerm(accountKey, folder, term);
         cachedMatchedUids.forEach((uid) => matchedUidSet.add(uid));
         console.log(`[search] cached matches=${cachedMatchedUids.length}`);
+        // deno-imap search() signature: search(criteria: ImapSearchCriteria, charset?: string)
+        // ImapSearchCriteria.header expects: { field: string, value: string }[]
+        // ImapSearchCriteria.text/body expect: string
+        // Returns sequence numbers (not UIDs)
         const searchAttempts: Array<{ label: string; criteria: Record<string, unknown> }> = [
-          { label: "Subject", criteria: { header: ["Subject", term] } },
-          { label: "From", criteria: { header: ["From", term] } },
-          { label: "To", criteria: { header: ["To", term] } },
-          { label: "Cc", criteria: { header: ["Cc", term] } },
           { label: "Text", criteria: { text: term } },
-          { label: "Body", criteria: { body: term } },
+          { label: "Subject", criteria: { header: [{ field: "Subject", value: term }] } },
+          { label: "From", criteria: { header: [{ field: "From", value: term }] } },
+          { label: "To", criteria: { header: [{ field: "To", value: term }] } },
+          { label: "Cc", criteria: { header: [{ field: "Cc", value: term }] } },
         ];
         let anySearchWorked = false;
 
         for (const attempt of searchAttempts) {
           try {
-            const searchResult = await (client as any).search(attempt.criteria, { byUid: true });
-            const uids = (Array.isArray(searchResult) ? searchResult : []).map(Number).filter(Number.isFinite);
-            if (uids.length > 0) {
+            const searchResult = await client.search(attempt.criteria as any);
+            const seqNos = (Array.isArray(searchResult) ? searchResult : []).map(Number).filter(Number.isFinite);
+            if (seqNos.length > 0) {
               anySearchWorked = true;
-              uids.forEach((uid) => matchedUidSet.add(uid));
+              // Convert sequence numbers to UIDs by fetching UID for each
+              const seqRange = seqNos.join(",");
+              const uidMsgs = await (client as any).fetch(seqRange, { uid: true });
+              const fetched = (Array.isArray(uidMsgs) ? uidMsgs : [uidMsgs]).filter(Boolean);
+              for (const m of fetched) {
+                if (Number.isFinite(Number(m?.uid))) matchedUidSet.add(Number(m.uid));
+              }
             }
+            // If TEXT search worked, skip header-specific searches (TEXT covers them)
+            if (attempt.label === "Text" && anySearchWorked) break;
           } catch (attemptError) {
             console.log(`[search] search failed for ${attempt.label}:`, attemptError);
           }

@@ -14,13 +14,106 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      email_search_cache: {
+        Row: {
+          account_email: string
+          account_key: string
+          attachment_names: string[]
+          cc_addresses: Json
+          flags: string[]
+          folder_id: string
+          from_email: string
+          from_name: string
+          has_attachments: boolean
+          id: number
+          imap_host: string
+          in_reply_to: string
+          message_id: string
+          search_document: unknown
+          sent_at: string
+          snippet: string
+          subject: string
+          to_addresses: Json
+          uid: number
+          updated_at: string
+        }
+        Insert: {
+          account_email: string
+          account_key: string
+          attachment_names?: string[]
+          cc_addresses?: Json
+          flags?: string[]
+          folder_id: string
+          from_email?: string
+          from_name?: string
+          has_attachments?: boolean
+          id?: number
+          imap_host: string
+          in_reply_to?: string
+          message_id?: string
+          search_document?: unknown
+          sent_at?: string
+          snippet?: string
+          subject?: string
+          to_addresses?: Json
+          uid: number
+          updated_at?: string
+        }
+        Update: {
+          account_email?: string
+          account_key?: string
+          attachment_names?: string[]
+          cc_addresses?: Json
+          flags?: string[]
+          folder_id?: string
+          from_email?: string
+          from_name?: string
+          has_attachments?: boolean
+          id?: number
+          imap_host?: string
+          in_reply_to?: string
+          message_id?: string
+          search_document?: unknown
+          sent_at?: string
+          snippet?: string
+          subject?: string
+          to_addresses?: Json
+          uid?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      email_search_cache_document: {
+        Args: {
+          p_attachment_names: string[]
+          p_cc_addresses: Json
+          p_from_email: string
+          p_from_name: string
+          p_snippet: string
+          p_subject: string
+          p_to_addresses: Json
+        }
+        Returns: unknown
+      }
+      search_email_search_cache: {
+        Args: {
+          p_account_key: string
+          p_folder_id: string
+          p_limit?: number
+          p_offset?: number
+          p_query: string
+        }
+        Returns: {
+          uid: number
+        }[]
+      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
     }
     Enums: {
       [_ in never]: never

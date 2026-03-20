@@ -292,11 +292,11 @@ function SidebarContent({
           return (
              <div key={folder.id}>
               <div
-                className={cn(
+                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
                   isActive
-                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]"
-                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200",
+                    ? "bg-emerald-500/15 text-emerald-300 shadow-[inset_0_0_20px_rgba(16,185,129,0.08)] border border-emerald-500/20"
+                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border border-transparent",
                   dragOverFolder === folder.id && "ring-2 ring-emerald-400/50 bg-emerald-500/10"
                 )}
               >
@@ -319,12 +319,12 @@ function SidebarContent({
                   onDrop={(e) => handleFolderDrop(e, folder.id)}
                   className="flex items-center gap-3 flex-1 min-w-0 text-left"
                 >
-                <Icon className={cn("w-4 h-4", isActive ? "text-emerald-400" : "text-zinc-500")} />
+                <Icon className={cn("w-4 h-4", isActive ? "text-emerald-300" : "text-zinc-500")} />
                 <span className="flex-1 text-left">{translateFolderName(folder.id, folder.name, lang)}</span>
                 {count > 0 && (
                   <span className={cn(
                     "px-2 py-0.5 rounded-full text-xs font-bold",
-                    isActive ? "bg-emerald-500/20 text-emerald-400" : "bg-zinc-800 text-zinc-300"
+                    isActive ? "bg-emerald-500/25 text-emerald-300" : "bg-zinc-800 text-zinc-300"
                   )}>
                     {count}
                   </span>

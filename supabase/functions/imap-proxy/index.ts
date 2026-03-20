@@ -366,9 +366,6 @@ Deno.serve(async (req) => {
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
 
-
-
-
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
           .map((msg: any) => {

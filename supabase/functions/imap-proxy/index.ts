@@ -236,6 +236,28 @@ async function querySearchCacheByUids(accountKey: string, folder: string, uids: 
   return (data || []) as SearchCacheRow[];
 }
 
+async function querySearchCacheByTerm(accountKey: string, folder: string, term: string) {
+  const admin = getAdminClient();
+  if (!admin || !term.trim()) return [];
+
+  const { data, error } = await admin.rpc("search_email_search_cache", {
+    p_account_key: accountKey,
+    p_folder_id: folder,
+    p_query: term,
+    p_limit: 1000,
+    p_offset: 0,
+  });
+
+  if (error) {
+    console.error("[search-cache] term lookup failed:", error);
+    return [];
+  }
+
+  return (data || [])
+    .map((row: { uid?: number | string }) => Number(row?.uid))
+    .filter((uid) => Number.isFinite(uid));
+}
+
 async function fetchEnvelopeBatch(client: ImapClient, sequence: string, byUid = false) {
   const messages = await (client as any).fetch(sequence, {
     ...(byUid ? { byUid: true } : {}),
@@ -365,6 +387,9 @@ Deno.serve(async (req) => {
         });
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+
+
+
 
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
@@ -817,25 +842,35 @@ Deno.serve(async (req) => {
         const normalizedTerm = normalizeSearchTerm(term);
         let matchedUids: number[] = [];
         const matchedUidSet = new Set<number>();
-        const searchHeaders = ["Subject", "From", "To", "Cc"];
-        let anyHeaderSearchWorked = false;
+        const cachedMatchedUids = await querySearchCacheByTerm(accountKey, folder, term);
+        cachedMatchedUids.forEach((uid) => matchedUidSet.add(uid));
+        console.log(`[search] cached matches=${cachedMatchedUids.length}`);
+        const searchAttempts: Array<{ label: string; criteria: Record<string, unknown> }> = [
+          { label: "Subject", criteria: { header: ["Subject", term] } },
+          { label: "From", criteria: { header: ["From", term] } },
+          { label: "To", criteria: { header: ["To", term] } },
+          { label: "Cc", criteria: { header: ["Cc", term] } },
+          { label: "Text", criteria: { text: term } },
+          { label: "Body", criteria: { body: term } },
+        ];
+        let anySearchWorked = false;
 
-        for (const header of searchHeaders) {
+        for (const attempt of searchAttempts) {
           try {
-            const searchResult = await (client as any).search({ header: [header, term] }, { byUid: true });
+            const searchResult = await (client as any).search(attempt.criteria, { byUid: true });
             const uids = (Array.isArray(searchResult) ? searchResult : []).map(Number).filter(Number.isFinite);
             if (uids.length > 0) {
-              anyHeaderSearchWorked = true;
+              anySearchWorked = true;
               uids.forEach((uid) => matchedUidSet.add(uid));
             }
-          } catch (headerError) {
-            console.log(`[search] header search failed for ${header}:`, headerError);
+          } catch (attemptError) {
+            console.log(`[search] search failed for ${attempt.label}:`, attemptError);
           }
         }
 
         matchedUids = [...matchedUidSet];
 
-        if (!anyHeaderSearchWorked || matchedUids.length === 0) {
+        if (!anySearchWorked) {
           console.log("[search] falling back to envelope scan");
           const mailboxStatus = await client.selectMailbox(folder);
           const totalMessages = Number((mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0);
@@ -865,6 +900,8 @@ Deno.serve(async (req) => {
             );
           }
         }
+
+        matchedUids = [...matchedUidSet];
 
         // Sort newest first
         matchedUids.sort((a, b) => b - a);

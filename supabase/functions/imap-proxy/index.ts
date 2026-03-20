@@ -449,16 +449,10 @@ Deno.serve(async (req) => {
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
 
-
-
-
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
           .map((msg: any) => {
             const env = msg.envelope || {};
-            let hasAtt = false;
-            try { hasAtt = msg.bodyStructure ? imapHasAttachments(msg.bodyStructure) : false; } catch {}
-
             return {
               uid: msg.uid,
               flags: msg.flags || [],
@@ -481,17 +475,13 @@ Deno.serve(async (req) => {
               date: env.date || new Date().toISOString(),
               messageId: env.messageId || "",
               inReplyTo: env.inReplyTo || "",
-              hasAttachments: hasAtt,
+              hasAttachments: false,
               attachments: [],
             };
           })
-          .sort((a: any, b: any) => b.uid - a.uid); // newest first
+          .sort((a: any, b: any) => b.uid - a.uid);
 
-        await upsertSearchCache(
-          normalized
-            .map((msg: any) => buildCacheRow(accountKey, host, username, folder, msg))
-            .filter(Boolean) as SearchCacheRow[],
-        );
+        // Cache building skipped for list (no bodyStructure available)
 
         await client.disconnect();
         client = null;

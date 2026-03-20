@@ -488,7 +488,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     }
   }, [currentFolder, fetchEmails]);
 
-  // Server-side search with debounce (metadata-only: subject, from, to, cc)
+  // Server-side search with debounce (subject/from/to/cc and, when IMAP server supports it, TEXT/BODY)
   // NO dependency on `emails` or `isSearchActive` to prevent loops/overwrites
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);

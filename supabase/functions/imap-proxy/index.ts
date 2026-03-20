@@ -613,7 +613,7 @@ Deno.serve(async (req) => {
           cc: (env.cc || []).map((a: any) => ({ name: decodeMimeWords(a.name || a.mailbox || ""), email: `${a.mailbox}@${a.host}` })),
           date: env.date || "",
           messageId: env.messageId || "",
-          bodyText, bodyHtml, text: bodyText, html: bodyHtml, hasBody, attachments,
+          bodyText, bodyHtml, text: bodyText, html: bodyHtml, hasBody, tooLargeToParse: messageSize > MAX_FETCH_BODY_MESSAGE_SIZE, attachments,
         });
       }
 

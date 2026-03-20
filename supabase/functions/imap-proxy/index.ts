@@ -236,6 +236,51 @@ async function querySearchCacheByUids(accountKey: string, folder: string, uids: 
   return (data || []) as SearchCacheRow[];
 }
 
+async function fetchEnvelopeBatch(client: ImapClient, sequence: string, byUid = false) {
+  const messages = await (client as any).fetch(sequence, {
+    ...(byUid ? { byUid: true } : {}),
+    uid: true,
+    envelope: true,
+    flags: true,
+    bodyStructure: true,
+    size: true,
+  });
+  return (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+}
+
+async function syncCachedFlags(accountKey: string, folder: string, uid: number, addFlags?: string[], removeFlags?: string[]) {
+  const admin = getAdminClient();
+  if (!admin || !Number.isFinite(uid)) return;
+
+  const { data, error } = await admin
+    .from("email_search_cache")
+    .select("flags")
+    .eq("account_key", accountKey)
+    .eq("folder_id", folder)
+    .eq("uid", uid)
+    .maybeSingle();
+
+  if (error || !data) {
+    if (error) console.error("[search-cache] flags read failed:", error);
+    return;
+  }
+
+  const nextFlags = new Set<string>(Array.isArray(data.flags) ? data.flags : []);
+  (addFlags || []).forEach((flag) => nextFlags.add(flag));
+  (removeFlags || []).forEach((flag) => nextFlags.delete(flag));
+
+  const { error: updateError } = await admin
+    .from("email_search_cache")
+    .update({ flags: [...nextFlags] })
+    .eq("account_key", accountKey)
+    .eq("folder_id", folder)
+    .eq("uid", uid);
+
+  if (updateError) {
+    console.error("[search-cache] flags update failed:", updateError);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -724,6 +769,8 @@ Deno.serve(async (req) => {
           await client.setFlags(String(flagUid), removeFlags, "remove", true);
         }
 
+        await syncCachedFlags(accountKey, folder, Number(flagUid), addFlags, removeFlags);
+
         await client.disconnect();
         client = null;
         return ok({ success: true });
@@ -801,14 +848,7 @@ Deno.serve(async (req) => {
           for (let seqEnd = totalMessages; seqEnd >= 1; seqEnd -= batchSize) {
             const seqStart = Math.max(1, seqEnd - batchSize + 1);
             const sequence = `${seqStart}:${seqEnd}`;
-            const messages = await (client as any).fetch(sequence, {
-              uid: true,
-              envelope: true,
-              flags: true,
-              bodyStructure: true,
-              size: true,
-            });
-            const batch = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+            const batch = await fetchEnvelopeBatch(client, sequence);
             for (const msg of batch) {
               if (!Number.isFinite(Number(msg?.uid))) continue;
               if (searchEmailFromEnvelope(msg, normalizedTerm)) {
@@ -864,15 +904,7 @@ Deno.serve(async (req) => {
 
         if (missingUids.length > 0) {
           const uidRange = missingUids.join(",");
-          const messages = await (client as any).fetch(uidRange, {
-            byUid: true,
-            uid: true,
-            envelope: true,
-            flags: true,
-            bodyStructure: true,
-            size: true,
-          });
-          normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+          normalized = await fetchEnvelopeBatch(client, uidRange, true);
         }
 
         const fetchedEmails = normalized

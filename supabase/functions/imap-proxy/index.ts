@@ -727,7 +727,7 @@ Deno.serve(async (req) => {
           );
           const mailboxStatus = await client.selectMailbox(folder);
           const totalMessages = Number((mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0);
-          const scanLimit = Math.min(totalMessages, 200);
+          const scanLimit = Math.min(totalMessages, 100);
           const seqStart = Math.max(1, totalMessages - scanLimit + 1);
           const sequence = `${seqStart}:${totalMessages}`;
 

@@ -803,29 +803,40 @@ Deno.serve(async (req) => {
         const bodyHtml = typeof parsed.html === "string" ? parsed.html.trim() : "";
 
         let finalHtml = bodyHtml;
+        let htmlSource = bodyHtml ? "postal-mime" : "none";
 
         // Fallback 1: check if HTML is hiding in an attachment (text/html part treated as attachment)
         if (!finalHtml && parsed.attachments?.length) {
-          const htmlAttachment = parsed.attachments.find((a: any) =>
-            (a.mimeType || "").toLowerCase() === "text/html"
-          );
-          if (htmlAttachment?.content) {
-            finalHtml = new TextDecoder().decode(
-              htmlAttachment.content instanceof Uint8Array
-                ? htmlAttachment.content
-                : new Uint8Array(htmlAttachment.content),
-            ).trim();
-            console.log("[fetch] Got HTML from attachment fallback, length:", finalHtml.length);
+          try {
+            const htmlAttachment = parsed.attachments.find((a: any) =>
+              (a.mimeType || "").toLowerCase() === "text/html"
+            );
+            if (htmlAttachment?.content) {
+              let contentBytes: Uint8Array | null = null;
+              if (htmlAttachment.content instanceof Uint8Array) {
+                contentBytes = htmlAttachment.content;
+              } else if (htmlAttachment.content instanceof ArrayBuffer) {
+                contentBytes = new Uint8Array(htmlAttachment.content);
+              } else if (typeof htmlAttachment.content === "string") {
+                contentBytes = new TextEncoder().encode(htmlAttachment.content);
+              }
+              if (contentBytes && contentBytes.length > 0) {
+                finalHtml = new TextDecoder().decode(contentBytes).trim();
+                htmlSource = "attachment-fallback";
+                console.log("[fetch] Got HTML from attachment fallback, length:", finalHtml.length);
+              }
+            }
+          } catch (attErr) {
+            console.error("[fetch] HTML attachment fallback failed:", attErr);
           }
         }
 
         // Fallback 2: PostalMime gave no HTML, but bodyStructure says there IS an HTML part.
-        // Fetch that specific MIME part directly from IMAP.
         if (!finalHtml && bodyStructure && client) {
-          const htmlPartPath = findHtmlPartPath(bodyStructure);
-          if (htmlPartPath) {
-            try {
-              console.log("[fetch] PostalMime gave no HTML, fetching MIME part directly:", htmlPartPath);
+          try {
+            const htmlPartPath = findHtmlPartPath(bodyStructure);
+            if (htmlPartPath) {
+              console.log("[fetch] Trying direct IMAP part fetch:", htmlPartPath);
               const partMsgs = await (client as any).fetch(String(targetUid), {
                 byUid: true,
                 uid: true,
@@ -834,79 +845,99 @@ Deno.serve(async (req) => {
               const partArr = (Array.isArray(partMsgs) ? partMsgs : [partMsgs]).filter(Boolean);
               const partMsg = partArr.find((m: any) => Number(m?.uid) === targetUid) || partArr[0];
 
-              // deno-imap may return body parts via Map or direct property
-              let partContent: unknown = null;
-              if (partMsg?.bodyParts instanceof Map) {
-                partContent = partMsg.bodyParts.get(htmlPartPath);
-              } else if (partMsg?.body instanceof Map) {
-                partContent = partMsg.body.get(htmlPartPath);
-              }
-              // also check string-key property like body[1.2]
-              if (!partContent) {
-                partContent = partMsg?.[`body[${htmlPartPath}]`];
-              }
+              if (partMsg) {
+                let partContent: unknown = null;
+                if (partMsg?.bodyParts instanceof Map) {
+                  partContent = partMsg.bodyParts.get(htmlPartPath);
+                } else if (partMsg?.body instanceof Map) {
+                  partContent = partMsg.body.get(htmlPartPath);
+                }
+                if (!partContent) {
+                  partContent = partMsg?.[`body[${htmlPartPath}]`];
+                }
 
-              if (partContent) {
-                const partBytes = await toUint8Array(partContent);
-                if (partBytes && partBytes.length > 0) {
-                  let decoded = new TextDecoder().decode(partBytes).trim();
-
-                  // Check if the part is quoted-printable encoded and decode it
-                  if (decoded.includes("=3D") || decoded.includes("=\r\n") || decoded.includes("=\n")) {
-                    decoded = decodeQuotedPrintable(decoded);
+                if (partContent) {
+                  const partBytes = await toUint8Array(partContent);
+                  if (partBytes && partBytes.length > 0) {
+                    let decoded = new TextDecoder().decode(partBytes).trim();
+                    if (decoded.includes("=3D") || decoded.includes("=\r\n") || decoded.includes("=\n")) {
+                      try {
+                        decoded = decodeQuotedPrintable(decoded);
+                      } catch (qpErr) {
+                        console.error("[fetch] QP decode failed, using raw:", qpErr);
+                      }
+                    }
+                    finalHtml = decoded;
+                    htmlSource = "direct-imap-part";
+                    console.log("[fetch] Got HTML from direct IMAP part fetch, length:", finalHtml.length);
                   }
-
-                  finalHtml = decoded;
-                  console.log("[fetch] Got HTML from direct IMAP part fetch, length:", finalHtml.length);
                 }
               }
-            } catch (e) {
-              console.error("[fetch] Direct HTML part fetch failed:", e);
             }
+          } catch (partErr) {
+            console.error("[fetch] Direct HTML part fetch failed:", partErr);
           }
         }
 
-        // Fallback 3: if we still only have text, check for QP artifacts in text that suggest
-        // the content was HTML but got decoded as plain text
+        // Fallback 3: if bodyText actually contains HTML tags, promote it
         if (!finalHtml && bodyText) {
-          // Check if the "plain text" is actually HTML that wasn't recognized
-          if (/<\/?[a-z][\s\S]*>/i.test(bodyText)) {
-            finalHtml = bodyText;
-            console.log("[fetch] bodyText contains HTML tags, promoting to finalHtml");
+          try {
+            if (/<\/?[a-z][\s\S]*>/i.test(bodyText)) {
+              finalHtml = bodyText;
+              htmlSource = "text-promoted";
+              console.log("[fetch] bodyText contains HTML tags, promoting to finalHtml");
+            }
+          } catch (regexErr) {
+            console.error("[fetch] HTML detection in bodyText failed:", regexErr);
           }
         }
 
         const hasBody = Boolean(bodyText || finalHtml);
-        console.log("[fetch] uid:", targetUid, "bodyText.len:", bodyText.length, "finalHtml.len:", finalHtml.length, "hasBody:", hasBody);
+        console.log("[fetch] uid:", targetUid, "bodyText.len:", bodyText.length, "finalHtml.len:", finalHtml.length, "hasBody:", hasBody, "htmlSource:", htmlSource);
 
-        const attachments = (parsed.attachments || [])
-          .filter((a: any) => {
-            const mimeType = (a.mimeType || "").toLowerCase();
-            return mimeType !== "text/plain" && mimeType !== "text/html";
-          })
-          .map((a: any) => {
-            const bytes = a.content
-              ? (a.content instanceof Uint8Array ? a.content : new Uint8Array(a.content))
-              : null;
-
-            let contentBase64 = "";
-            if (includeAttachmentContent && bytes && bytes.length <= MAX_ATTACHMENT_INLINE_BYTES) {
+        let attachments: any[] = [];
+        try {
+          attachments = (parsed.attachments || [])
+            .filter((a: any) => {
+              const mimeType = (a.mimeType || "").toLowerCase();
+              return mimeType !== "text/plain" && mimeType !== "text/html";
+            })
+            .map((a: any) => {
+              let bytes: Uint8Array | null = null;
               try {
-                let binary = "";
-                for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-                contentBase64 = btoa(binary);
+                if (a.content instanceof Uint8Array) {
+                  bytes = a.content;
+                } else if (a.content instanceof ArrayBuffer) {
+                  bytes = new Uint8Array(a.content);
+                } else if (a.content && typeof a.content === "object") {
+                  bytes = new Uint8Array(a.content);
+                }
               } catch {
-                contentBase64 = "";
+                bytes = null;
               }
-            }
 
-            return {
-              name: a.filename || "unnamed",
-              size: bytes?.length || 0,
-              type: a.mimeType || "application/octet-stream",
-              contentBase64,
-            };
-          });
+              let contentBase64 = "";
+              if (includeAttachmentContent && bytes && bytes.length <= MAX_ATTACHMENT_INLINE_BYTES) {
+                try {
+                  let binary = "";
+                  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+                  contentBase64 = btoa(binary);
+                } catch {
+                  contentBase64 = "";
+                }
+              }
+
+              return {
+                name: a.filename || "unnamed",
+                size: bytes?.length || 0,
+                type: a.mimeType || "application/octet-stream",
+                contentBase64,
+              };
+            });
+        } catch (attProcessErr) {
+          console.error("[fetch] Attachment processing failed:", attProcessErr);
+          attachments = [];
+        }
 
         const env = envelope || {};
         const resolvedUid = targetUid;

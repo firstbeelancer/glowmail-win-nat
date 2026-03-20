@@ -650,6 +650,7 @@ Deno.serve(async (req) => {
             envelope = msg.envelope;
             flags = msg.flags || [];
             messageSize = Number(msg.size || 0);
+            bodyStructure = msg.bodyStructure || null;
             msgSourceType = typeof msg.source;
             msgSourceConstructor = msg.source?.constructor?.name || "undefined";
 
@@ -658,14 +659,12 @@ Deno.serve(async (req) => {
             if (!rawSource) await readRawCandidate("msg.source", msg.source);
 
             console.log(
-              "fetch source attempt - hasSource:",
+              "[fetch] source attempt - hasSource:",
               !!rawSource,
               "origin:",
               rawSourceOrigin,
-              "msg.source type:",
-              msgSourceType,
-              "msg.source constructor:",
-              msgSourceConstructor,
+              "hasBodyStructure:",
+              !!bodyStructure,
               "keys:",
               Object.keys(msg).join(","),
             );

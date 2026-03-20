@@ -67,6 +67,14 @@ function normalizeAddress(address: any): Address {
   };
 }
 
+function normalizeSearchTerm(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 function extractAttachmentNames(bodyStructure: any): string[] {
   if (!bodyStructure) return [];
   const names = new Set<string>();
@@ -130,6 +138,49 @@ function buildCacheRow(accountKey: string, host: string, username: string, folde
   };
 }
 
+function searchEmailFromEnvelope(msg: any, term: string) {
+  const env = msg.envelope || {};
+  const from = normalizeAddress(env.from?.[0]);
+  const to = (env.to || []).map(normalizeAddress);
+  const cc = (env.cc || []).map(normalizeAddress);
+  const attachmentNames = extractAttachmentNames(msg.bodyStructure);
+  const haystack = normalizeSearchTerm([
+    env.subject || "",
+    from.name,
+    from.email,
+    ...to.flatMap((item) => [item.name, item.email]),
+    ...cc.flatMap((item) => [item.name, item.email]),
+    ...attachmentNames,
+  ].join(" "));
+
+  return haystack.includes(term);
+}
+
+function mapFetchedSearchEmail(msg: any) {
+  const env = msg.envelope || {};
+  const attachments = extractAttachmentNames(msg.bodyStructure).map((name) => ({
+    name: name || "unnamed",
+    size: 0,
+    type: "application/octet-stream",
+  }));
+
+  return {
+    uid: msg.uid,
+    flags: msg.flags || [],
+    size: msg.size || 0,
+    subject: env.subject || "(No Subject)",
+    from: env.from?.[0]
+      ? { name: env.from[0].name || env.from[0].mailbox, email: `${env.from[0].mailbox}@${env.from[0].host}` }
+      : { name: "Unknown", email: "" },
+    to: (env.to || []).map((a: any) => ({ name: a.name || a.mailbox, email: `${a.mailbox}@${a.host}` })),
+    cc: (env.cc || []).map((a: any) => ({ name: a.name || a.mailbox, email: `${a.mailbox}@${a.host}` })),
+    date: env.date || new Date().toISOString(),
+    messageId: env.messageId || "",
+    inReplyTo: env.inReplyTo || "",
+    attachments,
+  };
+}
+
 function cacheRowToEmail(row: SearchCacheRow) {
   return {
     uid: row.uid,
@@ -183,6 +234,51 @@ async function querySearchCacheByUids(accountKey: string, folder: string, uids: 
   }
 
   return (data || []) as SearchCacheRow[];
+}
+
+async function fetchEnvelopeBatch(client: ImapClient, sequence: string, byUid = false) {
+  const messages = await (client as any).fetch(sequence, {
+    ...(byUid ? { byUid: true } : {}),
+    uid: true,
+    envelope: true,
+    flags: true,
+    bodyStructure: true,
+    size: true,
+  });
+  return (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+}
+
+async function syncCachedFlags(accountKey: string, folder: string, uid: number, addFlags?: string[], removeFlags?: string[]) {
+  const admin = getAdminClient();
+  if (!admin || !Number.isFinite(uid)) return;
+
+  const { data, error } = await admin
+    .from("email_search_cache")
+    .select("flags")
+    .eq("account_key", accountKey)
+    .eq("folder_id", folder)
+    .eq("uid", uid)
+    .maybeSingle();
+
+  if (error || !data) {
+    if (error) console.error("[search-cache] flags read failed:", error);
+    return;
+  }
+
+  const nextFlags = new Set<string>(Array.isArray(data.flags) ? data.flags : []);
+  (addFlags || []).forEach((flag) => nextFlags.add(flag));
+  (removeFlags || []).forEach((flag) => nextFlags.delete(flag));
+
+  const { error: updateError } = await admin
+    .from("email_search_cache")
+    .update({ flags: [...nextFlags] })
+    .eq("account_key", accountKey)
+    .eq("folder_id", folder)
+    .eq("uid", uid);
+
+  if (updateError) {
+    console.error("[search-cache] flags update failed:", updateError);
+  }
 }
 
 Deno.serve(async (req) => {
@@ -269,9 +365,6 @@ Deno.serve(async (req) => {
         });
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
-
-
-
 
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
@@ -673,6 +766,8 @@ Deno.serve(async (req) => {
           await client.setFlags(String(flagUid), removeFlags, "remove", true);
         }
 
+        await syncCachedFlags(accountKey, folder, Number(flagUid), addFlags, removeFlags);
+
         await client.disconnect();
         client = null;
         return ok({ success: true });
@@ -719,29 +814,55 @@ Deno.serve(async (req) => {
 
         console.log(`[search] request folder="${folder}" query="${term}" page=${safePage} pageSize=${safePageSize}`);
 
-        // Use native IMAP SEARCH — much faster than scanning all envelopes
+        const normalizedTerm = normalizeSearchTerm(term);
         let matchedUids: number[] = [];
-        try {
-          // Try OR search across subject, from, to
-          const searchCriteria = {
-            or: [
-              { header: ["Subject", term] },
-              { header: ["From", term] },
-              { header: ["To", term] },
-            ],
-          };
-          const searchResult = await (client as any).search(searchCriteria, { byUid: true });
-          matchedUids = (Array.isArray(searchResult) ? searchResult : []).map(Number).filter(Number.isFinite);
-        } catch (e1) {
-          console.log("[search] structured OR search failed, trying SUBJECT only:", e1);
+        const matchedUidSet = new Set<number>();
+        const searchHeaders = ["Subject", "From", "To", "Cc"];
+        let anyHeaderSearchWorked = false;
+
+        for (const header of searchHeaders) {
           try {
-            const searchResult = await (client as any).search({ header: ["Subject", term] }, { byUid: true });
-            matchedUids = (Array.isArray(searchResult) ? searchResult : []).map(Number).filter(Number.isFinite);
-          } catch (e2) {
-            console.error("[search] IMAP SEARCH failed entirely:", e2);
-            await client.disconnect();
-            client = null;
-            return ok({ emails: [], total: 0, page: safePage, pageSize: safePageSize, hasMore: false, searchError: "IMAP search not supported" });
+            const searchResult = await (client as any).search({ header: [header, term] }, { byUid: true });
+            const uids = (Array.isArray(searchResult) ? searchResult : []).map(Number).filter(Number.isFinite);
+            if (uids.length > 0) {
+              anyHeaderSearchWorked = true;
+              uids.forEach((uid) => matchedUidSet.add(uid));
+            }
+          } catch (headerError) {
+            console.log(`[search] header search failed for ${header}:`, headerError);
+          }
+        }
+
+        matchedUids = [...matchedUidSet];
+
+        if (!anyHeaderSearchWorked || matchedUids.length === 0) {
+          console.log("[search] falling back to envelope scan");
+          const mailboxStatus = await client.selectMailbox(folder);
+          const totalMessages = Number((mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0);
+          const batchSize = 200;
+          const scannedMatches: any[] = [];
+
+          for (let seqEnd = totalMessages; seqEnd >= 1; seqEnd -= batchSize) {
+            const seqStart = Math.max(1, seqEnd - batchSize + 1);
+            const sequence = `${seqStart}:${seqEnd}`;
+            const batch = await fetchEnvelopeBatch(client, sequence);
+            for (const msg of batch) {
+              if (!Number.isFinite(Number(msg?.uid))) continue;
+              if (searchEmailFromEnvelope(msg, normalizedTerm)) {
+                scannedMatches.push(msg);
+                matchedUidSet.add(Number(msg.uid));
+              }
+            }
+          }
+
+          matchedUids = [...matchedUidSet].sort((a, b) => b - a);
+
+          if (scannedMatches.length > 0) {
+            await upsertSearchCache(
+              scannedMatches
+                .map((msg: any) => buildCacheRow(accountKey, host, username, folder, msg))
+                .filter(Boolean) as SearchCacheRow[],
+            );
           }
         }
 
@@ -780,70 +901,12 @@ Deno.serve(async (req) => {
 
         if (missingUids.length > 0) {
           const uidRange = missingUids.join(",");
-          const messages = await (client as any).fetch(uidRange, {
-            byUid: true,
-            uid: true,
-            envelope: true,
-            flags: true,
-            bodyStructure: true,
-            size: true,
-          });
-          normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+          normalized = await fetchEnvelopeBatch(client, uidRange, true);
         }
-
-        const extractSearchAttachments = (bs: any): { name: string; size: number; type: string }[] => {
-          if (!bs) return [];
-          const atts: { name: string; size: number; type: string }[] = [];
-          const walk = (node: any) => {
-            if (!node) return;
-            const rawDisp = node.disposition || node.contentDisposition || '';
-            const disposition = (typeof rawDisp === 'string' ? rawDisp : rawDisp?.type || '').toString().toLowerCase();
-            const nodeType = node.type || node.mediaType || '';
-            const nodeSubtype = node.subtype || node.mediaSubtype || '';
-            const mimeType = `${nodeType}/${nodeSubtype}`.toLowerCase();
-            const filename = node.dispositionParameters?.filename
-              || node.parameters?.name
-              || node.contentDispositionParameters?.filename
-              || node.attrs?.name
-              || (typeof rawDisp === 'object' && rawDisp?.params?.filename)
-              || '';
-            const isTextBody = ['text/plain', 'text/html'].includes(mimeType);
-            const isMultipart = mimeType.startsWith('multipart/') || mimeType.startsWith('message/');
-            const isAttachment = disposition === 'attachment' ||
-              (disposition === 'inline' && node.id && mimeType.startsWith('image/')) ||
-              (filename && !isTextBody) ||
-              (!isTextBody && !isMultipart && mimeType !== '/' && nodeType !== '' && disposition !== '' && disposition !== 'inline');
-            if (isAttachment) {
-              atts.push({ name: filename || 'unnamed', size: node.size || 0, type: mimeType });
-            }
-            const children = node.childNodes || node.parts || node.body;
-            if (Array.isArray(children)) children.forEach(walk);
-          };
-          walk(bs);
-          return atts;
-        };
 
         const fetchedEmails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
-          .map((msg: any) => {
-            const env = msg.envelope || {};
-            const attachments = extractSearchAttachments(msg.bodyStructure);
-            return {
-              uid: msg.uid,
-              flags: msg.flags || [],
-              size: msg.size || 0,
-              subject: env.subject || "(No Subject)",
-              from: env.from?.[0]
-                ? { name: env.from[0].name || env.from[0].mailbox, email: `${env.from[0].mailbox}@${env.from[0].host}` }
-                : { name: "Unknown", email: "" },
-              to: (env.to || []).map((a: any) => ({ name: a.name || a.mailbox, email: `${a.mailbox}@${a.host}` })),
-              cc: (env.cc || []).map((a: any) => ({ name: a.name || a.mailbox, email: `${a.mailbox}@${a.host}` })),
-              date: env.date || new Date().toISOString(),
-              messageId: env.messageId || "",
-              inReplyTo: env.inReplyTo || "",
-              attachments,
-            };
-          });
+          .map((msg: any) => mapFetchedSearchEmail(msg));
 
         const fetchedByUid = new Map<number, any>(
           fetchedEmails.map((email: any) => [Number(email.uid), email]),

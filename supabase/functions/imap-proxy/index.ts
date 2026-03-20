@@ -543,20 +543,41 @@ Deno.serve(async (req) => {
         let bodyText = "";
         let bodyHtml = "";
 
+        const looksQuotedPrintable = (v: string) => /=[0-9A-Fa-f]{2}/.test(v) && /=\r?\n/.test(v);
+
+        const decodeQuotedPrintable = (v: string): string => {
+          return v
+            .replace(/=\r?\n/g, "")
+            .replace(/=([0-9A-Fa-f]{2})/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)));
+        };
+
+        const decodeAndCleanQP = (raw: string): string => {
+          if (!raw) return "";
+          if (looksQuotedPrintable(raw)) {
+            const decoded = decodeQuotedPrintable(raw);
+            try {
+              const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
+              return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+            } catch {
+              return decoded;
+            }
+          }
+          return raw;
+        };
+
         const decodePartData = (partData: unknown): string => {
+          let raw = "";
           if (partData instanceof Uint8Array) {
             const safeBytes = partData.length > MAX_BODY_DECODE_BYTES ? partData.slice(0, MAX_BODY_DECODE_BYTES) : partData;
-            return new TextDecoder("utf-8", { fatal: false }).decode(safeBytes);
+            raw = new TextDecoder("utf-8", { fatal: false }).decode(safeBytes);
+          } else if (typeof partData === "string") {
+            raw = partData.length > MAX_BODY_DECODE_BYTES ? partData.slice(0, MAX_BODY_DECODE_BYTES) : partData;
           }
-          if (typeof partData === "string") {
-            return partData.length > MAX_BODY_DECODE_BYTES ? partData.slice(0, MAX_BODY_DECODE_BYTES) : partData;
-          }
-          return "";
+          return decodeAndCleanQP(raw);
         };
 
         // For large messages return metadata only to avoid CPU limit.
         if (messageSize <= MAX_FETCH_BODY_MESSAGE_SIZE) {
-          // Fetch only text body sections (no attachments downloaded)
           const partsToFetch = [...textSections.slice(0, 1), ...htmlSections.slice(0, 1)];
           for (const section of partsToFetch) {
             try {

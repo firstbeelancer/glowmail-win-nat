@@ -503,7 +503,7 @@ Deno.serve(async (req) => {
       }
 
       case "fetch": {
-        const { folder = "INBOX", uid, includeAttachmentContent = false } = body;
+        const { folder = "INBOX", uid } = body;
         if (!uid) return err("Missing uid", 400);
 
         await client.selectMailbox(folder);
@@ -511,326 +511,108 @@ Deno.serve(async (req) => {
         const targetUid = Number(uid);
         if (!Number.isFinite(targetUid)) return err("Invalid uid", 400);
 
-        const MAX_RAW_BYTES = 3_000_000;
-        const MAX_ATTACHMENT_INLINE_BYTES = 256_000;
-
-        let rawSource: Uint8Array | null = null;
-        let envelope: any = null;
-        let flags: string[] = [];
-        let messageSize = 0;
-
-        let msgSourceType = "undefined";
-        let msgSourceConstructor = "undefined";
-        let rawSourceOrigin = "none";
-
-        const toUint8Array = async (value: unknown): Promise<Uint8Array | null> => {
-          if (value instanceof Uint8Array) {
-            return value.length > MAX_RAW_BYTES ? value.slice(0, MAX_RAW_BYTES) : value;
-          }
-          if (typeof value === "string") {
-            const encoded = new TextEncoder().encode(value);
-            return encoded.length > MAX_RAW_BYTES ? encoded.slice(0, MAX_RAW_BYTES) : encoded;
-          }
-          if (value instanceof ArrayBuffer) {
-            const bytes = new Uint8Array(value);
-            return bytes.length > MAX_RAW_BYTES ? bytes.slice(0, MAX_RAW_BYTES) : bytes;
-          }
-          if (value && typeof value === "object") {
-            const maybe = value as { buffer?: unknown; byteOffset?: unknown; byteLength?: unknown };
-            if (maybe.buffer instanceof ArrayBuffer) {
-              const byteOffset = typeof maybe.byteOffset === "number" ? maybe.byteOffset : 0;
-              const byteLength = typeof maybe.byteLength === "number" ? maybe.byteLength : undefined;
-              const bytes = new Uint8Array(maybe.buffer, byteOffset, byteLength);
-              return bytes.length > MAX_RAW_BYTES ? bytes.slice(0, MAX_RAW_BYTES) : bytes;
-            }
-            const keys = Object.keys(value);
-            if (keys.length > 0 && keys.every(k => /^\d+$/.test(k))) {
-              const arr = new Uint8Array(keys.length);
-              for (let i = 0; i < keys.length; i++) arr[i] = (value as any)[i];
-              return arr.length > MAX_RAW_BYTES ? arr.slice(0, MAX_RAW_BYTES) : arr;
-            }
-          }
-          return null;
-        };
-
-        const describe = (value: unknown) => ({
-          type: typeof value,
-          constructorName: value && typeof value === "object"
-            ? ((value as any).constructor?.name || "Unknown")
-            : "n/a",
-          keys: value && typeof value === "object"
-            ? Object.keys(value as Record<string, unknown>)
-            : [],
+        // Step 1: lightweight envelope + bodyStructure fetch (no raw body)
+        const envelopeMessages = await (client as any).fetch(String(targetUid), {
+          byUid: true, uid: true, envelope: true, flags: true, size: true, bodyStructure: true,
         });
 
-        const readRawCandidate = async (label: string, value: unknown) => {
-          if (value == null) return;
-          const converted = await toUint8Array(value);
-          if (converted && converted.length > 0) {
-            rawSource = converted;
-            rawSourceOrigin = label;
-            return;
-          }
+        const envelopeFetched = (Array.isArray(envelopeMessages) ? envelopeMessages : [envelopeMessages]).filter(Boolean);
+        const msg = envelopeFetched.find((item: any) => Number(item?.uid) === targetUid) || envelopeFetched[0];
 
-          const unsupported = describe(value);
-          console.warn(
-            "Unsupported raw source candidate:",
-            label,
-            "type:",
-            unsupported.type,
-            "constructor:",
-            unsupported.constructorName,
-            "keys:",
-            unsupported.keys.join(","),
-          );
+        if (!msg) {
+          await client.disconnect();
+          client = null;
+          return ok({
+            uid: targetUid, flags: [], subject: "", from: { name: "Unknown", email: "" },
+            to: [], cc: [], date: "", messageId: "", bodyText: "", bodyHtml: "", text: "", html: "",
+            hasBody: false, notFound: true, attachments: [],
+          });
+        }
+
+        const env = msg.envelope || {};
+        const fetchFlags = msg.flags || [];
+
+        // Step 2: find text/plain and text/html sections from bodyStructure
+        const textSections: string[] = [];
+        const htmlSections: string[] = [];
+
+        const findTextParts = (node: any, path = "") => {
+          if (!node) return;
+          const nType = (node.type || node.mediaType || "").toLowerCase();
+          const nSub = (node.subtype || node.mediaSubtype || "").toLowerCase();
+          const children = node.childNodes || node.parts || node.body;
+          if (Array.isArray(children)) {
+            children.forEach((child: any, i: number) => findTextParts(child, path ? `${path}.${i + 1}` : `${i + 1}`));
+          } else {
+            if (nType === "text" && nSub === "plain") textSections.push(path || "1");
+            else if (nType === "text" && nSub === "html") htmlSections.push(path || "1");
+          }
+        };
+        findTextParts(msg.bodyStructure);
+        if (textSections.length === 0 && htmlSections.length === 0) textSections.push("1");
+
+        let bodyText = "";
+        let bodyHtml = "";
+
+        const decodePartData = (partData: unknown): string => {
+          if (partData instanceof Uint8Array) return new TextDecoder("utf-8", { fatal: false }).decode(partData);
+          if (typeof partData === "string") return partData;
+          return "";
         };
 
-        try {
-          // Use `full: true` which generates BODY.PEEK[] — the correct way to get raw content
-          const messages = await (client as any).fetch(String(targetUid), {
-            byUid: true,
-            uid: true,
-            envelope: true,
-            flags: true,
-            size: true,
-            full: true,
-          });
-
-          const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
-          const msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || fetched[0];
-
-          if (msg) {
-            envelope = msg.envelope;
-            flags = msg.flags || [];
-            messageSize = Number(msg.size || 0);
-
-            // deno-imap stores BODY[] content in msg.parts[""]?.data (Uint8Array)
-            const fullBodyPart = msg.parts?.[""]?.data || msg.parts?.[""]?.content;
-            await readRawCandidate("msg.parts[''].data", fullBodyPart);
-            if (!rawSource) await readRawCandidate("msg.raw", msg.raw);
-
-            console.log(
-              "fetch full body - hasSource:",
-              !!rawSource,
-              "origin:",
-              rawSourceOrigin,
-              "parts keys:",
-              msg.parts ? Object.keys(msg.parts).join(",") : "none",
-              "msg keys:",
-              Object.keys(msg).join(","),
-            );
-          }
-        } catch (e) {
-          console.error("fetch full body failed:", e);
-        }
-
-        if (!rawSource) {
+        // Fetch only text body sections (no attachments downloaded)
+        const partsToFetch = [...textSections.slice(0, 1), ...htmlSections.slice(0, 1)];
+        for (const section of partsToFetch) {
           try {
-            // Fallback: fetch with bodyParts to get specific sections
-            const messages2 = await (client as any).fetch(String(targetUid), {
-              byUid: true,
-              uid: true,
-              envelope: true,
-              flags: true,
-              size: true,
-              bodyParts: [""],
-            });
-
-            const fetched2 = (Array.isArray(messages2) ? messages2 : [messages2]).filter(Boolean);
-            const msg2 = fetched2.find((item: any) => Number(item?.uid) === targetUid) || fetched2[0];
-
-            if (msg2) {
-              if (!envelope) envelope = msg2.envelope;
-              if (!flags.length) flags = msg2.flags || [];
-              if (!messageSize) messageSize = Number(msg2.size || 0);
-
-              // Check parts for body content
-              if (msg2.parts) {
-                for (const [key, part] of Object.entries(msg2.parts)) {
-                  const partData = (part as any)?.data || (part as any)?.content;
-                  if (partData) {
-                    await readRawCandidate(`msg2.parts[${key}].data`, partData);
-                    if (rawSource) break;
-                  }
-                }
-              }
-              if (!rawSource) await readRawCandidate("msg2.raw", msg2.raw);
-
-              console.log(
-                "fallback bodyParts - hasSource:",
-                !!rawSource,
-                "origin:",
-                rawSourceOrigin,
-                "parts keys:",
-                msg2.parts ? Object.keys(msg2.parts).join(",") : "none",
-                "msg2 keys:",
-                Object.keys(msg2).join(","),
-              );
+            const partMsgs = await (client as any).fetch(String(targetUid), { byUid: true, uid: true, bodyParts: [section] });
+            const partArr = (Array.isArray(partMsgs) ? partMsgs : [partMsgs]).filter(Boolean);
+            const pMsg = partArr[0];
+            const pData = pMsg?.parts?.[section]?.data || pMsg?.parts?.[section]?.content;
+            if (pData) {
+              const content = decodePartData(pData);
+              if (textSections.includes(section) && !bodyText) bodyText = content.trim();
+              else if (htmlSections.includes(section) && !bodyHtml) bodyHtml = content.trim();
             }
-          } catch (e2) {
-            console.error("fetch bodyParts fallback failed:", e2);
-          }
+          } catch (e) { console.warn(`Part ${section} fetch failed:`, e); }
         }
 
-        if (messageSize > MAX_RAW_BYTES && !rawSource) {
-          await client.disconnect();
-          client = null;
-          console.log("Skipping heavy parse for large message uid:", targetUid, "size:", messageSize);
-          return ok({
-            uid: targetUid,
-            flags,
-            subject: envelope?.subject || "",
-            from: envelope?.from?.[0]
-              ? {
-                  name: envelope.from[0].name || envelope.from[0].mailbox,
-                  email: `${envelope.from[0].mailbox}@${envelope.from[0].host}`,
-                }
-              : { name: "Unknown", email: "" },
-            to: (envelope?.to || []).map((a: any) => ({
-              name: a.name || a.mailbox,
-              email: `${a.mailbox}@${a.host}`,
-            })),
-            cc: (envelope?.cc || []).map((a: any) => ({
-              name: a.name || a.mailbox,
-              email: `${a.mailbox}@${a.host}`,
-            })),
-            date: envelope?.date || "",
-            messageId: envelope?.messageId || "",
-            bodyText: "",
-            bodyHtml: "",
-            text: "",
-            html: "",
-            hasBody: false,
-            tooLargeToParse: true,
-            attachments: [],
-          });
-        }
-
-        if (!rawSource) {
-          await client.disconnect();
-          client = null;
-          console.log("No raw source obtained for uid:", targetUid);
-          return ok({
-            uid: targetUid,
-            flags: [],
-            subject: envelope?.subject || "",
-            from: { name: "Unknown", email: "" },
-            to: [],
-            cc: [],
-            date: "",
-            messageId: "",
-            bodyText: "",
-            bodyHtml: "",
-            text: "",
-            html: "",
-            hasBody: false,
-            notFound: true,
-          });
-        }
-
-        let parsed: any;
-        try {
-          parsed = await PostalMime.parse(rawSource);
-        } catch (parseError) {
-          console.error("PostalMime parse failed:", parseError);
-          await client.disconnect();
-          client = null;
-          return ok({
-            uid: targetUid,
-            flags,
-            subject: envelope?.subject || "",
-            from: { name: "Unknown", email: "" },
-            to: [],
-            cc: [],
-            date: envelope?.date || "",
-            messageId: envelope?.messageId || "",
-            bodyText: "",
-            bodyHtml: "",
-            text: "",
-            html: "",
-            hasBody: false,
-            parseError: true,
-            attachments: [],
-          });
-        }
-
-        const bodyText = typeof parsed.text === "string" ? parsed.text.trim() : "";
-        const bodyHtml = typeof parsed.html === "string" ? parsed.html.trim() : "";
-
-        let finalHtml = bodyHtml;
-        if (!finalHtml && parsed.attachments?.length) {
-          const htmlAttachment = parsed.attachments.find((a: any) => a.mimeType === "text/html");
-          if (htmlAttachment?.content) {
-            finalHtml = new TextDecoder().decode(
-              htmlAttachment.content instanceof Uint8Array
-                ? htmlAttachment.content
-                : new Uint8Array(htmlAttachment.content),
-            ).trim();
-          }
-        }
-
-        const hasBody = Boolean(bodyText || finalHtml);
-
-        const attachments = (parsed.attachments || [])
-          .filter((a: any) => {
-            const mimeType = (a.mimeType || "").toLowerCase();
-            return mimeType !== "text/plain" && mimeType !== "text/html";
-          })
-          .map((a: any) => {
-            const bytes = a.content
-              ? (a.content instanceof Uint8Array ? a.content : new Uint8Array(a.content))
-              : null;
-
-            let contentBase64 = "";
-            if (includeAttachmentContent && bytes && bytes.length <= MAX_ATTACHMENT_INLINE_BYTES) {
-              try {
-                let binary = "";
-                for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-                contentBase64 = btoa(binary);
-              } catch {
-                contentBase64 = "";
-              }
+        // Last resort: fetch TEXT section
+        if (!bodyText && !bodyHtml) {
+          try {
+            const tMsgs = await (client as any).fetch(String(targetUid), { byUid: true, uid: true, bodyParts: ["TEXT"] });
+            const tArr = (Array.isArray(tMsgs) ? tMsgs : [tMsgs]).filter(Boolean);
+            const raw = tArr[0]?.parts?.["TEXT"]?.data || tArr[0]?.parts?.["TEXT"]?.content;
+            if (raw) {
+              const content = decodePartData(raw instanceof Uint8Array && raw.length > 500_000 ? raw.slice(0, 500_000) : raw);
+              if (content.includes("<html") || content.includes("<body") || content.includes("<div")) bodyHtml = content.trim();
+              else bodyText = content.trim();
             }
+          } catch (e) { console.warn("TEXT fetch failed:", e); }
+        }
 
-            return {
-              name: a.filename || "unnamed",
-              size: bytes?.length || 0,
-              type: a.mimeType || "application/octet-stream",
-              contentBase64,
-            };
-          });
+        const hasBody = Boolean(bodyText || bodyHtml);
 
-        const env = envelope || {};
-        const resolvedUid = targetUid;
+        // Attachment list from bodyStructure (metadata only, no download)
+        const attachmentNames = extractAttachmentNames(msg.bodyStructure);
+        const attachments = attachmentNames.map((name) => ({
+          name: name || "unnamed", size: 0, type: "application/octet-stream", contentBase64: "",
+        }));
 
         await client.disconnect();
         client = null;
 
         return ok({
-          uid: resolvedUid,
-          flags,
-          subject: parsed.subject || env.subject || "",
-          from: parsed.from
-            ? { name: parsed.from.name || parsed.from.address || "Unknown", email: parsed.from.address || "" }
-            : env.from?.[0]
-              ? { name: env.from[0].name || env.from[0].mailbox, email: `${env.from[0].mailbox}@${env.from[0].host}` }
-              : { name: "Unknown", email: "" },
-          to: (parsed.to || []).map((a: any) => ({
-            name: a.name || a.address || "",
-            email: a.address || "",
-          })),
-          cc: (parsed.cc || []).map((a: any) => ({
-            name: a.name || a.address || "",
-            email: a.address || "",
-          })),
-          date: parsed.date || env.date || "",
-          messageId: parsed.messageId || env.messageId || "",
-          bodyText,
-          bodyHtml: finalHtml,
-          text: bodyText,
-          html: finalHtml,
-          hasBody,
-          attachments,
+          uid: targetUid,
+          flags: fetchFlags,
+          subject: decodeMimeWords(env.subject || ""),
+          from: env.from?.[0]
+            ? { name: decodeMimeWords(env.from[0].name || env.from[0].mailbox || ""), email: `${env.from[0].mailbox}@${env.from[0].host}` }
+            : { name: "Unknown", email: "" },
+          to: (env.to || []).map((a: any) => ({ name: decodeMimeWords(a.name || a.mailbox || ""), email: `${a.mailbox}@${a.host}` })),
+          cc: (env.cc || []).map((a: any) => ({ name: decodeMimeWords(a.name || a.mailbox || ""), email: `${a.mailbox}@${a.host}` })),
+          date: env.date || "",
+          messageId: env.messageId || "",
+          bodyText, bodyHtml, text: bodyText, html: bodyHtml, hasBody, attachments,
         });
       }
 

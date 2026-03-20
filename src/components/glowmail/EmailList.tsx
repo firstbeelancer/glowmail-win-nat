@@ -557,14 +557,14 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
               <div className="flex items-center gap-2 mb-1">
                 <h3 className={cn(
                   "text-sm flex-1",
-                  !email.read ? "font-bold text-zinc-100" : "font-medium text-zinc-400",
+                  !email.read ? "font-bold text-zinc-50" : "font-medium text-zinc-500",
                   email.starred && "font-bold text-emerald-300"
                 )}>
                   {email.subject}
                 </h3>
               </div>
               
-              <p className="text-sm text-zinc-500 truncate mb-2">
+              <p className={cn("text-sm truncate mb-2", !email.read ? "text-zinc-400" : "text-zinc-600")}>
                 {email.snippet}
               </p>
 

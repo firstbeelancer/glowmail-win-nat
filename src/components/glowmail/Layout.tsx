@@ -319,7 +319,7 @@ function SidebarContent({
                   onDrop={(e) => handleFolderDrop(e, folder.id)}
                   className="flex items-center gap-3 flex-1 min-w-0 text-left"
                 >
-                <Icon className={cn("w-4 h-4", isActive ? "text-emerald-400" : "text-zinc-500")} />
+                <Icon className={cn("w-4 h-4", isActive ? "text-emerald-300" : "text-zinc-500")} />
                 <span className="flex-1 text-left">{translateFolderName(folder.id, folder.name, lang)}</span>
                 {count > 0 && (
                   <span className={cn(

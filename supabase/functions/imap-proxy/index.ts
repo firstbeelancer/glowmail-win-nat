@@ -563,6 +563,7 @@ Deno.serve(async (req) => {
 
         let rawSource: Uint8Array | null = null;
         let envelope: any = null;
+        let bodyStructure: any = null;
         let flags: string[] = [];
         let messageSize = 0;
 

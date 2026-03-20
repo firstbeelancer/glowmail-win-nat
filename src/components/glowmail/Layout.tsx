@@ -251,7 +251,7 @@ function SidebarContent({
   return (
     <>
       <div className="p-4 h-16 flex items-center border-b border-zinc-800/50 shrink-0">
-        <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent tracking-tight">
+        <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--emerald-400)' }}>
           {t('app.title', lang)}
         </h1>
       </div>

@@ -392,9 +392,10 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
               }}
               className={cn(
                 "group flex flex-col p-4 border-b border-zinc-800/50 cursor-grab transition-all hover:bg-zinc-900/50 relative active:cursor-grabbing",
-                !email.read && "bg-zinc-900/20",
+                !email.read && "bg-zinc-800/30 border-l-[3px] border-l-emerald-500",
+                email.read && "border-l-[3px] border-l-transparent",
                 email.starred && "bg-emerald-500/[0.03] shadow-[inset_0_0_25px_rgba(16,185,129,0.06)]",
-                selectedEmailId === email.id && "ring-1 ring-emerald-500/50 bg-emerald-500/[0.06] border-l-2 border-l-emerald-500"
+                selectedEmailId === email.id && "ring-1 ring-emerald-500/50 bg-emerald-500/[0.06] border-l-[3px] border-l-emerald-400"
               )}
             >
               <div className="flex items-center justify-between mb-1">
@@ -406,14 +407,14 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
                   {email.importance === 'high' && (
                     <AlertTriangle className="w-3.5 h-3.5 text-red-400 drop-shadow-[0_0_5px_rgba(248,113,113,0.5)]" />
                   )}
-                  <span className={cn("font-semibold text-sm", !email.read ? "text-zinc-100" : "text-zinc-300")}>
+                  <span className={cn("text-sm", !email.read ? "font-bold text-zinc-50" : "font-medium text-zinc-400")}>
                     {email.from.name}
                   </span>
                   {/* Attachment indicator */}
                   {email.attachments.length > 0 && (
-                    <span className="inline-flex items-center gap-0.5 text-zinc-500" title={`${email.attachments.length} ${lang === 'ru' ? 'вложени' + (email.attachments.length === 1 ? 'е' : 'я') : 'attachment' + (email.attachments.length > 1 ? 's' : '')}`}>
-                      <Paperclip className="w-3 h-3" />
-                      {email.attachments.length > 1 && <span className="text-[10px]">{email.attachments.length}</span>}
+                    <span className="inline-flex items-center gap-0.5 text-zinc-400" title={`${email.attachments.length} ${lang === 'ru' ? 'вложени' + (email.attachments.length === 1 ? 'е' : 'я') : 'attachment' + (email.attachments.length > 1 ? 's' : '')}`}>
+                      <Paperclip className="w-3.5 h-3.5 stroke-[2.5]" />
+                      {email.attachments.length > 1 && <span className="text-[10px] font-semibold">{email.attachments.length}</span>}
                     </span>
                   )}
                 </div>

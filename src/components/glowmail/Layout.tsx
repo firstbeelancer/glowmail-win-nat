@@ -125,13 +125,13 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
           </button>
           
           <div className="flex-1 max-w-2xl relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--emerald-400)] transition-colors" />
             <input
               type="text"
               placeholder={t('layout.searchPlaceholder', lang)}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-zinc-900/50 border border-zinc-800 rounded-full pl-10 pr-10 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all placeholder:text-zinc-600"
+              className="w-full bg-zinc-900/50 border border-[var(--emerald-400)]/40 rounded-full pl-10 pr-10 py-2 text-sm ring-1 ring-[var(--emerald-400)]/25 focus:outline-none focus:ring-2 focus:ring-[var(--emerald-400)]/50 focus:border-[var(--emerald-400)]/50 transition-all placeholder:text-zinc-600"
             />
             {searchQuery && (
               <button

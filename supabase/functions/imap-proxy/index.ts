@@ -531,6 +531,9 @@ Deno.serve(async (req) => {
 
         const env = msg.envelope || {};
         const fetchFlags = msg.flags || [];
+        const messageSize = Number(msg.size || 0);
+        const MAX_BODY_DECODE_BYTES = 200_000;
+        const MAX_FETCH_BODY_MESSAGE_SIZE = 1_500_000;
 
         // Step 2: find text/plain and text/html sections from bodyStructure
         const textSections: string[] = [];
@@ -555,39 +558,37 @@ Deno.serve(async (req) => {
         let bodyHtml = "";
 
         const decodePartData = (partData: unknown): string => {
-          if (partData instanceof Uint8Array) return new TextDecoder("utf-8", { fatal: false }).decode(partData);
-          if (typeof partData === "string") return partData;
+          if (partData instanceof Uint8Array) {
+            const safeBytes = partData.length > MAX_BODY_DECODE_BYTES ? partData.slice(0, MAX_BODY_DECODE_BYTES) : partData;
+            return new TextDecoder("utf-8", { fatal: false }).decode(safeBytes);
+          }
+          if (typeof partData === "string") {
+            return partData.length > MAX_BODY_DECODE_BYTES ? partData.slice(0, MAX_BODY_DECODE_BYTES) : partData;
+          }
           return "";
         };
 
-        // Fetch only text body sections (no attachments downloaded)
-        const partsToFetch = [...textSections.slice(0, 1), ...htmlSections.slice(0, 1)];
-        for (const section of partsToFetch) {
-          try {
-            const partMsgs = await (client as any).fetch(String(targetUid), { byUid: true, uid: true, bodyParts: [section] });
-            const partArr = (Array.isArray(partMsgs) ? partMsgs : [partMsgs]).filter(Boolean);
-            const pMsg = partArr[0];
-            const pData = pMsg?.parts?.[section]?.data || pMsg?.parts?.[section]?.content;
-            if (pData) {
-              const content = decodePartData(pData);
-              if (textSections.includes(section) && !bodyText) bodyText = content.trim();
-              else if (htmlSections.includes(section) && !bodyHtml) bodyHtml = content.trim();
+        // For large messages return metadata only to avoid CPU limit.
+        if (messageSize <= MAX_FETCH_BODY_MESSAGE_SIZE) {
+          // Fetch only text body sections (no attachments downloaded)
+          const partsToFetch = [...textSections.slice(0, 1), ...htmlSections.slice(0, 1)];
+          for (const section of partsToFetch) {
+            try {
+              const partMsgs = await (client as any).fetch(String(targetUid), { byUid: true, uid: true, bodyParts: [section] });
+              const partArr = (Array.isArray(partMsgs) ? partMsgs : [partMsgs]).filter(Boolean);
+              const pMsg = partArr[0];
+              const pData = pMsg?.parts?.[section]?.data || pMsg?.parts?.[section]?.content;
+              if (pData) {
+                const content = decodePartData(pData);
+                if (textSections.includes(section) && !bodyText) bodyText = content.trim();
+                else if (htmlSections.includes(section) && !bodyHtml) bodyHtml = content.trim();
+              }
+            } catch (e) {
+              console.warn(`Part ${section} fetch failed:`, e);
             }
-          } catch (e) { console.warn(`Part ${section} fetch failed:`, e); }
-        }
-
-        // Last resort: fetch TEXT section
-        if (!bodyText && !bodyHtml) {
-          try {
-            const tMsgs = await (client as any).fetch(String(targetUid), { byUid: true, uid: true, bodyParts: ["TEXT"] });
-            const tArr = (Array.isArray(tMsgs) ? tMsgs : [tMsgs]).filter(Boolean);
-            const raw = tArr[0]?.parts?.["TEXT"]?.data || tArr[0]?.parts?.["TEXT"]?.content;
-            if (raw) {
-              const content = decodePartData(raw instanceof Uint8Array && raw.length > 500_000 ? raw.slice(0, 500_000) : raw);
-              if (content.includes("<html") || content.includes("<body") || content.includes("<div")) bodyHtml = content.trim();
-              else bodyText = content.trim();
-            }
-          } catch (e) { console.warn("TEXT fetch failed:", e); }
+          }
+        } else {
+          console.log("Skipping body decode for large message", { uid: targetUid, messageSize });
         }
 
         const hasBody = Boolean(bodyText || bodyHtml);

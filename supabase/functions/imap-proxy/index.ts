@@ -75,6 +75,27 @@ function normalizeSearchTerm(value: string) {
     .trim();
 }
 
+function decodeMimeWords(value: string) {
+  if (!value) return "";
+  return value.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (_match, charset, encoding, text) => {
+    try {
+      if (encoding.toUpperCase() === "B") {
+        const binary = atob(text);
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        return new TextDecoder(charset).decode(bytes);
+      }
+
+      const decoded = text
+        .replace(/_/g, " ")
+        .replace(/=([0-9A-Fa-f]{2})/g, (_hexMatch: string, hex: string) => String.fromCharCode(parseInt(hex, 16)));
+      const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+      return new TextDecoder(charset).decode(bytes);
+    } catch {
+      return text;
+    }
+  });
+}
+
 function extractAttachmentNames(bodyStructure: any): string[] {
   if (!bodyStructure) return [];
   const names = new Set<string>();
@@ -123,12 +144,18 @@ function buildCacheRow(accountKey: string, host: string, username: string, folde
     imap_host: host.trim().toLowerCase(),
     folder_id: folder,
     uid: Number(msg.uid),
-    subject: env.subject || "(No Subject)",
-    snippet: env.subject || "",
-    from_name: normalizeAddress(env.from?.[0]).name,
+    subject: decodeMimeWords(env.subject || "(No Subject)"),
+    snippet: decodeMimeWords(msg.snippet || env.subject || ""),
+    from_name: decodeMimeWords(normalizeAddress(env.from?.[0]).name),
     from_email: normalizeAddress(env.from?.[0]).email,
-    to_addresses: (env.to || []).map(normalizeAddress),
-    cc_addresses: (env.cc || []).map(normalizeAddress),
+    to_addresses: (env.to || []).map((address: any) => {
+      const normalized = normalizeAddress(address);
+      return { ...normalized, name: decodeMimeWords(normalized.name) };
+    }),
+    cc_addresses: (env.cc || []).map((address: any) => {
+      const normalized = normalizeAddress(address);
+      return { ...normalized, name: decodeMimeWords(normalized.name) };
+    }),
     attachment_names: attachmentNames,
     has_attachments: hasAttachments || attachmentNames.length > 0,
     flags: msg.flags || [],
@@ -145,15 +172,52 @@ function searchEmailFromEnvelope(msg: any, term: string) {
   const cc = (env.cc || []).map(normalizeAddress);
   const attachmentNames = extractAttachmentNames(msg.bodyStructure);
   const haystack = normalizeSearchTerm([
-    env.subject || "",
-    from.name,
+    decodeMimeWords(env.subject || ""),
+    decodeMimeWords(from.name),
     from.email,
-    ...to.flatMap((item) => [item.name, item.email]),
-    ...cc.flatMap((item) => [item.name, item.email]),
+    ...to.flatMap((item) => [decodeMimeWords(item.name), item.email]),
+    ...cc.flatMap((item) => [decodeMimeWords(item.name), item.email]),
     ...attachmentNames,
   ].join(" "));
 
   return haystack.includes(term);
+}
+
+async function extractSearchableBody(msg: any) {
+  const rawCandidate = msg?.raw ?? msg?.source;
+  if (!rawCandidate) return "";
+
+  let bytes: Uint8Array | null = null;
+  if (rawCandidate instanceof Uint8Array) {
+    bytes = rawCandidate;
+  } else if (typeof rawCandidate === "string") {
+    bytes = new TextEncoder().encode(rawCandidate);
+  } else if (rawCandidate instanceof ArrayBuffer) {
+    bytes = new Uint8Array(rawCandidate);
+  } else if (rawCandidate && typeof rawCandidate === "object" && rawCandidate.buffer instanceof ArrayBuffer) {
+    const offset = typeof rawCandidate.byteOffset === "number" ? rawCandidate.byteOffset : 0;
+    const length = typeof rawCandidate.byteLength === "number" ? rawCandidate.byteLength : undefined;
+    bytes = new Uint8Array(rawCandidate.buffer, offset, length);
+  }
+
+  if (!bytes || bytes.length === 0) return "";
+
+  try {
+    const parsed = await PostalMime.parse(bytes);
+    return normalizeSearchTerm([
+      parsed.subject || "",
+      parsed.text || "",
+      typeof parsed.html === "string" ? parsed.html.replace(/<[^>]+>/g, " ") : "",
+    ].join(" "));
+  } catch {
+    return "";
+  }
+}
+
+async function searchMessageContent(msg: any, term: string) {
+  if (searchEmailFromEnvelope(msg, term)) return true;
+  const bodyHaystack = await extractSearchableBody(msg);
+  return bodyHaystack.includes(term);
 }
 
 function mapFetchedSearchEmail(msg: any) {
@@ -258,7 +322,7 @@ async function querySearchCacheByTerm(accountKey: string, folder: string, term: 
     .filter((uid) => Number.isFinite(uid));
 }
 
-async function fetchEnvelopeBatch(client: ImapClient, sequence: string, byUid = false) {
+async function fetchEnvelopeBatch(client: ImapClient, sequence: string, byUid = false, includeSource = false) {
   const messages = await (client as any).fetch(sequence, {
     ...(byUid ? { byUid: true } : {}),
     uid: true,
@@ -266,6 +330,7 @@ async function fetchEnvelopeBatch(client: ImapClient, sequence: string, byUid = 
     flags: true,
     bodyStructure: true,
     size: true,
+    ...(includeSource ? { source: true } : {}),
   });
   return (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
 }
@@ -880,10 +945,10 @@ Deno.serve(async (req) => {
           for (let seqEnd = totalMessages; seqEnd >= 1; seqEnd -= batchSize) {
             const seqStart = Math.max(1, seqEnd - batchSize + 1);
             const sequence = `${seqStart}:${seqEnd}`;
-            const batch = await fetchEnvelopeBatch(client, sequence);
+            const batch = await fetchEnvelopeBatch(client, sequence, false, true);
             for (const msg of batch) {
               if (!Number.isFinite(Number(msg?.uid))) continue;
-              if (searchEmailFromEnvelope(msg, normalizedTerm)) {
+              if (await searchMessageContent(msg, normalizedTerm)) {
                 scannedMatches.push(msg);
                 matchedUidSet.add(Number(msg.uid));
               }

@@ -414,13 +414,12 @@ Deno.serve(async (req) => {
       }
 
       case "list": {
-        const { folder = "INBOX", page = 1, pageSize = 50 } = body;
+        const { folder = "INBOX", page = 1, pageSize = 20 } = body;
         const mailboxStatus = await client.selectMailbox(folder);
 
-        // Use EXISTS count from mailbox status for reliable pagination
         const total = (mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0;
         const safePage = Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 1;
-        const safePageSize = Number.isFinite(Number(pageSize)) && Number(pageSize) > 0 ? Number(pageSize) : 50;
+        const safePageSize = Math.min(30, Number.isFinite(Number(pageSize)) && Number(pageSize) > 0 ? Number(pageSize) : 20);
 
         if (total === 0) {
           await client.disconnect();
@@ -428,9 +427,6 @@ Deno.serve(async (req) => {
           return ok({ emails: [], total: 0, page: safePage, pageSize: safePageSize });
         }
 
-        // Calculate sequence range (newest first)
-        // Page 1: sequences (total-pageSize+1) to total
-        // Page 2: sequences (total-2*pageSize+1) to (total-pageSize)
         const seqEnd = total - (safePage - 1) * safePageSize;
         const seqStart = Math.max(1, seqEnd - safePageSize + 1);
 
@@ -443,26 +439,20 @@ Deno.serve(async (req) => {
         const sequence = `${seqStart}:${seqEnd}`;
         console.log("list fetch - total:", total, "seqRange:", sequence, "page:", safePage);
 
+        // Lightweight fetch: envelope + flags only (no bodyStructure to save CPU)
         const messages = await (client as any).fetch(sequence, {
           uid: true,
           envelope: true,
           flags: true,
           size: true,
-          bodyStructure: true,
         });
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
-
-
-
 
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
           .map((msg: any) => {
             const env = msg.envelope || {};
-            let hasAtt = false;
-            try { hasAtt = msg.bodyStructure ? imapHasAttachments(msg.bodyStructure) : false; } catch {}
-
             return {
               uid: msg.uid,
               flags: msg.flags || [],
@@ -485,17 +475,13 @@ Deno.serve(async (req) => {
               date: env.date || new Date().toISOString(),
               messageId: env.messageId || "",
               inReplyTo: env.inReplyTo || "",
-              hasAttachments: hasAtt,
+              hasAttachments: false,
               attachments: [],
             };
           })
-          .sort((a: any, b: any) => b.uid - a.uid); // newest first
+          .sort((a: any, b: any) => b.uid - a.uid);
 
-        await upsertSearchCache(
-          normalized
-            .map((msg: any) => buildCacheRow(accountKey, host, username, folder, msg))
-            .filter(Boolean) as SearchCacheRow[],
-        );
+        // Cache building skipped for list (no bodyStructure available)
 
         await client.disconnect();
         client = null;
@@ -741,7 +727,7 @@ Deno.serve(async (req) => {
           );
           const mailboxStatus = await client.selectMailbox(folder);
           const totalMessages = Number((mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0);
-          const scanLimit = Math.min(totalMessages, 200);
+          const scanLimit = Math.min(totalMessages, 100);
           const seqStart = Math.max(1, totalMessages - scanLimit + 1);
           const sequence = `${seqStart}:${totalMessages}`;
 

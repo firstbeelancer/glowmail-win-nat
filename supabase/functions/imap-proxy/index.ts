@@ -934,9 +934,12 @@ Deno.serve(async (req) => {
         }
 
         matchedUids = [...matchedUidSet];
+        const shouldForceContentScan = !term.includes("@");
 
-        if (!anySearchWorked) {
-          console.log("[search] falling back to envelope scan");
+        if (!anySearchWorked || matchedUids.length === 0 || shouldForceContentScan) {
+          console.log(
+            `[search] falling back to content scan anySearchWorked=${anySearchWorked} preMatched=${matchedUids.length} force=${shouldForceContentScan}`,
+          );
           const mailboxStatus = await client.selectMailbox(folder);
           const totalMessages = Number((mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0);
           const batchSize = 200;

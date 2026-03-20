@@ -127,6 +127,53 @@ function extractAttachmentNames(bodyStructure: any): string[] {
   return [...names];
 }
 
+/** Walk MIME bodyStructure tree and return the IMAP part path (e.g. "1.2") for the first text/html node */
+function findHtmlPartPath(node: any, path = ""): string | null {
+  if (!node) return null;
+  const type = (node.type || node.mediaType || "").toLowerCase();
+  const subtype = (node.subtype || node.mediaSubtype || "").toLowerCase();
+
+  if (type === "text" && subtype === "html") {
+    // prefer node.part if the library provides it, otherwise use computed path
+    return node.part || path || "1";
+  }
+
+  const children = node.childNodes || node.parts || [];
+  if (Array.isArray(children)) {
+    for (let i = 0; i < children.length; i++) {
+      const childPath = path ? `${path}.${i + 1}` : `${i + 1}`;
+      const result = findHtmlPartPath(children[i], childPath);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}
+
+/** Decode quoted-printable encoded string */
+function decodeQuotedPrintable(input: string, charset = "utf-8"): string {
+  // Remove soft line breaks
+  const unfolded = input.replace(/=\r?\n/g, "");
+  // Decode =XX hex sequences
+  const bytes: number[] = [];
+  for (let i = 0; i < unfolded.length; i++) {
+    if (unfolded[i] === "=" && i + 2 < unfolded.length) {
+      const hex = unfolded.substring(i + 1, i + 3);
+      if (/^[0-9A-Fa-f]{2}$/.test(hex)) {
+        bytes.push(parseInt(hex, 16));
+        i += 2;
+        continue;
+      }
+    }
+    bytes.push(unfolded.charCodeAt(i));
+  }
+  try {
+    return new TextDecoder(charset).decode(new Uint8Array(bytes));
+  } catch {
+    return new TextDecoder("utf-8").decode(new Uint8Array(bytes));
+  }
+}
+
 function buildCacheRow(accountKey: string, host: string, username: string, folder: string, msg: any): SearchCacheRow | null {
   if (!Number.isFinite(Number(msg?.uid))) return null;
   const env = msg.envelope || {};
@@ -516,6 +563,7 @@ Deno.serve(async (req) => {
 
         let rawSource: Uint8Array | null = null;
         let envelope: any = null;
+        let bodyStructure: any = null;
         let flags: string[] = [];
         let messageSize = 0;
 
@@ -592,6 +640,7 @@ Deno.serve(async (req) => {
             envelope: true,
             flags: true,
             size: true,
+            bodyStructure: true,
             source: true,
           });
 
@@ -602,6 +651,7 @@ Deno.serve(async (req) => {
             envelope = msg.envelope;
             flags = msg.flags || [];
             messageSize = Number(msg.size || 0);
+            bodyStructure = msg.bodyStructure || null;
             msgSourceType = typeof msg.source;
             msgSourceConstructor = msg.source?.constructor?.name || "undefined";
 
@@ -610,14 +660,12 @@ Deno.serve(async (req) => {
             if (!rawSource) await readRawCandidate("msg.source", msg.source);
 
             console.log(
-              "fetch source attempt - hasSource:",
+              "[fetch] source attempt - hasSource:",
               !!rawSource,
               "origin:",
               rawSourceOrigin,
-              "msg.source type:",
-              msgSourceType,
-              "msg.source constructor:",
-              msgSourceConstructor,
+              "hasBodyStructure:",
+              !!bodyStructure,
               "keys:",
               Object.keys(msg).join(","),
             );
@@ -755,18 +803,81 @@ Deno.serve(async (req) => {
         const bodyHtml = typeof parsed.html === "string" ? parsed.html.trim() : "";
 
         let finalHtml = bodyHtml;
+
+        // Fallback 1: check if HTML is hiding in an attachment (text/html part treated as attachment)
         if (!finalHtml && parsed.attachments?.length) {
-          const htmlAttachment = parsed.attachments.find((a: any) => a.mimeType === "text/html");
+          const htmlAttachment = parsed.attachments.find((a: any) =>
+            (a.mimeType || "").toLowerCase() === "text/html"
+          );
           if (htmlAttachment?.content) {
             finalHtml = new TextDecoder().decode(
               htmlAttachment.content instanceof Uint8Array
                 ? htmlAttachment.content
                 : new Uint8Array(htmlAttachment.content),
             ).trim();
+            console.log("[fetch] Got HTML from attachment fallback, length:", finalHtml.length);
+          }
+        }
+
+        // Fallback 2: PostalMime gave no HTML, but bodyStructure says there IS an HTML part.
+        // Fetch that specific MIME part directly from IMAP.
+        if (!finalHtml && bodyStructure && client) {
+          const htmlPartPath = findHtmlPartPath(bodyStructure);
+          if (htmlPartPath) {
+            try {
+              console.log("[fetch] PostalMime gave no HTML, fetching MIME part directly:", htmlPartPath);
+              const partMsgs = await (client as any).fetch(String(targetUid), {
+                byUid: true,
+                uid: true,
+                bodyParts: [htmlPartPath],
+              });
+              const partArr = (Array.isArray(partMsgs) ? partMsgs : [partMsgs]).filter(Boolean);
+              const partMsg = partArr.find((m: any) => Number(m?.uid) === targetUid) || partArr[0];
+
+              // deno-imap may return body parts via Map or direct property
+              let partContent: unknown = null;
+              if (partMsg?.bodyParts instanceof Map) {
+                partContent = partMsg.bodyParts.get(htmlPartPath);
+              } else if (partMsg?.body instanceof Map) {
+                partContent = partMsg.body.get(htmlPartPath);
+              }
+              // also check string-key property like body[1.2]
+              if (!partContent) {
+                partContent = partMsg?.[`body[${htmlPartPath}]`];
+              }
+
+              if (partContent) {
+                const partBytes = await toUint8Array(partContent);
+                if (partBytes && partBytes.length > 0) {
+                  let decoded = new TextDecoder().decode(partBytes).trim();
+
+                  // Check if the part is quoted-printable encoded and decode it
+                  if (decoded.includes("=3D") || decoded.includes("=\r\n") || decoded.includes("=\n")) {
+                    decoded = decodeQuotedPrintable(decoded);
+                  }
+
+                  finalHtml = decoded;
+                  console.log("[fetch] Got HTML from direct IMAP part fetch, length:", finalHtml.length);
+                }
+              }
+            } catch (e) {
+              console.error("[fetch] Direct HTML part fetch failed:", e);
+            }
+          }
+        }
+
+        // Fallback 3: if we still only have text, check for QP artifacts in text that suggest
+        // the content was HTML but got decoded as plain text
+        if (!finalHtml && bodyText) {
+          // Check if the "plain text" is actually HTML that wasn't recognized
+          if (/<\/?[a-z][\s\S]*>/i.test(bodyText)) {
+            finalHtml = bodyText;
+            console.log("[fetch] bodyText contains HTML tags, promoting to finalHtml");
           }
         }
 
         const hasBody = Boolean(bodyText || finalHtml);
+        console.log("[fetch] uid:", targetUid, "bodyText.len:", bodyText.length, "finalHtml.len:", finalHtml.length, "hasBody:", hasBody);
 
         const attachments = (parsed.attachments || [])
           .filter((a: any) => {

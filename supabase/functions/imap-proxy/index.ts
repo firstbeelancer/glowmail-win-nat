@@ -127,6 +127,53 @@ function extractAttachmentNames(bodyStructure: any): string[] {
   return [...names];
 }
 
+/** Walk MIME bodyStructure tree and return the IMAP part path (e.g. "1.2") for the first text/html node */
+function findHtmlPartPath(node: any, path = ""): string | null {
+  if (!node) return null;
+  const type = (node.type || node.mediaType || "").toLowerCase();
+  const subtype = (node.subtype || node.mediaSubtype || "").toLowerCase();
+
+  if (type === "text" && subtype === "html") {
+    // prefer node.part if the library provides it, otherwise use computed path
+    return node.part || path || "1";
+  }
+
+  const children = node.childNodes || node.parts || [];
+  if (Array.isArray(children)) {
+    for (let i = 0; i < children.length; i++) {
+      const childPath = path ? `${path}.${i + 1}` : `${i + 1}`;
+      const result = findHtmlPartPath(children[i], childPath);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}
+
+/** Decode quoted-printable encoded string */
+function decodeQuotedPrintable(input: string, charset = "utf-8"): string {
+  // Remove soft line breaks
+  const unfolded = input.replace(/=\r?\n/g, "");
+  // Decode =XX hex sequences
+  const bytes: number[] = [];
+  for (let i = 0; i < unfolded.length; i++) {
+    if (unfolded[i] === "=" && i + 2 < unfolded.length) {
+      const hex = unfolded.substring(i + 1, i + 3);
+      if (/^[0-9A-Fa-f]{2}$/.test(hex)) {
+        bytes.push(parseInt(hex, 16));
+        i += 2;
+        continue;
+      }
+    }
+    bytes.push(unfolded.charCodeAt(i));
+  }
+  try {
+    return new TextDecoder(charset).decode(new Uint8Array(bytes));
+  } catch {
+    return new TextDecoder("utf-8").decode(new Uint8Array(bytes));
+  }
+}
+
 function buildCacheRow(accountKey: string, host: string, username: string, folder: string, msg: any): SearchCacheRow | null {
   if (!Number.isFinite(Number(msg?.uid))) return null;
   const env = msg.envelope || {};

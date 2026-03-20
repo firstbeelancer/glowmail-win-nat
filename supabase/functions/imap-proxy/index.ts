@@ -639,6 +639,7 @@ Deno.serve(async (req) => {
             envelope: true,
             flags: true,
             size: true,
+            bodyStructure: true,
             source: true,
           });
 

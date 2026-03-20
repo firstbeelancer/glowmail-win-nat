@@ -94,19 +94,75 @@ function MailApp() {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+  /** Convert plain text to rich HTML: auto-link URLs, format > quote chains as blockquotes */
+  const formatPlainTextAsHtml = (text: string): string => {
+    let html = escapeHtml(text);
+
+    // Convert URLs to clickable links
+    html = html.replace(
+      /https?:\/\/[^\s<>&"')\]]+/g,
+      url => `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#1a73e8">${url}</a>`
+    );
+
+    // Convert email addresses to mailto links
+    html = html.replace(
+      /([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/g,
+      (email) => `<a href="mailto:${email}" style="color:#1a73e8">${email}</a>`
+    );
+
+    // Convert > quoted lines into styled blockquotes
+    const lines = html.split('\n');
+    const result: string[] = [];
+    let currentDepth = 0;
+
+    for (const line of lines) {
+      // Count leading &gt; markers
+      const match = line.match(/^((&gt;\s*)+)/);
+      const depth = match ? (match[0].match(/&gt;/g) || []).length : 0;
+
+      // Close/open blockquotes to match depth
+      while (currentDepth > depth) {
+        result.push('</blockquote>');
+        currentDepth--;
+      }
+      while (currentDepth < depth) {
+        result.push('<blockquote style="margin:4px 0;padding:0 12px;border-left:3px solid #ccc;color:#666">');
+        currentDepth++;
+      }
+
+      const cleanLine = depth > 0 ? line.replace(/^(&gt;\s*)+/, '') : line;
+      result.push(cleanLine);
+    }
+
+    while (currentDepth > 0) {
+      result.push('</blockquote>');
+      currentDepth--;
+    }
+
+    return `<div style="white-space:pre-wrap;line-height:1.55;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px">${result.join('\n')}</div>`;
+  };
+
   const buildRenderableEmailBody = (full: any) => {
     const bodyHtml = typeof full?.bodyHtml === 'string' ? full.bodyHtml.trim() : '';
     const html = typeof full?.html === 'string' ? full.html.trim() : '';
     const bodyText = typeof full?.bodyText === 'string' ? full.bodyText.trim() : '';
     const text = typeof full?.text === 'string' ? full.text.trim() : '';
 
+    // Prefer HTML from any available field
     const resolvedHtml = bodyHtml || html;
     const resolvedText = bodyText || text;
     const htmlHasTags = /<\/?[a-z][\s\S]*>/i.test(resolvedHtml);
 
     if (resolvedHtml && htmlHasTags) return resolvedHtml;
+
+    // Check if text actually contains HTML (misclassified)
+    if (resolvedText && /<\/?[a-z][\s\S]*>/i.test(resolvedText)) {
+      return resolvedText;
+    }
+
+    // Pure plain text — format nicely with links and blockquotes
     if (resolvedText) {
-      return `<div style="white-space: pre-wrap; line-height: 1.55;">${escapeHtml(resolvedText)}</div>`;
+      return formatPlainTextAsHtml(resolvedText);
     }
 
     return settings.language === 'ru'

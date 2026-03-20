@@ -1,17 +1,22 @@
 import React, { useRef, useEffect, useState } from 'react';
 
-/** Sanitize HTML: remove scripts, event handlers, dangerous tags */
+/** Sanitize HTML: remove scripts, event handlers, dangerous tags but keep layout-critical elements */
 function sanitizeHtml(html: string): string {
   // Remove <script> tags and content
   let clean = html.replace(/<script[\s\S]*?<\/script>/gi, '');
-  // Remove <style> that contains @import or expression()
-  // Keep regular <style> for email formatting
+  // Remove <style> blocks that contain dangerous CSS (expression, @import with url)
+  // but KEEP regular <style> blocks — they're critical for email layout
+  clean = clean.replace(/<style[^>]*>[\s\S]*?expression\s*\([\s\S]*?<\/style>/gi, '');
   // Remove event handlers (on*)
   clean = clean.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]*)/gi, '');
   // Remove javascript: hrefs
   clean = clean.replace(/href\s*=\s*(?:"javascript:[^"]*"|'javascript:[^']*')/gi, 'href="#"');
-  // Remove <iframe>, <object>, <embed>, <form>, <input>, <button> tags
-  clean = clean.replace(/<\/?(iframe|object|embed|form|input|button|textarea|select|applet|meta|link|base)[\s\S]*?>/gi, '');
+  // Remove dangerous tags but keep <meta charset> for encoding and <style> for layout
+  clean = clean.replace(/<\/?(iframe|object|embed|form|input|button|textarea|select|applet|base)[\s\S]*?>/gi, '');
+  // Remove <link> tags (external stylesheets — security risk) but not <style>
+  clean = clean.replace(/<link[\s\S]*?>/gi, '');
+  // Make all links open in new tab (inside iframe they'd navigate the iframe)
+  clean = clean.replace(/<a\s/gi, '<a target="_blank" rel="noopener noreferrer" ');
   return clean;
 }
 

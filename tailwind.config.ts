@@ -31,6 +31,10 @@ export default {
           900: "hsl(var(--zinc-900))",
           950: "hsl(var(--zinc-950))",
         },
+        emerald: {
+          400: "var(--emerald-400)",
+          500: "var(--emerald-500)",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

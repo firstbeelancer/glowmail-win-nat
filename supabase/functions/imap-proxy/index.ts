@@ -586,13 +586,14 @@ Deno.serve(async (req) => {
         };
 
         try {
+          // Use `full: true` which generates BODY.PEEK[] — the correct way to get raw content
           const messages = await (client as any).fetch(String(targetUid), {
             byUid: true,
             uid: true,
             envelope: true,
             flags: true,
             size: true,
-            source: true,
+            full: true,
           });
 
           const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
@@ -602,28 +603,25 @@ Deno.serve(async (req) => {
             envelope = msg.envelope;
             flags = msg.flags || [];
             messageSize = Number(msg.size || 0);
-            msgSourceType = typeof msg.source;
-            msgSourceConstructor = msg.source?.constructor?.name || "undefined";
 
-            // Try 'raw' first (deno-imap returns raw, not source)
-            await readRawCandidate("msg.raw", msg.raw);
-            if (!rawSource) await readRawCandidate("msg.source", msg.source);
+            // deno-imap stores BODY[] content in msg.parts[""]?.data (Uint8Array)
+            const fullBodyPart = msg.parts?.[""]?.data || msg.parts?.[""]?.content;
+            await readRawCandidate("msg.parts[''].data", fullBodyPart);
+            if (!rawSource) await readRawCandidate("msg.raw", msg.raw);
 
             console.log(
-              "fetch source attempt - hasSource:",
+              "fetch full body - hasSource:",
               !!rawSource,
               "origin:",
               rawSourceOrigin,
-              "msg.source type:",
-              msgSourceType,
-              "msg.source constructor:",
-              msgSourceConstructor,
-              "keys:",
+              "parts keys:",
+              msg.parts ? Object.keys(msg.parts).join(",") : "none",
+              "msg keys:",
               Object.keys(msg).join(","),
             );
           }
         } catch (e) {
-          console.error("fetch source failed:", e);
+          console.error("fetch full body failed:", e);
         }
 
         if (!rawSource) {

@@ -41,6 +41,7 @@ type SearchCacheRow = {
   message_id: string;
   in_reply_to: string;
   sent_at: string;
+  body_text?: string;
   updated_at?: string;
 };
 
@@ -73,6 +74,10 @@ function normalizeSearchTerm(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function hasNonAscii(value: string) {
+  return /[^\u0000-\u007f]/.test(value);
 }
 
 function decodeMimeWords(value: string) {
@@ -174,7 +179,88 @@ function decodeQuotedPrintable(input: string, charset = "utf-8"): string {
   }
 }
 
-function buildCacheRow(accountKey: string, host: string, username: string, folder: string, msg: any): SearchCacheRow | null {
+function scoreTextReadability(value: string) {
+  if (!value) return Number.NEGATIVE_INFINITY;
+  const letters = (value.match(/[A-Za-zА-Яа-яЁё]/g) || []).length;
+  const replacement = (value.match(/�/g) || []).length;
+  const control = (value.match(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || []).length;
+  return letters * 2 - replacement * 8 - control * 4 + Math.min(value.length / 200, 20);
+}
+
+function decodeBytesWithCharsetGuess(bytes: Uint8Array) {
+  const charsets = ["utf-8", "windows-1251", "koi8-r", "iso-8859-5"];
+  let best = "";
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const charset of charsets) {
+    try {
+      const decoded = new TextDecoder(charset).decode(bytes);
+      const score = scoreTextReadability(decoded);
+      if (score > bestScore) {
+        bestScore = score;
+        best = decoded;
+      }
+    } catch {
+      // ignore charset decode failures
+    }
+  }
+
+  return best;
+}
+
+function maybeDecodeQuotedPrintable(value: string) {
+  if (!value) return value;
+  const looksQP = /=[0-9A-Fa-f]{2}|=\r?\n/.test(value);
+  if (!looksQP) return value;
+
+  const candidates = [
+    value,
+    decodeQuotedPrintable(value, "utf-8"),
+    decodeQuotedPrintable(value, "windows-1251"),
+    decodeQuotedPrintable(value, "koi8-r"),
+    decodeQuotedPrintable(value, "iso-8859-5"),
+  ];
+
+  let best = value;
+  let bestScore = scoreTextReadability(value);
+
+  for (const candidate of candidates) {
+    const score = scoreTextReadability(candidate);
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+
+  return best;
+}
+
+function stripHtmlForSearch(value: string) {
+  return value
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ");
+}
+
+function cleanBodyText(value: string) {
+  return value
+    .replace(/\u00A0/g, " ")
+    .replace(/[\u200B-\u200D\uFEFF]/g, " ")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, " ")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function buildCacheRow(
+  accountKey: string,
+  host: string,
+  username: string,
+  folder: string,
+  msg: any,
+  bodyText?: string,
+): SearchCacheRow | null {
   if (!Number.isFinite(Number(msg?.uid))) return null;
   const env = msg.envelope || {};
   let hasAttachments = false;
@@ -184,6 +270,7 @@ function buildCacheRow(accountKey: string, host: string, username: string, folde
     hasAttachments = false;
   }
   const attachmentNames = extractAttachmentNames(msg.bodyStructure);
+  const normalizedBodyText = typeof bodyText === "string" ? cleanBodyText(bodyText) : "";
 
   return {
     account_key: accountKey,
@@ -209,6 +296,7 @@ function buildCacheRow(accountKey: string, host: string, username: string, folde
     message_id: env.messageId || "",
     in_reply_to: env.inReplyTo || "",
     sent_at: env.date || new Date().toISOString(),
+    ...(normalizedBodyText ? { body_text: normalizedBodyText } : {}),
   };
 }
 
@@ -232,7 +320,9 @@ function searchEmailFromEnvelope(msg: any, term: string) {
 
 async function extractSearchableBody(msg: any) {
   const rawCandidate = msg?.raw ?? msg?.source;
-  if (!rawCandidate) return "";
+  if (!rawCandidate) {
+    return { normalizedText: "", plainText: "", source: "missing-raw" };
+  }
 
   let bytes: Uint8Array | null = null;
   if (rawCandidate instanceof Uint8Array) {
@@ -247,24 +337,63 @@ async function extractSearchableBody(msg: any) {
     bytes = new Uint8Array(rawCandidate.buffer, offset, length);
   }
 
-  if (!bytes || bytes.length === 0) return "";
+  if (!bytes || bytes.length === 0) {
+    return { normalizedText: "", plainText: "", source: "empty-raw" };
+  }
+
+  const textParts: string[] = [];
+  let source = "postal-mime";
 
   try {
     const parsed = await PostalMime.parse(bytes);
-    return normalizeSearchTerm([
-      parsed.subject || "",
-      parsed.text || "",
-      typeof parsed.html === "string" ? parsed.html.replace(/<[^>]+>/g, " ") : "",
-    ].join(" "));
+    const parsedText = typeof parsed.text === "string" ? maybeDecodeQuotedPrintable(parsed.text) : "";
+    const parsedHtml = typeof parsed.html === "string"
+      ? maybeDecodeQuotedPrintable(stripHtmlForSearch(parsed.html))
+      : "";
+
+    if (parsedText) textParts.push(parsedText);
+    if (parsedHtml) textParts.push(parsedHtml);
   } catch {
-    return "";
+    source = "raw-decode-fallback";
   }
+
+  if (textParts.length === 0) {
+    const decodedRaw = decodeBytesWithCharsetGuess(bytes);
+    if (decodedRaw) {
+      const mimeBody = decodedRaw.replace(/^[\s\S]*?\r?\n\r?\n/, " ");
+      const qpDecoded = maybeDecodeQuotedPrintable(mimeBody);
+      textParts.push(stripHtmlForSearch(qpDecoded));
+      source = "raw-decode-fallback";
+    }
+  }
+
+  const plainText = cleanBodyText(textParts.join(" "));
+  const normalizedText = normalizeSearchTerm(plainText);
+
+  return {
+    normalizedText,
+    plainText,
+    source,
+  };
 }
 
 async function searchMessageContent(msg: any, term: string) {
-  if (searchEmailFromEnvelope(msg, term)) return true;
-  const bodyHaystack = await extractSearchableBody(msg);
-  return bodyHaystack.includes(term);
+  if (searchEmailFromEnvelope(msg, term)) {
+    return {
+      matched: true,
+      bodyText: "",
+      normalizedBody: "",
+      source: "envelope",
+    };
+  }
+
+  const extracted = await extractSearchableBody(msg);
+  return {
+    matched: extracted.normalizedText.includes(term),
+    bodyText: extracted.plainText,
+    normalizedBody: extracted.normalizedText,
+    source: extracted.source,
+  };
 }
 
 function mapFetchedSearchEmail(msg: any) {
@@ -1058,16 +1187,20 @@ Deno.serve(async (req) => {
         // Returns sequence numbers (not UIDs)
         const searchAttempts: Array<{ label: string; criteria: Record<string, unknown> }> = [
           { label: "Text", criteria: { text: term } },
+          { label: "Body", criteria: { body: term } },
           { label: "Subject", criteria: { header: [{ field: "Subject", value: term }] } },
           { label: "From", criteria: { header: [{ field: "From", value: term }] } },
           { label: "To", criteria: { header: [{ field: "To", value: term }] } },
           { label: "Cc", criteria: { header: [{ field: "Cc", value: term }] } },
         ];
         let anySearchWorked = false;
+        const useUtf8Search = hasNonAscii(term);
 
         for (const attempt of searchAttempts) {
           try {
-            const searchResult = await client.search(attempt.criteria as any);
+            const searchResult = useUtf8Search
+              ? await client.search(attempt.criteria as any, "UTF-8")
+              : await client.search(attempt.criteria as any);
             const seqNos = (Array.isArray(searchResult) ? searchResult : []).map(Number).filter(Number.isFinite);
             if (seqNos.length > 0) {
               anySearchWorked = true;
@@ -1080,7 +1213,7 @@ Deno.serve(async (req) => {
               }
             }
             // If TEXT search worked, skip header-specific searches (TEXT covers them)
-            if (attempt.label === "Text" && anySearchWorked) break;
+            if ((attempt.label === "Text" || attempt.label === "Body") && anySearchWorked) break;
           } catch (attemptError) {
             console.log(`[search] search failed for ${attempt.label}:`, attemptError);
           }
@@ -1096,7 +1229,10 @@ Deno.serve(async (req) => {
           const mailboxStatus = await client.selectMailbox(folder);
           const totalMessages = Number((mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0);
           const batchSize = 200;
-          const scannedMatches: any[] = [];
+          const scannedMatches: Array<{ msg: any; bodyText: string }> = [];
+          const scannedCacheRows: SearchCacheRow[] = [];
+          let scannedCount = 0;
+          let extractedBodyCount = 0;
 
           for (let seqEnd = totalMessages; seqEnd >= 1; seqEnd -= batchSize) {
             const seqStart = Math.max(1, seqEnd - batchSize + 1);
@@ -1104,19 +1240,35 @@ Deno.serve(async (req) => {
             const batch = await fetchEnvelopeBatch(client, sequence, false, true);
             for (const msg of batch) {
               if (!Number.isFinite(Number(msg?.uid))) continue;
-              if (await searchMessageContent(msg, normalizedTerm)) {
-                scannedMatches.push(msg);
+              scannedCount += 1;
+              const contentResult = await searchMessageContent(msg, normalizedTerm);
+              if (contentResult.bodyText) {
+                extractedBodyCount += 1;
+                const row = buildCacheRow(accountKey, host, username, folder, msg, contentResult.bodyText);
+                if (row) scannedCacheRows.push(row);
+              }
+
+              if (contentResult.matched) {
+                scannedMatches.push({ msg, bodyText: contentResult.bodyText });
                 matchedUidSet.add(Number(msg.uid));
               }
             }
           }
 
+          console.log(
+            `[search] content scan stats scanned=${scannedCount} extractedBodies=${extractedBodyCount} matched=${scannedMatches.length}`,
+          );
+
           matchedUids = [...matchedUidSet].sort((a, b) => b - a);
+
+          if (scannedCacheRows.length > 0) {
+            await upsertSearchCache(scannedCacheRows.slice(0, 5000));
+          }
 
           if (scannedMatches.length > 0) {
             await upsertSearchCache(
               scannedMatches
-                .map((msg: any) => buildCacheRow(accountKey, host, username, folder, msg))
+                .map(({ msg, bodyText }) => buildCacheRow(accountKey, host, username, folder, msg, bodyText))
                 .filter(Boolean) as SearchCacheRow[],
             );
           }

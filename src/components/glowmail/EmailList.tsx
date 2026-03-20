@@ -581,8 +581,8 @@ export function EmailList({ onSelect, onEditDraft, selectedEmailId }: { onSelect
                   ))}
                   {/* Show attachment names preview on desktop */}
                   {email.attachments.length > 0 && email.attachments.length <= 3 && (
-                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-800/60 text-zinc-500 border border-zinc-700/30">
-                      <Paperclip className="w-2.5 h-2.5" />
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium bg-zinc-800/60 text-zinc-400 border border-zinc-700/30">
+                      <Paperclip className="w-2.5 h-2.5 stroke-[2.5]" />
                       {email.attachments.map(a => a.name).join(', ')}
                     </span>
                   )}

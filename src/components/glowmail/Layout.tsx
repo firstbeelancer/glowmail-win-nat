@@ -324,7 +324,7 @@ function SidebarContent({
                 {count > 0 && (
                   <span className={cn(
                     "px-2 py-0.5 rounded-full text-xs font-bold",
-                    isActive ? "bg-emerald-500/20 text-emerald-400" : "bg-zinc-800 text-zinc-300"
+                    isActive ? "bg-emerald-500/25 text-emerald-300" : "bg-zinc-800 text-zinc-300"
                   )}>
                     {count}
                   </span>

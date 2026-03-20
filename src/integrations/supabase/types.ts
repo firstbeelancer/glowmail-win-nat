@@ -19,7 +19,6 @@ export type Database = {
           account_email: string
           account_key: string
           attachment_names: string[]
-          body_text: string
           cc_addresses: Json
           flags: string[]
           folder_id: string
@@ -42,7 +41,6 @@ export type Database = {
           account_email: string
           account_key: string
           attachment_names?: string[]
-          body_text?: string
           cc_addresses?: Json
           flags?: string[]
           folder_id: string
@@ -65,7 +63,6 @@ export type Database = {
           account_email?: string
           account_key?: string
           attachment_names?: string[]
-          body_text?: string
           cc_addresses?: Json
           flags?: string[]
           folder_id?: string
@@ -86,48 +83,11 @@ export type Database = {
         }
         Relationships: []
       }
-      mail_sync_state: {
-        Row: {
-          account_key: string
-          created_at: string
-          folder_id: string
-          full_sync_done: boolean
-          id: number
-          last_sync_at: string
-          last_synced_uid: number
-          total_messages: number
-        }
-        Insert: {
-          account_key: string
-          created_at?: string
-          folder_id: string
-          full_sync_done?: boolean
-          id?: never
-          last_sync_at?: string
-          last_synced_uid?: number
-          total_messages?: number
-        }
-        Update: {
-          account_key?: string
-          created_at?: string
-          folder_id?: string
-          full_sync_done?: boolean
-          id?: never
-          last_sync_at?: string
-          last_synced_uid?: number
-          total_messages?: number
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      count_cached_emails: {
-        Args: { p_account_key: string; p_folder_id: string }
-        Returns: number
-      }
       email_search_cache_document: {
         Args: {
           p_attachment_names: string[]
@@ -139,51 +99,6 @@ export type Database = {
           p_to_addresses: Json
         }
         Returns: unknown
-      }
-      email_search_cache_document_v2: {
-        Args: {
-          p_attachment_names: string[]
-          p_body_text: string
-          p_cc_addresses: Json
-          p_from_email: string
-          p_from_name: string
-          p_snippet: string
-          p_subject: string
-          p_to_addresses: Json
-        }
-        Returns: unknown
-      }
-      get_sync_state: {
-        Args: { p_account_key: string; p_folder_id: string }
-        Returns: {
-          full_sync_done: boolean
-          last_sync_at: string
-          last_synced_uid: number
-          total_messages: number
-        }[]
-      }
-      list_cached_emails: {
-        Args: {
-          p_account_key: string
-          p_folder_id: string
-          p_limit?: number
-          p_offset?: number
-        }
-        Returns: {
-          attachment_names: string[]
-          cc_addresses: Json
-          flags: string[]
-          from_email: string
-          from_name: string
-          has_attachments: boolean
-          in_reply_to: string
-          message_id: string
-          sent_at: string
-          snippet: string
-          subject: string
-          to_addresses: Json
-          uid: number
-        }[]
       }
       search_email_search_cache: {
         Args: {

@@ -414,12 +414,13 @@ Deno.serve(async (req) => {
       }
 
       case "list": {
-        const { folder = "INBOX", page = 1, pageSize = 20 } = body;
+        const { folder = "INBOX", page = 1, pageSize = 50 } = body;
         const mailboxStatus = await client.selectMailbox(folder);
 
+        // Use EXISTS count from mailbox status for reliable pagination
         const total = (mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0;
         const safePage = Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 1;
-        const safePageSize = Math.min(30, Number.isFinite(Number(pageSize)) && Number(pageSize) > 0 ? Number(pageSize) : 20);
+        const safePageSize = Number.isFinite(Number(pageSize)) && Number(pageSize) > 0 ? Number(pageSize) : 50;
 
         if (total === 0) {
           await client.disconnect();
@@ -427,6 +428,9 @@ Deno.serve(async (req) => {
           return ok({ emails: [], total: 0, page: safePage, pageSize: safePageSize });
         }
 
+        // Calculate sequence range (newest first)
+        // Page 1: sequences (total-pageSize+1) to total
+        // Page 2: sequences (total-2*pageSize+1) to (total-pageSize)
         const seqEnd = total - (safePage - 1) * safePageSize;
         const seqStart = Math.max(1, seqEnd - safePageSize + 1);
 
@@ -439,20 +443,26 @@ Deno.serve(async (req) => {
         const sequence = `${seqStart}:${seqEnd}`;
         console.log("list fetch - total:", total, "seqRange:", sequence, "page:", safePage);
 
-        // Lightweight fetch: envelope + flags only (no bodyStructure to save CPU)
         const messages = await (client as any).fetch(sequence, {
           uid: true,
           envelope: true,
           flags: true,
           size: true,
+          bodyStructure: true,
         });
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+
+
+
 
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
           .map((msg: any) => {
             const env = msg.envelope || {};
+            let hasAtt = false;
+            try { hasAtt = msg.bodyStructure ? imapHasAttachments(msg.bodyStructure) : false; } catch {}
+
             return {
               uid: msg.uid,
               flags: msg.flags || [],
@@ -475,13 +485,17 @@ Deno.serve(async (req) => {
               date: env.date || new Date().toISOString(),
               messageId: env.messageId || "",
               inReplyTo: env.inReplyTo || "",
-              hasAttachments: false,
+              hasAttachments: hasAtt,
               attachments: [],
             };
           })
-          .sort((a: any, b: any) => b.uid - a.uid);
+          .sort((a: any, b: any) => b.uid - a.uid); // newest first
 
-        // Cache building skipped for list (no bodyStructure available)
+        await upsertSearchCache(
+          normalized
+            .map((msg: any) => buildCacheRow(accountKey, host, username, folder, msg))
+            .filter(Boolean) as SearchCacheRow[],
+        );
 
         await client.disconnect();
         client = null;
@@ -489,7 +503,7 @@ Deno.serve(async (req) => {
       }
 
       case "fetch": {
-        const { folder = "INBOX", uid } = body;
+        const { folder = "INBOX", uid, includeAttachmentContent = false } = body;
         if (!uid) return err("Missing uid", 400);
 
         await client.selectMailbox(folder);
@@ -497,130 +511,323 @@ Deno.serve(async (req) => {
         const targetUid = Number(uid);
         if (!Number.isFinite(targetUid)) return err("Invalid uid", 400);
 
-        // Step 1: lightweight envelope + bodyStructure fetch (no raw body)
-        const envelopeMessages = await (client as any).fetch(String(targetUid), {
-          byUid: true, uid: true, envelope: true, flags: true, size: true, bodyStructure: true,
+        const MAX_RAW_BYTES = 3_000_000;
+        const MAX_ATTACHMENT_INLINE_BYTES = 256_000;
+
+        let rawSource: Uint8Array | null = null;
+        let envelope: any = null;
+        let flags: string[] = [];
+        let messageSize = 0;
+
+        let msgSourceType = "undefined";
+        let msgSourceConstructor = "undefined";
+        let rawSourceOrigin = "none";
+
+        const toUint8Array = async (value: unknown): Promise<Uint8Array | null> => {
+          if (value instanceof Uint8Array) {
+            return value.length > MAX_RAW_BYTES ? value.slice(0, MAX_RAW_BYTES) : value;
+          }
+          if (typeof value === "string") {
+            const encoded = new TextEncoder().encode(value);
+            return encoded.length > MAX_RAW_BYTES ? encoded.slice(0, MAX_RAW_BYTES) : encoded;
+          }
+          if (value instanceof ArrayBuffer) {
+            const bytes = new Uint8Array(value);
+            return bytes.length > MAX_RAW_BYTES ? bytes.slice(0, MAX_RAW_BYTES) : bytes;
+          }
+          if (value && typeof value === "object") {
+            const maybe = value as { buffer?: unknown; byteOffset?: unknown; byteLength?: unknown };
+            if (maybe.buffer instanceof ArrayBuffer) {
+              const byteOffset = typeof maybe.byteOffset === "number" ? maybe.byteOffset : 0;
+              const byteLength = typeof maybe.byteLength === "number" ? maybe.byteLength : undefined;
+              const bytes = new Uint8Array(maybe.buffer, byteOffset, byteLength);
+              return bytes.length > MAX_RAW_BYTES ? bytes.slice(0, MAX_RAW_BYTES) : bytes;
+            }
+            const keys = Object.keys(value);
+            if (keys.length > 0 && keys.every(k => /^\d+$/.test(k))) {
+              const arr = new Uint8Array(keys.length);
+              for (let i = 0; i < keys.length; i++) arr[i] = (value as any)[i];
+              return arr.length > MAX_RAW_BYTES ? arr.slice(0, MAX_RAW_BYTES) : arr;
+            }
+          }
+          return null;
+        };
+
+        const describe = (value: unknown) => ({
+          type: typeof value,
+          constructorName: value && typeof value === "object"
+            ? ((value as any).constructor?.name || "Unknown")
+            : "n/a",
+          keys: value && typeof value === "object"
+            ? Object.keys(value as Record<string, unknown>)
+            : [],
         });
 
-        const envelopeFetched = (Array.isArray(envelopeMessages) ? envelopeMessages : [envelopeMessages]).filter(Boolean);
-        const msg = envelopeFetched.find((item: any) => Number(item?.uid) === targetUid) || envelopeFetched[0];
+        const readRawCandidate = async (label: string, value: unknown) => {
+          if (value == null) return;
+          const converted = await toUint8Array(value);
+          if (converted && converted.length > 0) {
+            rawSource = converted;
+            rawSourceOrigin = label;
+            return;
+          }
 
-        if (!msg) {
+          const unsupported = describe(value);
+          console.warn(
+            "Unsupported raw source candidate:",
+            label,
+            "type:",
+            unsupported.type,
+            "constructor:",
+            unsupported.constructorName,
+            "keys:",
+            unsupported.keys.join(","),
+          );
+        };
+
+        try {
+          const messages = await (client as any).fetch(String(targetUid), {
+            byUid: true,
+            uid: true,
+            envelope: true,
+            flags: true,
+            size: true,
+            source: true,
+          });
+
+          const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+          const msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || fetched[0];
+
+          if (msg) {
+            envelope = msg.envelope;
+            flags = msg.flags || [];
+            messageSize = Number(msg.size || 0);
+            msgSourceType = typeof msg.source;
+            msgSourceConstructor = msg.source?.constructor?.name || "undefined";
+
+            // Try 'raw' first (deno-imap returns raw, not source)
+            await readRawCandidate("msg.raw", msg.raw);
+            if (!rawSource) await readRawCandidate("msg.source", msg.source);
+
+            console.log(
+              "fetch source attempt - hasSource:",
+              !!rawSource,
+              "origin:",
+              rawSourceOrigin,
+              "msg.source type:",
+              msgSourceType,
+              "msg.source constructor:",
+              msgSourceConstructor,
+              "keys:",
+              Object.keys(msg).join(","),
+            );
+          }
+        } catch (e) {
+          console.error("fetch source failed:", e);
+        }
+
+        if (!rawSource) {
+          try {
+            const messages2 = await (client as any).fetch(String(targetUid), {
+              byUid: true,
+              uid: true,
+              envelope: true,
+              flags: true,
+              size: true,
+              bodyParts: [""],
+            });
+
+            const fetched2 = (Array.isArray(messages2) ? messages2 : [messages2]).filter(Boolean);
+            const msg2 = fetched2.find((item: any) => Number(item?.uid) === targetUid) || fetched2[0];
+
+            if (msg2) {
+              if (!envelope) envelope = msg2.envelope;
+              if (!flags.length) flags = msg2.flags || [];
+              if (!messageSize) messageSize = Number(msg2.size || 0);
+
+              if (!rawSource) await readRawCandidate("msg2.raw", msg2.raw);
+              if (!rawSource) await readRawCandidate("msg2.source", msg2.source);
+              if (!rawSource && msg2.parts) {
+                const textPart = msg2.parts?.find?.((p: any) => p.body);
+                if (textPart?.body) await readRawCandidate("msg2.parts[].body", textPart.body);
+              }
+
+              const bodyContent = msg2.bodyParts?.get?.("") || msg2.body?.get?.("") || msg2["body[]"];
+              console.log(
+                "fallback bodyParts - hasContent:",
+                !!bodyContent,
+                "type:",
+                typeof bodyContent,
+                "keys:",
+                Object.keys(msg2).join(","),
+              );
+
+              if (!rawSource) await readRawCandidate("msg2.body[]", bodyContent);
+            }
+          } catch (e2) {
+            console.error("fetch bodyParts fallback failed:", e2);
+          }
+        }
+
+        if (messageSize > MAX_RAW_BYTES && !rawSource) {
           await client.disconnect();
           client = null;
+          console.log("Skipping heavy parse for large message uid:", targetUid, "size:", messageSize);
           return ok({
-            uid: targetUid, flags: [], subject: "", from: { name: "Unknown", email: "" },
-            to: [], cc: [], date: "", messageId: "", bodyText: "", bodyHtml: "", text: "", html: "",
-            hasBody: false, notFound: true, attachments: [],
+            uid: targetUid,
+            flags,
+            subject: envelope?.subject || "",
+            from: envelope?.from?.[0]
+              ? {
+                  name: envelope.from[0].name || envelope.from[0].mailbox,
+                  email: `${envelope.from[0].mailbox}@${envelope.from[0].host}`,
+                }
+              : { name: "Unknown", email: "" },
+            to: (envelope?.to || []).map((a: any) => ({
+              name: a.name || a.mailbox,
+              email: `${a.mailbox}@${a.host}`,
+            })),
+            cc: (envelope?.cc || []).map((a: any) => ({
+              name: a.name || a.mailbox,
+              email: `${a.mailbox}@${a.host}`,
+            })),
+            date: envelope?.date || "",
+            messageId: envelope?.messageId || "",
+            bodyText: "",
+            bodyHtml: "",
+            text: "",
+            html: "",
+            hasBody: false,
+            tooLargeToParse: true,
+            attachments: [],
           });
         }
 
-        const env = msg.envelope || {};
-        const fetchFlags = msg.flags || [];
-        const messageSize = Number(msg.size || 0);
-        const MAX_BODY_DECODE_BYTES = 200_000;
-        const MAX_FETCH_BODY_MESSAGE_SIZE = 1_500_000;
-
-        // Step 2: find text/plain and text/html sections from bodyStructure
-        const textSections: string[] = [];
-        const htmlSections: string[] = [];
-
-        const findTextParts = (node: any, path = "") => {
-          if (!node) return;
-          const nType = (node.type || node.mediaType || "").toLowerCase();
-          const nSub = (node.subtype || node.mediaSubtype || "").toLowerCase();
-          const children = node.childNodes || node.parts || node.body;
-          if (Array.isArray(children)) {
-            children.forEach((child: any, i: number) => findTextParts(child, path ? `${path}.${i + 1}` : `${i + 1}`));
-          } else {
-            if (nType === "text" && nSub === "plain") textSections.push(path || "1");
-            else if (nType === "text" && nSub === "html") htmlSections.push(path || "1");
-          }
-        };
-        findTextParts(msg.bodyStructure);
-        if (textSections.length === 0 && htmlSections.length === 0) textSections.push("1");
-
-        let bodyText = "";
-        let bodyHtml = "";
-
-        const looksQuotedPrintable = (v: string) => /=[0-9A-Fa-f]{2}/.test(v) && /=\r?\n/.test(v);
-
-        const decodeQuotedPrintable = (v: string): string => {
-          return v
-            .replace(/=\r?\n/g, "")
-            .replace(/=([0-9A-Fa-f]{2})/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)));
-        };
-
-        const decodeAndCleanQP = (raw: string): string => {
-          if (!raw) return "";
-          if (looksQuotedPrintable(raw)) {
-            const decoded = decodeQuotedPrintable(raw);
-            try {
-              const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
-              return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
-            } catch {
-              return decoded;
-            }
-          }
-          return raw;
-        };
-
-        const decodePartData = (partData: unknown): string => {
-          let raw = "";
-          if (partData instanceof Uint8Array) {
-            const safeBytes = partData.length > MAX_BODY_DECODE_BYTES ? partData.slice(0, MAX_BODY_DECODE_BYTES) : partData;
-            raw = new TextDecoder("utf-8", { fatal: false }).decode(safeBytes);
-          } else if (typeof partData === "string") {
-            raw = partData.length > MAX_BODY_DECODE_BYTES ? partData.slice(0, MAX_BODY_DECODE_BYTES) : partData;
-          }
-          return decodeAndCleanQP(raw);
-        };
-
-        // For large messages return metadata only to avoid CPU limit.
-        if (messageSize <= MAX_FETCH_BODY_MESSAGE_SIZE) {
-          const partsToFetch = [...textSections.slice(0, 1), ...htmlSections.slice(0, 1)];
-          for (const section of partsToFetch) {
-            try {
-              const partMsgs = await (client as any).fetch(String(targetUid), { byUid: true, uid: true, bodyParts: [section] });
-              const partArr = (Array.isArray(partMsgs) ? partMsgs : [partMsgs]).filter(Boolean);
-              const pMsg = partArr[0];
-              const pData = pMsg?.parts?.[section]?.data || pMsg?.parts?.[section]?.content;
-              if (pData) {
-                const content = decodePartData(pData);
-                if (textSections.includes(section) && !bodyText) bodyText = content.trim();
-                else if (htmlSections.includes(section) && !bodyHtml) bodyHtml = content.trim();
-              }
-            } catch (e) {
-              console.warn(`Part ${section} fetch failed:`, e);
-            }
-          }
-        } else {
-          console.log("Skipping body decode for large message", { uid: targetUid, messageSize });
+        if (!rawSource) {
+          await client.disconnect();
+          client = null;
+          console.log("No raw source obtained for uid:", targetUid);
+          return ok({
+            uid: targetUid,
+            flags: [],
+            subject: envelope?.subject || "",
+            from: { name: "Unknown", email: "" },
+            to: [],
+            cc: [],
+            date: "",
+            messageId: "",
+            bodyText: "",
+            bodyHtml: "",
+            text: "",
+            html: "",
+            hasBody: false,
+            notFound: true,
+          });
         }
 
-        const hasBody = Boolean(bodyText || bodyHtml);
+        let parsed: any;
+        try {
+          parsed = await PostalMime.parse(rawSource);
+        } catch (parseError) {
+          console.error("PostalMime parse failed:", parseError);
+          await client.disconnect();
+          client = null;
+          return ok({
+            uid: targetUid,
+            flags,
+            subject: envelope?.subject || "",
+            from: { name: "Unknown", email: "" },
+            to: [],
+            cc: [],
+            date: envelope?.date || "",
+            messageId: envelope?.messageId || "",
+            bodyText: "",
+            bodyHtml: "",
+            text: "",
+            html: "",
+            hasBody: false,
+            parseError: true,
+            attachments: [],
+          });
+        }
 
-        // Attachment list from bodyStructure (metadata only, no download)
-        const attachmentNames = extractAttachmentNames(msg.bodyStructure);
-        const attachments = attachmentNames.map((name) => ({
-          name: name || "unnamed", size: 0, type: "application/octet-stream", contentBase64: "",
-        }));
+        const bodyText = typeof parsed.text === "string" ? parsed.text.trim() : "";
+        const bodyHtml = typeof parsed.html === "string" ? parsed.html.trim() : "";
+
+        let finalHtml = bodyHtml;
+        if (!finalHtml && parsed.attachments?.length) {
+          const htmlAttachment = parsed.attachments.find((a: any) => a.mimeType === "text/html");
+          if (htmlAttachment?.content) {
+            finalHtml = new TextDecoder().decode(
+              htmlAttachment.content instanceof Uint8Array
+                ? htmlAttachment.content
+                : new Uint8Array(htmlAttachment.content),
+            ).trim();
+          }
+        }
+
+        const hasBody = Boolean(bodyText || finalHtml);
+
+        const attachments = (parsed.attachments || [])
+          .filter((a: any) => {
+            const mimeType = (a.mimeType || "").toLowerCase();
+            return mimeType !== "text/plain" && mimeType !== "text/html";
+          })
+          .map((a: any) => {
+            const bytes = a.content
+              ? (a.content instanceof Uint8Array ? a.content : new Uint8Array(a.content))
+              : null;
+
+            let contentBase64 = "";
+            if (includeAttachmentContent && bytes && bytes.length <= MAX_ATTACHMENT_INLINE_BYTES) {
+              try {
+                let binary = "";
+                for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+                contentBase64 = btoa(binary);
+              } catch {
+                contentBase64 = "";
+              }
+            }
+
+            return {
+              name: a.filename || "unnamed",
+              size: bytes?.length || 0,
+              type: a.mimeType || "application/octet-stream",
+              contentBase64,
+            };
+          });
+
+        const env = envelope || {};
+        const resolvedUid = targetUid;
 
         await client.disconnect();
         client = null;
 
         return ok({
-          uid: targetUid,
-          flags: fetchFlags,
-          subject: decodeMimeWords(env.subject || ""),
-          from: env.from?.[0]
-            ? { name: decodeMimeWords(env.from[0].name || env.from[0].mailbox || ""), email: `${env.from[0].mailbox}@${env.from[0].host}` }
-            : { name: "Unknown", email: "" },
-          to: (env.to || []).map((a: any) => ({ name: decodeMimeWords(a.name || a.mailbox || ""), email: `${a.mailbox}@${a.host}` })),
-          cc: (env.cc || []).map((a: any) => ({ name: decodeMimeWords(a.name || a.mailbox || ""), email: `${a.mailbox}@${a.host}` })),
-          date: env.date || "",
-          messageId: env.messageId || "",
-          bodyText, bodyHtml, text: bodyText, html: bodyHtml, hasBody, tooLargeToParse: messageSize > MAX_FETCH_BODY_MESSAGE_SIZE, attachments,
+          uid: resolvedUid,
+          flags,
+          subject: parsed.subject || env.subject || "",
+          from: parsed.from
+            ? { name: parsed.from.name || parsed.from.address || "Unknown", email: parsed.from.address || "" }
+            : env.from?.[0]
+              ? { name: env.from[0].name || env.from[0].mailbox, email: `${env.from[0].mailbox}@${env.from[0].host}` }
+              : { name: "Unknown", email: "" },
+          to: (parsed.to || []).map((a: any) => ({
+            name: a.name || a.address || "",
+            email: a.address || "",
+          })),
+          cc: (parsed.cc || []).map((a: any) => ({
+            name: a.name || a.address || "",
+            email: a.address || "",
+          })),
+          date: parsed.date || env.date || "",
+          messageId: parsed.messageId || env.messageId || "",
+          bodyText,
+          bodyHtml: finalHtml,
+          text: bodyText,
+          html: finalHtml,
+          hasBody,
+          attachments,
         });
       }
 
@@ -740,26 +947,25 @@ Deno.serve(async (req) => {
         matchedUids = [...matchedUidSet];
         const shouldForceContentScan = !term.includes("@");
 
-        // Only do content scan if we have very few results AND it's not an email search
-        // Limit scan to last 200 messages to stay within CPU limits
-        if ((!anySearchWorked || matchedUids.length === 0) && shouldForceContentScan) {
+        if (!anySearchWorked || matchedUids.length === 0 || shouldForceContentScan) {
           console.log(
-            `[search] falling back to envelope-only scan anySearchWorked=${anySearchWorked} preMatched=${matchedUids.length}`,
+            `[search] falling back to content scan anySearchWorked=${anySearchWorked} preMatched=${matchedUids.length} force=${shouldForceContentScan}`,
           );
           const mailboxStatus = await client.selectMailbox(folder);
           const totalMessages = Number((mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0);
-          const scanLimit = Math.min(totalMessages, 100);
-          const seqStart = Math.max(1, totalMessages - scanLimit + 1);
-          const sequence = `${seqStart}:${totalMessages}`;
-
-          // Envelope-only scan (no source) to stay within CPU limits
-          const batch = await fetchEnvelopeBatch(client, sequence, false, false);
+          const batchSize = 200;
           const scannedMatches: any[] = [];
-          for (const msg of batch) {
-            if (!Number.isFinite(Number(msg?.uid))) continue;
-            if (searchEmailFromEnvelope(msg, normalizedTerm)) {
-              scannedMatches.push(msg);
-              matchedUidSet.add(Number(msg.uid));
+
+          for (let seqEnd = totalMessages; seqEnd >= 1; seqEnd -= batchSize) {
+            const seqStart = Math.max(1, seqEnd - batchSize + 1);
+            const sequence = `${seqStart}:${seqEnd}`;
+            const batch = await fetchEnvelopeBatch(client, sequence, false, true);
+            for (const msg of batch) {
+              if (!Number.isFinite(Number(msg?.uid))) continue;
+              if (await searchMessageContent(msg, normalizedTerm)) {
+                scannedMatches.push(msg);
+                matchedUidSet.add(Number(msg.uid));
+              }
             }
           }
 

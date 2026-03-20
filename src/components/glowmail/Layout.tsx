@@ -125,13 +125,13 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
           </button>
           
           <div className="flex-1 max-w-2xl relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--emerald-400)] transition-colors" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 group-focus-within:text-emerald-400 transition-colors" />
             <input
               type="text"
               placeholder={t('layout.searchPlaceholder', lang)}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-zinc-900/50 border border-[var(--emerald-400)]/40 rounded-full pl-10 pr-10 py-2 text-sm ring-1 ring-[var(--emerald-400)]/25 focus:outline-none focus:ring-2 focus:ring-[var(--emerald-400)]/50 focus:border-[var(--emerald-400)]/50 transition-all placeholder:text-zinc-600"
+              className="w-full bg-zinc-900/50 border border-zinc-800 rounded-full pl-10 pr-10 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all placeholder:text-zinc-600"
             />
             {searchQuery && (
               <button
@@ -251,7 +251,7 @@ function SidebarContent({
   return (
     <>
       <div className="p-4 h-16 flex items-center border-b border-zinc-800/50 shrink-0">
-        <h1 className="text-xl font-bold tracking-tight" style={{ color: 'var(--emerald-400)' }}>
+        <h1 className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent tracking-tight">
           {t('app.title', lang)}
         </h1>
       </div>
@@ -292,11 +292,11 @@ function SidebarContent({
           return (
              <div key={folder.id}>
               <div
-                 className={cn(
+                className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
                   isActive
-                    ? "bg-emerald-500/15 text-emerald-300 shadow-[inset_0_0_20px_rgba(16,185,129,0.08)] border border-emerald-500/20"
-                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200 border border-transparent",
+                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]"
+                    : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200",
                   dragOverFolder === folder.id && "ring-2 ring-emerald-400/50 bg-emerald-500/10"
                 )}
               >
@@ -319,12 +319,12 @@ function SidebarContent({
                   onDrop={(e) => handleFolderDrop(e, folder.id)}
                   className="flex items-center gap-3 flex-1 min-w-0 text-left"
                 >
-                <Icon className={cn("w-4 h-4", isActive ? "text-emerald-300" : "text-zinc-500")} />
+                <Icon className={cn("w-4 h-4", isActive ? "text-emerald-400" : "text-zinc-500")} />
                 <span className="flex-1 text-left">{translateFolderName(folder.id, folder.name, lang)}</span>
                 {count > 0 && (
                   <span className={cn(
                     "px-2 py-0.5 rounded-full text-xs font-bold",
-                    isActive ? "bg-emerald-500/25 text-emerald-300" : "bg-zinc-800 text-zinc-300"
+                    isActive ? "bg-emerald-500/20 text-emerald-400" : "bg-zinc-800 text-zinc-300"
                   )}>
                     {count}
                   </span>

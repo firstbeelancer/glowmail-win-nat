@@ -586,13 +586,14 @@ Deno.serve(async (req) => {
         };
 
         try {
+          // Use `full: true` which generates BODY.PEEK[] — the correct way to get raw content
           const messages = await (client as any).fetch(String(targetUid), {
             byUid: true,
             uid: true,
             envelope: true,
             flags: true,
             size: true,
-            source: true,
+            full: true,
           });
 
           const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
@@ -602,32 +603,30 @@ Deno.serve(async (req) => {
             envelope = msg.envelope;
             flags = msg.flags || [];
             messageSize = Number(msg.size || 0);
-            msgSourceType = typeof msg.source;
-            msgSourceConstructor = msg.source?.constructor?.name || "undefined";
 
-            // Try 'raw' first (deno-imap returns raw, not source)
-            await readRawCandidate("msg.raw", msg.raw);
-            if (!rawSource) await readRawCandidate("msg.source", msg.source);
+            // deno-imap stores BODY[] content in msg.parts[""]?.data (Uint8Array)
+            const fullBodyPart = msg.parts?.[""]?.data || msg.parts?.[""]?.content;
+            await readRawCandidate("msg.parts[''].data", fullBodyPart);
+            if (!rawSource) await readRawCandidate("msg.raw", msg.raw);
 
             console.log(
-              "fetch source attempt - hasSource:",
+              "fetch full body - hasSource:",
               !!rawSource,
               "origin:",
               rawSourceOrigin,
-              "msg.source type:",
-              msgSourceType,
-              "msg.source constructor:",
-              msgSourceConstructor,
-              "keys:",
+              "parts keys:",
+              msg.parts ? Object.keys(msg.parts).join(",") : "none",
+              "msg keys:",
               Object.keys(msg).join(","),
             );
           }
         } catch (e) {
-          console.error("fetch source failed:", e);
+          console.error("fetch full body failed:", e);
         }
 
         if (!rawSource) {
           try {
+            // Fallback: fetch with bodyParts to get specific sections
             const messages2 = await (client as any).fetch(String(targetUid), {
               byUid: true,
               uid: true,
@@ -645,24 +644,28 @@ Deno.serve(async (req) => {
               if (!flags.length) flags = msg2.flags || [];
               if (!messageSize) messageSize = Number(msg2.size || 0);
 
-              if (!rawSource) await readRawCandidate("msg2.raw", msg2.raw);
-              if (!rawSource) await readRawCandidate("msg2.source", msg2.source);
-              if (!rawSource && msg2.parts) {
-                const textPart = msg2.parts?.find?.((p: any) => p.body);
-                if (textPart?.body) await readRawCandidate("msg2.parts[].body", textPart.body);
+              // Check parts for body content
+              if (msg2.parts) {
+                for (const [key, part] of Object.entries(msg2.parts)) {
+                  const partData = (part as any)?.data || (part as any)?.content;
+                  if (partData) {
+                    await readRawCandidate(`msg2.parts[${key}].data`, partData);
+                    if (rawSource) break;
+                  }
+                }
               }
+              if (!rawSource) await readRawCandidate("msg2.raw", msg2.raw);
 
-              const bodyContent = msg2.bodyParts?.get?.("") || msg2.body?.get?.("") || msg2["body[]"];
               console.log(
-                "fallback bodyParts - hasContent:",
-                !!bodyContent,
-                "type:",
-                typeof bodyContent,
-                "keys:",
+                "fallback bodyParts - hasSource:",
+                !!rawSource,
+                "origin:",
+                rawSourceOrigin,
+                "parts keys:",
+                msg2.parts ? Object.keys(msg2.parts).join(",") : "none",
+                "msg2 keys:",
                 Object.keys(msg2).join(","),
               );
-
-              if (!rawSource) await readRawCandidate("msg2.body[]", bodyContent);
             }
           } catch (e2) {
             console.error("fetch bodyParts fallback failed:", e2);

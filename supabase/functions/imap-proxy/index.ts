@@ -69,6 +69,14 @@ function normalizeAddress(address: any): Address {
 }
 
 function normalizeSearchTerm(value: string) {
+  // NFKD normalization decomposes Cyrillic й→и+combining-breve and ё→е+combining-diaeresis,
+  // then the diacritic-strip regex removes those combining chars, destroying the characters.
+  // To avoid corrupting Cyrillic (and other non-Latin) scripts, we skip NFKD decomposition
+  // when the string contains any Cyrillic characters and just lowercase it directly.
+  const hasCyrillic = /[\u0400-\u04ff]/.test(value);
+  if (hasCyrillic) {
+    return value.toLowerCase().trim();
+  }
   return value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")

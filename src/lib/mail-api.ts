@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { loadCredentials } from "./credentials";
 
 export type MailCredentials = {
   imapHost: string;
@@ -10,21 +11,7 @@ export type MailCredentials = {
 };
 
 function getCredentials(): MailCredentials | null {
-  const raw = localStorage.getItem("glowmail_credentials");
-  if (!raw) return null;
-  try {
-    const c = JSON.parse(raw);
-    return {
-      imapHost: c.imapHost,
-      imapPort: c.imapPort,
-      smtpHost: c.smtpHost,
-      smtpPort: c.smtpPort,
-      email: c.email,
-      password: c.password,
-    };
-  } catch {
-    return null;
-  }
+  return loadCredentials();
 }
 
 async function callImap(action: string, extra: Record<string, unknown> = {}) {

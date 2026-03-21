@@ -761,7 +761,6 @@ Deno.serve(async (req) => {
         const { folder = "INBOX", page = 1, pageSize = 50 } = body;
         const mailboxStatus = await client.selectMailbox(folder);
 
-        // Use EXISTS count from mailbox status for reliable pagination
         const total = (mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0;
         const safePage = Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 1;
         const safePageSize = Number.isFinite(Number(pageSize)) && Number(pageSize) > 0 ? Number(pageSize) : 50;
@@ -772,9 +771,6 @@ Deno.serve(async (req) => {
           return ok({ emails: [], total: 0, page: safePage, pageSize: safePageSize });
         }
 
-        // Calculate sequence range (newest first)
-        // Page 1: sequences (total-pageSize+1) to total
-        // Page 2: sequences (total-2*pageSize+1) to (total-pageSize)
         const seqEnd = total - (safePage - 1) * safePageSize;
         const seqStart = Math.max(1, seqEnd - safePageSize + 1);
 
@@ -796,9 +792,6 @@ Deno.serve(async (req) => {
         });
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
-
-
-
 
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
@@ -833,7 +826,7 @@ Deno.serve(async (req) => {
               attachments: [],
             };
           })
-          .sort((a: any, b: any) => b.uid - a.uid); // newest first
+          .sort((a: any, b: any) => b.uid - a.uid);
 
         await upsertSearchCache(
           normalized
@@ -952,7 +945,6 @@ Deno.serve(async (req) => {
             msgSourceType = typeof msg.source;
             msgSourceConstructor = msg.source?.constructor?.name || "undefined";
 
-            // Try 'raw' first (deno-imap returns raw, not source)
             await readRawCandidate("msg.raw", msg.raw);
             if (!rawSource) await readRawCandidate("msg.source", msg.source);
 
@@ -1102,7 +1094,6 @@ Deno.serve(async (req) => {
         let finalHtml = bodyHtml;
         let htmlSource = bodyHtml ? "postal-mime" : "none";
 
-        // Fallback 1: check if HTML is hiding in an attachment (text/html part treated as attachment)
         if (!finalHtml && parsed.attachments?.length) {
           try {
             const htmlAttachment = parsed.attachments.find((a: any) =>
@@ -1128,7 +1119,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Fallback 2: PostalMime gave no HTML, but bodyStructure says there IS an HTML part.
         if (!finalHtml && bodyStructure && client) {
           try {
             const htmlPartPath = findHtmlPartPath(bodyStructure);
@@ -1176,7 +1166,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Fallback 3: if bodyText actually contains HTML tags, promote it
         if (!finalHtml && bodyText) {
           try {
             if (/<\/?[a-z][\s\S]*>/i.test(bodyText)) {
@@ -1242,10 +1231,8 @@ Deno.serve(async (req) => {
         await client.disconnect();
         client = null;
 
-        // Backfill body_text into search cache for this email
         {
           try {
-            // Use plain text first; if empty, strip HTML for searchable text
             let searchableBody = bodyText ? cleanBodyText(bodyText) : "";
             if (!searchableBody && finalHtml) {
               searchableBody = cleanBodyText(stripHtmlForSearch(maybeDecodeQuotedPrintable(finalHtml)));
@@ -1378,11 +1365,9 @@ Deno.serve(async (req) => {
         let matchedUids: number[] = [];
         const matchedUidSet = new Set<number>();
 
-        // --- Phase 1: Search existing cache ---
         const cachedMatchedUids = await querySearchCacheByTerm(accountKey, folder, term);
         cachedMatchedUids.forEach((uid) => matchedUidSet.add(uid));
 
-        // --- Phase 1b: Diagnostics - check body_text coverage in cache ---
         const admin = getAdminClient();
         let cacheTotal = 0;
         let cacheWithBody = 0;
@@ -1408,8 +1393,6 @@ Deno.serve(async (req) => {
         }
         console.log(`[search] cache coverage: total=${cacheTotal} withBody=${cacheWithBody} cachedMatches=${cachedMatchedUids.length}`);
 
-        // --- Phase 2: Populate body_text for cached emails missing it ---
-        // This targeted fetch is much cheaper than a full content scan
         if (admin && cacheTotal > 0 && cacheWithBody < cacheTotal) {
           try {
             let populatedCount = 0;
@@ -1493,8 +1476,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        // --- Phase 3: IMAP server-side search ---
-        // deno-imap search() signature: search(criteria: ImapSearchCriteria, charset?: string)
         const searchAttempts: Array<{ label: string; criteria: Record<string, unknown> }> = [
           { label: "Text", criteria: { text: term } },
           { label: "Body", criteria: { body: term } },
@@ -1528,7 +1509,6 @@ Deno.serve(async (req) => {
 
         matchedUids = [...matchedUidSet];
 
-        // --- Phase 4: Full content scan fallback (only if cache + IMAP gave nothing) ---
         const shouldForceContentScan = !term.includes("@")
           && (matchedUids.length === 0 || useUtf8Search);
 
@@ -1579,8 +1559,6 @@ Deno.serve(async (req) => {
         }
 
         matchedUids = [...matchedUidSet];
-
-        // Sort newest first
         matchedUids.sort((a, b) => b - a);
         const totalFound = matchedUids.length;
 
@@ -1592,7 +1570,6 @@ Deno.serve(async (req) => {
           return ok({ emails: [], total: 0, page: safePage, pageSize: safePageSize, hasMore: false });
         }
 
-        // Paginate UIDs
         const startIdx = (safePage - 1) * safePageSize;
         const pageUids = matchedUids.slice(startIdx, startIdx + safePageSize);
         const hasMore = startIdx + safePageSize < totalFound;

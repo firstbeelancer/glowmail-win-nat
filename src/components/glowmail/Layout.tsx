@@ -149,8 +149,10 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
           </button>
           <button
             onClick={() => {
-              localStorage.removeItem('glowmail_credentials');
-              window.location.reload();
+              import('@/lib/credentials').then(({ clearCredentials }) => {
+                clearCredentials();
+                window.location.reload();
+              });
             }}
             className="p-2 rounded-full hover:bg-zinc-800 transition-colors"
             title={lang === 'ru' ? 'Выйти' : 'Log out'}

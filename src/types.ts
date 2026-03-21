@@ -59,7 +59,7 @@ export type Signature = {
   content: string;
 };
 
-export type AuthMethod = 'password' | 'oauth2' | 'app-password' | 'encrypted-password' | 'kerberos' | 'ntlm' | 'tls-certificate';
+export type AuthMethod = 'password' | 'app-password';
 
 export type UserSettings = {
   account: {
@@ -74,7 +74,6 @@ export type UserSettings = {
     smtpPort: number;
     secure: boolean;
     authMethod: AuthMethod;
-    oauthProvider?: string;
   };
   signature: string;
   signatures: Signature[];
@@ -91,8 +90,6 @@ export type UserSettings = {
   groupBy: 'none' | 'date' | 'sender' | 'tag';
   layoutMode: 'vertical' | 'horizontal';
   markAsReadDelay: number;
-  ldapServer: string;
-  ldapBaseDn: string;
   language: 'en' | 'ru';
   aiEnabled: boolean;
   folderColors: Record<string, string>;

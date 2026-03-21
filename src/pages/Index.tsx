@@ -9,12 +9,13 @@ import { Toaster } from 'react-hot-toast';
 import { AnimatePresence } from 'framer-motion';
 import Login from './Login';
 import * as mailApi from '../lib/mail-api';
+import { saveCredentials, hasCredentials, loadCredentials } from '../lib/credentials';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [composeData, setComposeData] = useState<Partial<Email> | null>(null);
-  const { markAsRead, settings, sendEmail, currentFolder, emails } = useMail();
+  const { markAsRead, settings, sendEmail, saveDraft, currentFolder, emails } = useMail();
 
   // Get sorted email list for next/prev navigation
   const folderEmails = emails.filter(e => e.folderId === currentFolder)
@@ -39,13 +40,24 @@ function MailApp() {
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (event.data?.type === 'glowmail-compose') {
-        const { to, subject, body } = event.data;
+        const { to, cc, bcc, subject, body } = event.data;
         const toContacts = to.split(',').map((email: string) => ({
-          id: email.trim(),
-          name: email.trim(),
-          email: email.trim(),
+          id: email.trim(), name: email.trim(), email: email.trim(),
         })).filter((c: any) => c.email);
-        sendEmail({ to: toContacts, subject, body });
+        const ccContacts = cc ? cc.split(',').map((email: string) => ({
+          id: email.trim(), name: email.trim(), email: email.trim(),
+        })).filter((c: any) => c.email) : [];
+        const bccContacts = bcc ? bcc.split(',').map((email: string) => ({
+          id: email.trim(), name: email.trim(), email: email.trim(),
+        })).filter((c: any) => c.email) : [];
+        sendEmail({ to: toContacts, cc: ccContacts, bcc: bccContacts, subject, body });
+      }
+      if (event.data?.type === 'glowmail-draft') {
+        const { to, cc, bcc, subject, body } = event.data;
+        const toContacts = to ? [{ id: to, name: to, email: to }] : [];
+        const ccContacts = cc ? [{ id: cc, name: cc, email: cc }] : [];
+        const bccContacts = bcc ? [{ id: bcc, name: bcc, email: bcc }] : [];
+        saveDraft({ to: toContacts, cc: ccContacts, bcc: bccContacts, subject, body });
       }
     };
     window.addEventListener('message', handler);
@@ -359,13 +371,11 @@ function MailApp() {
 }
 
 const Index = () => {
-  const [loggedIn, setLoggedIn] = useState(() => {
-    return !!localStorage.getItem('glowmail_credentials');
-  });
+  const [loggedIn, setLoggedIn] = useState(() => hasCredentials());
 
   if (!loggedIn) {
     return <Login onLogin={(creds) => {
-      localStorage.setItem('glowmail_credentials', JSON.stringify(creds));
+      saveCredentials(creds);
       setLoggedIn(true);
     }} />;
   }
@@ -398,24 +408,19 @@ function MailAppWithCreds() {
   const { updateSettings } = useMail();
 
   useEffect(() => {
-    const raw = localStorage.getItem('glowmail_credentials');
-    if (raw) {
-      try {
-        const creds = JSON.parse(raw);
-        updateSettings({
-          account: { name: creds.name, email: creds.email },
-          server: {
-            imapHost: creds.imapHost,
-            imapPort: creds.imapPort,
-            smtpHost: creds.smtpHost,
-            smtpPort: creds.smtpPort,
-            secure: true,
-            authMethod: 'app-password',
-          },
-        });
-      } catch {
-        // ignore broken stored creds
-      }
+    const creds = loadCredentials();
+    if (creds) {
+      updateSettings({
+        account: { name: creds.name, email: creds.email },
+        server: {
+          imapHost: creds.imapHost,
+          imapPort: creds.imapPort,
+          smtpHost: creds.smtpHost,
+          smtpPort: creds.smtpPort,
+          secure: true,
+          authMethod: 'app-password',
+        },
+      });
     }
   }, []);
 

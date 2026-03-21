@@ -1249,6 +1249,7 @@ Deno.serve(async (req) => {
         console.log(`[search] request folder="${folder}" query="${term}" page=${safePage} pageSize=${safePageSize}`);
 
         const normalizedTerm = normalizeSearchTerm(term);
+        const useUtf8Search = hasNonAscii(term);
         let matchedUids: number[] = [];
         const matchedUidSet = new Set<number>();
 
@@ -1286,21 +1287,24 @@ Deno.serve(async (req) => {
         // This targeted fetch is much cheaper than a full content scan
         if (admin && cacheTotal > 0 && cacheWithBody < cacheTotal) {
           try {
-            const { data: emptyBodyRows } = await admin
-              .from("email_search_cache")
-              .select("uid")
-              .eq("account_key", accountKey)
-              .eq("folder_id", folder)
-              .eq("body_text", "")
-              .limit(100); // batch limit to avoid timeout
+            let populatedCount = 0;
+            let missingRawCount = 0;
+            const maxPopulateRounds = useUtf8Search ? 20 : 5;
 
-            const emptyUids = (emptyBodyRows || []).map((r: any) => Number(r.uid)).filter(Number.isFinite);
-            if (emptyUids.length > 0) {
-              console.log(`[search] populating body_text for ${emptyUids.length} cached emails`);
-              let populatedCount = 0;
-              let missingRawCount = 0;
+            for (let round = 0; round < maxPopulateRounds; round++) {
+              const { data: emptyBodyRows } = await admin
+                .from("email_search_cache")
+                .select("uid")
+                .eq("account_key", accountKey)
+                .eq("folder_id", folder)
+                .eq("body_text", "")
+                .limit(100);
 
-              // Fetch source in batches of 10
+              const emptyUids = (emptyBodyRows || []).map((r: any) => Number(r.uid)).filter(Number.isFinite);
+              if (emptyUids.length === 0) break;
+
+              console.log(`[search] populating body_text round=${round + 1} count=${emptyUids.length}`);
+
               for (let i = 0; i < emptyUids.length; i += 10) {
                 const batchUids = emptyUids.slice(i, i + 10);
                 try {
@@ -1338,14 +1342,16 @@ Deno.serve(async (req) => {
                   console.error("[search] body populate batch failed:", batchErr);
                 }
               }
-              console.log(`[search] body populate done: populated=${populatedCount} missingRaw=${missingRawCount}`);
 
-              // Re-run cache search with newly populated body_text
-              if (populatedCount > 0) {
-                const newCachedUids = await querySearchCacheByTerm(accountKey, folder, term);
-                newCachedUids.forEach((uid) => matchedUidSet.add(uid));
-                console.log(`[search] re-cached matches after populate: ${newCachedUids.length} (was ${cachedMatchedUids.length})`);
-              }
+              if (!useUtf8Search && populatedCount > 0) break;
+            }
+
+            console.log(`[search] body populate done: populated=${populatedCount} missingRaw=${missingRawCount}`);
+
+            if (populatedCount > 0) {
+              const newCachedUids = await querySearchCacheByTerm(accountKey, folder, term);
+              newCachedUids.forEach((uid) => matchedUidSet.add(uid));
+              console.log(`[search] re-cached matches after populate: ${newCachedUids.length} (was ${cachedMatchedUids.length})`);
             }
           } catch (populateErr) {
             console.error("[search] body populate failed:", populateErr);
@@ -1363,7 +1369,6 @@ Deno.serve(async (req) => {
           { label: "Cc", criteria: { header: [{ field: "Cc", value: term }] } },
         ];
         let anySearchWorked = false;
-        const useUtf8Search = hasNonAscii(term);
 
         for (const attempt of searchAttempts) {
           try {
@@ -1389,7 +1394,8 @@ Deno.serve(async (req) => {
         matchedUids = [...matchedUidSet];
 
         // --- Phase 4: Full content scan fallback (only if cache + IMAP gave nothing) ---
-        const shouldForceContentScan = matchedUids.length === 0 && !term.includes("@");
+        const shouldForceContentScan = !term.includes("@")
+          && (matchedUids.length === 0 || useUtf8Search);
 
         if (shouldForceContentScan) {
           console.log(`[search] last-resort content scan, no results from cache or IMAP`);

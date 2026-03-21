@@ -132,13 +132,13 @@ function extractAttachmentNames(bodyStructure: any): string[] {
   return [...names];
 }
 
-/** Walk MIME bodyStructure tree and return the IMAP part path (e.g. "1.2") for the first text/html node */
-function findHtmlPartPath(node: any, path = ""): string | null {
+/** Walk MIME bodyStructure tree and return the IMAP part path (e.g. "1.2") for the first text subtype node */
+function findTextPartPath(node: any, subtypeWanted: "plain" | "html", path = ""): string | null {
   if (!node) return null;
   const type = (node.type || node.mediaType || "").toLowerCase();
   const subtype = (node.subtype || node.mediaSubtype || "").toLowerCase();
 
-  if (type === "text" && subtype === "html") {
+  if (type === "text" && subtype === subtypeWanted) {
     // prefer node.part if the library provides it, otherwise use computed path
     return node.part || path || "1";
   }
@@ -147,7 +147,28 @@ function findHtmlPartPath(node: any, path = ""): string | null {
   if (Array.isArray(children)) {
     for (let i = 0; i < children.length; i++) {
       const childPath = path ? `${path}.${i + 1}` : `${i + 1}`;
-      const result = findHtmlPartPath(children[i], childPath);
+      const result = findTextPartPath(children[i], subtypeWanted, childPath);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}
+
+function findHtmlPartPath(node: any, path = ""): string | null {
+  return findTextPartPath(node, "html", path);
+}
+
+function findPartNode(node: any, targetPath: string, path = ""): any | null {
+  if (!node) return null;
+  const resolvedPath = node.part || path || "1";
+  if (resolvedPath === targetPath) return node;
+
+  const children = node.childNodes || node.parts || [];
+  if (Array.isArray(children)) {
+    for (let i = 0; i < children.length; i++) {
+      const childPath = path ? `${path}.${i + 1}` : `${i + 1}`;
+      const result = findPartNode(children[i], targetPath, childPath);
       if (result) return result;
     }
   }
@@ -334,6 +355,40 @@ function toSearchableBytes(value: unknown): Uint8Array | null {
   return null;
 }
 
+function decodeBase64ToBytes(value: string): Uint8Array | null {
+  try {
+    const normalized = value.replace(/\s+/g, "");
+    if (!normalized) return null;
+    const binary = atob(normalized);
+    return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  } catch {
+    return null;
+  }
+}
+
+function decodeMimePartBody(bytes: Uint8Array, partNode: any) {
+  const rawText = new TextDecoder().decode(bytes);
+  const transferEncoding = String(
+    partNode?.encoding
+      || partNode?.contentTransferEncoding
+      || partNode?.transferEncoding
+      || "",
+  ).toLowerCase();
+
+  if (transferEncoding.includes("base64")) {
+    const decodedBytes = decodeBase64ToBytes(rawText);
+    if (decodedBytes && decodedBytes.length > 0) {
+      return decodeBytesWithCharsetGuess(decodedBytes);
+    }
+  }
+
+  if (transferEncoding.includes("quoted-printable")) {
+    return maybeDecodeQuotedPrintable(rawText);
+  }
+
+  return maybeDecodeQuotedPrintable(decodeBytesWithCharsetGuess(bytes) || rawText);
+}
+
 function extractInlineBodyCandidates(msg: any): Array<{ bytes: Uint8Array; source: string }> {
   const candidates: Array<{ bytes: Uint8Array; source: string }> = [];
   const pushCandidate = (value: unknown, source: string) => {
@@ -420,7 +475,61 @@ async function extractSearchableBody(msg: any) {
   };
 }
 
-async function searchMessageContent(msg: any, term: string) {
+async function fetchSearchableBodyFromParts(client: ImapClient, uid: number, bodyStructure: any) {
+  if (!client || !Number.isFinite(uid) || !bodyStructure) return { plainText: "", source: "missing-part-path" };
+
+  const candidateParts = [
+    { path: findTextPartPath(bodyStructure, "plain"), kind: "plain" as const },
+    { path: findTextPartPath(bodyStructure, "html"), kind: "html" as const },
+  ].filter((entry, index, arr): entry is { path: string; kind: "plain" | "html" } =>
+    !!entry.path && arr.findIndex((item) => item.path === entry.path) === index
+  );
+
+  const textParts: string[] = [];
+  let source = "missing-part-content";
+
+  for (const candidate of candidateParts) {
+    try {
+      const partNode = findPartNode(bodyStructure, candidate.path, "");
+      const partMsgs = await (client as any).fetch(String(uid), {
+        byUid: true,
+        uid: true,
+        bodyParts: [candidate.path],
+      });
+      const partArr = (Array.isArray(partMsgs) ? partMsgs : [partMsgs]).filter(Boolean);
+      const partMsg = partArr.find((m: any) => Number(m?.uid) === uid) || partArr[0];
+
+      let partContent: unknown = null;
+      if (partMsg?.bodyParts instanceof Map) {
+        partContent = partMsg.bodyParts.get(candidate.path);
+      } else if (partMsg?.body instanceof Map) {
+        partContent = partMsg.body.get(candidate.path);
+      }
+      if (!partContent) {
+        partContent = partMsg?.[`body[${candidate.path}]`];
+      }
+
+      const bytes = toSearchableBytes(partContent);
+      if (!bytes || bytes.length === 0) continue;
+
+      const decoded = decodeMimePartBody(bytes, partNode);
+      const normalized = candidate.kind === "html" ? stripHtmlForSearch(decoded) : decoded;
+      if (normalized.trim()) {
+        textParts.push(normalized);
+        source = `imap-part-${candidate.kind}:${candidate.path}`;
+      }
+    } catch (partErr) {
+      console.error("[search] part fetch failed:", partErr);
+    }
+  }
+
+  return {
+    plainText: cleanBodyText(textParts.join(" ")),
+    source,
+  };
+}
+
+async function searchMessageContent(msg: any, term: string, client?: ImapClient) {
   if (searchEmailFromEnvelope(msg, term)) {
     return {
       matched: true,
@@ -431,6 +540,22 @@ async function searchMessageContent(msg: any, term: string) {
   }
 
   const extracted = await extractSearchableBody(msg);
+  if ((!extracted.plainText || extracted.source === "missing-raw" || extracted.source === "empty-raw")
+    && client
+    && Number.isFinite(Number(msg?.uid))
+    && msg?.bodyStructure) {
+    const partFallback = await fetchSearchableBodyFromParts(client, Number(msg.uid), msg.bodyStructure);
+    if (partFallback.plainText) {
+      const normalizedBody = normalizeSearchTerm(partFallback.plainText);
+      return {
+        matched: normalizedBody.includes(term),
+        bodyText: partFallback.plainText,
+        normalizedBody,
+        source: partFallback.source,
+      };
+    }
+  }
+
   return {
     matched: extracted.normalizedText.includes(term),
     bodyText: extracted.plainText,
@@ -636,7 +761,6 @@ Deno.serve(async (req) => {
         const { folder = "INBOX", page = 1, pageSize = 50 } = body;
         const mailboxStatus = await client.selectMailbox(folder);
 
-        // Use EXISTS count from mailbox status for reliable pagination
         const total = (mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0;
         const safePage = Number.isFinite(Number(page)) && Number(page) > 0 ? Number(page) : 1;
         const safePageSize = Number.isFinite(Number(pageSize)) && Number(pageSize) > 0 ? Number(pageSize) : 50;
@@ -647,9 +771,6 @@ Deno.serve(async (req) => {
           return ok({ emails: [], total: 0, page: safePage, pageSize: safePageSize });
         }
 
-        // Calculate sequence range (newest first)
-        // Page 1: sequences (total-pageSize+1) to total
-        // Page 2: sequences (total-2*pageSize+1) to (total-pageSize)
         const seqEnd = total - (safePage - 1) * safePageSize;
         const seqStart = Math.max(1, seqEnd - safePageSize + 1);
 
@@ -671,9 +792,6 @@ Deno.serve(async (req) => {
         });
 
         const normalized = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
-
-
-
 
         const emails = normalized
           .filter((msg: any) => Number.isFinite(Number(msg?.uid)))
@@ -708,7 +826,7 @@ Deno.serve(async (req) => {
               attachments: [],
             };
           })
-          .sort((a: any, b: any) => b.uid - a.uid); // newest first
+          .sort((a: any, b: any) => b.uid - a.uid);
 
         await upsertSearchCache(
           normalized
@@ -827,7 +945,6 @@ Deno.serve(async (req) => {
             msgSourceType = typeof msg.source;
             msgSourceConstructor = msg.source?.constructor?.name || "undefined";
 
-            // Try 'raw' first (deno-imap returns raw, not source)
             await readRawCandidate("msg.raw", msg.raw);
             if (!rawSource) await readRawCandidate("msg.source", msg.source);
 
@@ -977,7 +1094,6 @@ Deno.serve(async (req) => {
         let finalHtml = bodyHtml;
         let htmlSource = bodyHtml ? "postal-mime" : "none";
 
-        // Fallback 1: check if HTML is hiding in an attachment (text/html part treated as attachment)
         if (!finalHtml && parsed.attachments?.length) {
           try {
             const htmlAttachment = parsed.attachments.find((a: any) =>
@@ -1003,7 +1119,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Fallback 2: PostalMime gave no HTML, but bodyStructure says there IS an HTML part.
         if (!finalHtml && bodyStructure && client) {
           try {
             const htmlPartPath = findHtmlPartPath(bodyStructure);
@@ -1051,7 +1166,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Fallback 3: if bodyText actually contains HTML tags, promote it
         if (!finalHtml && bodyText) {
           try {
             if (/<\/?[a-z][\s\S]*>/i.test(bodyText)) {
@@ -1117,10 +1231,8 @@ Deno.serve(async (req) => {
         await client.disconnect();
         client = null;
 
-        // Backfill body_text into search cache for this email
         {
           try {
-            // Use plain text first; if empty, strip HTML for searchable text
             let searchableBody = bodyText ? cleanBodyText(bodyText) : "";
             if (!searchableBody && finalHtml) {
               searchableBody = cleanBodyText(stripHtmlForSearch(maybeDecodeQuotedPrintable(finalHtml)));
@@ -1253,11 +1365,9 @@ Deno.serve(async (req) => {
         let matchedUids: number[] = [];
         const matchedUidSet = new Set<number>();
 
-        // --- Phase 1: Search existing cache ---
         const cachedMatchedUids = await querySearchCacheByTerm(accountKey, folder, term);
         cachedMatchedUids.forEach((uid) => matchedUidSet.add(uid));
 
-        // --- Phase 1b: Diagnostics - check body_text coverage in cache ---
         const admin = getAdminClient();
         let cacheTotal = 0;
         let cacheWithBody = 0;
@@ -1283,8 +1393,6 @@ Deno.serve(async (req) => {
         }
         console.log(`[search] cache coverage: total=${cacheTotal} withBody=${cacheWithBody} cachedMatches=${cachedMatchedUids.length}`);
 
-        // --- Phase 2: Populate body_text for cached emails missing it ---
-        // This targeted fetch is much cheaper than a full content scan
         if (admin && cacheTotal > 0 && cacheWithBody < cacheTotal) {
           try {
             let populatedCount = 0;
@@ -1322,7 +1430,17 @@ Deno.serve(async (req) => {
                     const msgUid = Number(msg?.uid);
                     if (!Number.isFinite(msgUid)) continue;
 
-                    const extracted = await extractSearchableBody(msg);
+                    let extracted = await extractSearchableBody(msg);
+                    if ((!extracted.plainText || extracted.source === "missing-raw" || extracted.source === "empty-raw") && msg?.bodyStructure) {
+                      const partFallback = await fetchSearchableBodyFromParts(client, msgUid, msg.bodyStructure);
+                      if (partFallback.plainText) {
+                        extracted = {
+                          normalizedText: normalizeSearchTerm(partFallback.plainText),
+                          plainText: partFallback.plainText,
+                          source: partFallback.source,
+                        };
+                      }
+                    }
                     if (extracted.source === "missing-raw" || extracted.source === "empty-raw") {
                       missingRawCount++;
                       continue;
@@ -1358,8 +1476,6 @@ Deno.serve(async (req) => {
           }
         }
 
-        // --- Phase 3: IMAP server-side search ---
-        // deno-imap search() signature: search(criteria: ImapSearchCriteria, charset?: string)
         const searchAttempts: Array<{ label: string; criteria: Record<string, unknown> }> = [
           { label: "Text", criteria: { text: term } },
           { label: "Body", criteria: { body: term } },
@@ -1393,7 +1509,6 @@ Deno.serve(async (req) => {
 
         matchedUids = [...matchedUidSet];
 
-        // --- Phase 4: Full content scan fallback (only if cache + IMAP gave nothing) ---
         const shouldForceContentScan = !term.includes("@")
           && (matchedUids.length === 0 || useUtf8Search);
 
@@ -1414,7 +1529,7 @@ Deno.serve(async (req) => {
             for (const msg of batch) {
               if (!Number.isFinite(Number(msg?.uid))) continue;
               scannedCount++;
-              const contentResult = await searchMessageContent(msg, normalizedTerm);
+              const contentResult = await searchMessageContent(msg, normalizedTerm, client);
 
               if (contentResult.source === "missing-raw" || contentResult.source === "empty-raw") {
                 missingRawCount++;
@@ -1444,8 +1559,6 @@ Deno.serve(async (req) => {
         }
 
         matchedUids = [...matchedUidSet];
-
-        // Sort newest first
         matchedUids.sort((a, b) => b - a);
         const totalFound = matchedUids.length;
 
@@ -1457,7 +1570,6 @@ Deno.serve(async (req) => {
           return ok({ emails: [], total: 0, page: safePage, pageSize: safePageSize, hasMore: false });
         }
 
-        // Paginate UIDs
         const startIdx = (safePage - 1) * safePageSize;
         const pageUids = matchedUids.slice(startIdx, startIdx + safePageSize);
         const hasMore = startIdx + safePageSize < totalFound;

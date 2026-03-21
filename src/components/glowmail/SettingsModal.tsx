@@ -355,30 +355,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     {isFetchingFolders ? t('settings.fetchingFolders', lang) : t('settings.fetchFolders', lang)}
                   </button>
                 </div>
-                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
-                      />
-                    </div>
-                    <button
-                      onClick={async () => {
-                        setIsLoadingLdap(true);
-                        await new Promise(r => setTimeout(r, 1500));
-                        const ldapContacts = [
-                          { id: `ldap-${Date.now()}-1`, name: 'John Doe', email: 'john.doe@corp.example.com' },
-                          { id: `ldap-${Date.now()}-2`, name: 'Jane Smith', email: 'jane.smith@corp.example.com' },
-                          { id: `ldap-${Date.now()}-3`, name: 'Admin Support', email: 'admin@corp.example.com' },
-                        ];
-                        ldapContacts.forEach(c => addContact(c));
-                        setIsLoadingLdap(false);
-                        toast.success(lang === 'ru' ? 'Контакты загружены из LDAP' : 'Contacts loaded from LDAP');
-                      }}
-                      disabled={isLoadingLdap || !localSettings.ldapServer}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 rounded-xl font-medium text-sm border border-zinc-700/50 transition-all disabled:opacity-50"
-                    >
-                      {isLoadingLdap ? <Loader2 className="w-4 h-4 animate-spin text-emerald-400" /> : <Globe className="w-4 h-4" />}
-                      {isLoadingLdap ? t('settings.ldapLoading', lang) : t('settings.ldapLoad', lang)}
-                    </button>
-                  </div>
-                </div>
               </div>
             )}
 

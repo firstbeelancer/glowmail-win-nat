@@ -69,12 +69,9 @@ function normalizeAddress(address: any): Address {
 }
 
 function normalizeSearchTerm(value: string) {
-  // NFKD normalization decomposes Cyrillic й→и+combining-breve and ё→е+combining-diaeresis,
-  // then the diacritic-strip regex removes those combining chars, destroying the characters.
-  // To avoid corrupting Cyrillic (and other non-Latin) scripts, we skip NFKD decomposition
-  // when the string contains any Cyrillic characters and just lowercase it directly.
-  const hasCyrillic = /[\u0400-\u04ff]/.test(value);
-  if (hasCyrillic) {
+  // NFKD decomposes Cyrillic: й→и+breve, ё→е+diaeresis, then diacritic strip destroys them.
+  // Skip NFKD for strings containing Cyrillic — just lowercase directly.
+  if (/[\u0400-\u04ff]/.test(value)) {
     return value.toLowerCase().trim();
   }
   return value
@@ -1433,7 +1430,7 @@ Deno.serve(async (req) => {
           try {
             let populatedCount = 0;
             let populateMissingRawCount = 0;
-            const maxPopulateRounds = 5;
+            const maxPopulateRounds = useUtf8Search ? 20 : 5;
 
             for (let round = 0; round < maxPopulateRounds; round++) {
               const { data: emptyBodyRows } = await admin
@@ -1497,7 +1494,7 @@ Deno.serve(async (req) => {
                 }
               }
 
-              if (populatedCount > 0) break;
+              if (!useUtf8Search && populatedCount > 0) break;
             }
 
             console.log(`[search] body populate done: populated=${populatedCount} missingRaw=${populateMissingRawCount}`);
@@ -1524,9 +1521,18 @@ Deno.serve(async (req) => {
 
         for (const attempt of searchAttempts) {
           try {
-            const searchResult = useUtf8Search
-              ? await client.search(attempt.criteria as any, "UTF-8")
-              : await client.search(attempt.criteria as any);
+            let searchResult: any;
+            if (useUtf8Search) {
+              try {
+                searchResult = await client.search(attempt.criteria as any, "UTF-8");
+              } catch (_utf8Err) {
+                // Server doesn't support UTF-8 SEARCH — fall back to plain search.
+                // This prevents a BAD/NO response from dropping the IMAP connection.
+                searchResult = await client.search(attempt.criteria as any);
+              }
+            } else {
+              searchResult = await client.search(attempt.criteria as any);
+            }
             const seqNos = (Array.isArray(searchResult) ? searchResult : []).map(Number).filter(Number.isFinite);
             if (seqNos.length > 0) {
               anySearchWorked = true;
@@ -1547,7 +1553,8 @@ Deno.serve(async (req) => {
 
         matchedUids = [...matchedUidSet];
 
-        const shouldForceContentScan = !term.includes("@") && matchedUids.length === 0;
+        const shouldForceContentScan = !term.includes("@")
+          && (matchedUids.length === 0 || useUtf8Search);
 
         if (shouldForceContentScan) {
           console.log(`[search] last-resort content scan, no results from cache or IMAP`);

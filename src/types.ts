@@ -74,7 +74,6 @@ export type UserSettings = {
     smtpPort: number;
     secure: boolean;
     authMethod: AuthMethod;
-    oauthProvider?: string;
   };
   signature: string;
   signatures: Signature[];

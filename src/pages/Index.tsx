@@ -11,7 +11,6 @@ import Login from './Login';
 import * as mailApi from '../lib/mail-api';
 import { saveCredentials, hasCredentials, loadCredentials } from '../lib/credentials';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);

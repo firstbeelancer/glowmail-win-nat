@@ -1074,6 +1074,29 @@ Deno.serve(async (req) => {
         await client.disconnect();
         client = null;
 
+        // Backfill body_text into search cache for this email
+        if (bodyText) {
+          try {
+            const cleanedBody = cleanBodyText(bodyText);
+            if (cleanedBody) {
+              const db = getAdminClient();
+              if (db) {
+                const accountKey = makeAccountKey(host, username);
+                await db
+                  .from("email_search_cache")
+                  .update({ body_text: cleanedBody })
+                  .eq("account_key", accountKey)
+                  .eq("folder_id", folder)
+                  .eq("uid", resolvedUid)
+                  .eq("body_text", ""); // only update if empty
+                console.log("[fetch] backfilled body_text for uid:", resolvedUid, "len:", cleanedBody.length);
+              }
+            }
+          } catch (backfillErr) {
+            console.error("[fetch] body_text backfill failed:", backfillErr);
+          }
+        }
+
         return ok({
           uid: resolvedUid,
           flags,

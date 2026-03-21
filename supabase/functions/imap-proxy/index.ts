@@ -1075,21 +1075,28 @@ Deno.serve(async (req) => {
         client = null;
 
         // Backfill body_text into search cache for this email
-        if (bodyText) {
+        {
           try {
-            const cleanedBody = cleanBodyText(bodyText);
-            if (cleanedBody) {
+            // Use plain text first; if empty, strip HTML for searchable text
+            let searchableBody = bodyText ? cleanBodyText(bodyText) : "";
+            if (!searchableBody && finalHtml) {
+              searchableBody = cleanBodyText(stripHtmlForSearch(maybeDecodeQuotedPrintable(finalHtml)));
+            }
+            if (searchableBody) {
               const db = getAdminClient();
               if (db) {
                 const accountKey = makeAccountKey(host, username);
-                await db
+                const { count } = await db
                   .from("email_search_cache")
-                  .update({ body_text: cleanedBody })
+                  .update({ body_text: searchableBody })
                   .eq("account_key", accountKey)
                   .eq("folder_id", folder)
                   .eq("uid", resolvedUid)
-                  .eq("body_text", ""); // only update if empty
-                console.log("[fetch] backfilled body_text for uid:", resolvedUid, "len:", cleanedBody.length);
+                  .eq("body_text", "")
+                  .select("uid", { count: "exact", head: true });
+                if (count && count > 0) {
+                  console.log("[fetch] backfilled body_text for uid:", resolvedUid, "len:", searchableBody.length);
+                }
               }
             }
           } catch (backfillErr) {
@@ -1201,13 +1208,107 @@ Deno.serve(async (req) => {
         const normalizedTerm = normalizeSearchTerm(term);
         let matchedUids: number[] = [];
         const matchedUidSet = new Set<number>();
+
+        // --- Phase 1: Search existing cache ---
         const cachedMatchedUids = await querySearchCacheByTerm(accountKey, folder, term);
         cachedMatchedUids.forEach((uid) => matchedUidSet.add(uid));
-        console.log(`[search] cached matches=${cachedMatchedUids.length}`);
+
+        // --- Phase 1b: Diagnostics - check body_text coverage in cache ---
+        const admin = getAdminClient();
+        let cacheTotal = 0;
+        let cacheWithBody = 0;
+        if (admin) {
+          try {
+            const { count: totalCount } = await admin
+              .from("email_search_cache")
+              .select("uid", { count: "exact", head: true })
+              .eq("account_key", accountKey)
+              .eq("folder_id", folder);
+            cacheTotal = totalCount || 0;
+
+            const { count: bodyCount } = await admin
+              .from("email_search_cache")
+              .select("uid", { count: "exact", head: true })
+              .eq("account_key", accountKey)
+              .eq("folder_id", folder)
+              .neq("body_text", "");
+            cacheWithBody = bodyCount || 0;
+          } catch (e) {
+            console.error("[search] cache diagnostics failed:", e);
+          }
+        }
+        console.log(`[search] cache coverage: total=${cacheTotal} withBody=${cacheWithBody} cachedMatches=${cachedMatchedUids.length}`);
+
+        // --- Phase 2: Populate body_text for cached emails missing it ---
+        // This targeted fetch is much cheaper than a full content scan
+        if (admin && cacheTotal > 0 && cacheWithBody < cacheTotal) {
+          try {
+            const { data: emptyBodyRows } = await admin
+              .from("email_search_cache")
+              .select("uid")
+              .eq("account_key", accountKey)
+              .eq("folder_id", folder)
+              .eq("body_text", "")
+              .limit(100); // batch limit to avoid timeout
+
+            const emptyUids = (emptyBodyRows || []).map((r: any) => Number(r.uid)).filter(Number.isFinite);
+            if (emptyUids.length > 0) {
+              console.log(`[search] populating body_text for ${emptyUids.length} cached emails`);
+              let populatedCount = 0;
+              let missingRawCount = 0;
+
+              // Fetch source in batches of 10
+              for (let i = 0; i < emptyUids.length; i += 10) {
+                const batchUids = emptyUids.slice(i, i + 10);
+                try {
+                  const uidRange = batchUids.join(",");
+                  const msgs = await (client as any).fetch(uidRange, {
+                    byUid: true,
+                    uid: true,
+                    source: true,
+                  });
+                  const fetched = (Array.isArray(msgs) ? msgs : [msgs]).filter(Boolean);
+
+                  for (const msg of fetched) {
+                    const msgUid = Number(msg?.uid);
+                    if (!Number.isFinite(msgUid)) continue;
+
+                    const extracted = await extractSearchableBody(msg);
+                    if (extracted.source === "missing-raw" || extracted.source === "empty-raw") {
+                      missingRawCount++;
+                      continue;
+                    }
+                    if (!extracted.plainText) continue;
+
+                    await admin
+                      .from("email_search_cache")
+                      .update({ body_text: extracted.plainText })
+                      .eq("account_key", accountKey)
+                      .eq("folder_id", folder)
+                      .eq("uid", msgUid)
+                      .eq("body_text", "");
+                    populatedCount++;
+                  }
+                } catch (batchErr) {
+                  console.error("[search] body populate batch failed:", batchErr);
+                }
+              }
+              console.log(`[search] body populate done: populated=${populatedCount} missingRaw=${missingRawCount}`);
+
+              // Re-run cache search with newly populated body_text
+              if (populatedCount > 0) {
+                const newCachedUids = await querySearchCacheByTerm(accountKey, folder, term);
+                newCachedUids.forEach((uid) => matchedUidSet.add(uid));
+                console.log(`[search] re-cached matches after populate: ${newCachedUids.length} (was ${cachedMatchedUids.length})`);
+              }
+            }
+          } catch (populateErr) {
+            console.error("[search] body populate failed:", populateErr);
+          }
+        }
+
+        // --- Phase 3: IMAP server-side search ---
         // deno-imap search() signature: search(criteria: ImapSearchCriteria, charset?: string)
-        // ImapSearchCriteria.header expects: { field: string, value: string }[]
-        // ImapSearchCriteria.text/body expect: string
-        // Returns sequence numbers (not UIDs)
         const searchAttempts: Array<{ label: string; criteria: Record<string, unknown> }> = [
           { label: "Text", criteria: { text: term } },
           { label: "Body", criteria: { body: term } },
@@ -1227,7 +1328,6 @@ Deno.serve(async (req) => {
             const seqNos = (Array.isArray(searchResult) ? searchResult : []).map(Number).filter(Number.isFinite);
             if (seqNos.length > 0) {
               anySearchWorked = true;
-              // Convert sequence numbers to UIDs by fetching UID for each
               const seqRange = seqNos.join(",");
               const uidMsgs = await (client as any).fetch(seqRange, { uid: true });
               const fetched = (Array.isArray(uidMsgs) ? uidMsgs : [uidMsgs]).filter(Boolean);
@@ -1235,7 +1335,6 @@ Deno.serve(async (req) => {
                 if (Number.isFinite(Number(m?.uid))) matchedUidSet.add(Number(m.uid));
               }
             }
-            // If TEXT search worked, skip header-specific searches (TEXT covers them)
             if ((attempt.label === "Text" || attempt.label === "Body") && anySearchWorked) break;
           } catch (attemptError) {
             console.log(`[search] search failed for ${attempt.label}:`, attemptError);
@@ -1243,19 +1342,19 @@ Deno.serve(async (req) => {
         }
 
         matchedUids = [...matchedUidSet];
-        const shouldForceContentScan = !term.includes("@");
 
-        if (!anySearchWorked || matchedUids.length === 0 || shouldForceContentScan) {
-          console.log(
-            `[search] falling back to content scan anySearchWorked=${anySearchWorked} preMatched=${matchedUids.length} force=${shouldForceContentScan}`,
-          );
+        // --- Phase 4: Full content scan fallback (only if cache + IMAP gave nothing) ---
+        const shouldForceContentScan = matchedUids.length === 0 && !term.includes("@");
+
+        if (shouldForceContentScan) {
+          console.log(`[search] last-resort content scan, no results from cache or IMAP`);
           const mailboxStatus = await client.selectMailbox(folder);
           const totalMessages = Number((mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0);
           const batchSize = 200;
-          const scannedMatches: Array<{ msg: any; bodyText: string }> = [];
           const scannedCacheRows: SearchCacheRow[] = [];
           let scannedCount = 0;
           let extractedBodyCount = 0;
+          let missingRawCount = 0;
 
           for (let seqEnd = totalMessages; seqEnd >= 1; seqEnd -= batchSize) {
             const seqStart = Math.max(1, seqEnd - batchSize + 1);
@@ -1263,37 +1362,33 @@ Deno.serve(async (req) => {
             const batch = await fetchEnvelopeBatch(client, sequence, false, true);
             for (const msg of batch) {
               if (!Number.isFinite(Number(msg?.uid))) continue;
-              scannedCount += 1;
+              scannedCount++;
               const contentResult = await searchMessageContent(msg, normalizedTerm);
+
+              if (contentResult.source === "missing-raw" || contentResult.source === "empty-raw") {
+                missingRawCount++;
+              }
+
               if (contentResult.bodyText) {
-                extractedBodyCount += 1;
+                extractedBodyCount++;
                 const row = buildCacheRow(accountKey, host, username, folder, msg, contentResult.bodyText);
                 if (row) scannedCacheRows.push(row);
               }
 
               if (contentResult.matched) {
-                scannedMatches.push({ msg, bodyText: contentResult.bodyText });
                 matchedUidSet.add(Number(msg.uid));
               }
             }
           }
 
           console.log(
-            `[search] content scan stats scanned=${scannedCount} extractedBodies=${extractedBodyCount} matched=${scannedMatches.length}`,
+            `[search] content scan: scanned=${scannedCount} extractedBodies=${extractedBodyCount} missingRaw=${missingRawCount} newMatches=${matchedUidSet.size - matchedUids.length}`,
           );
 
           matchedUids = [...matchedUidSet].sort((a, b) => b - a);
 
           if (scannedCacheRows.length > 0) {
             await upsertSearchCache(scannedCacheRows.slice(0, 5000));
-          }
-
-          if (scannedMatches.length > 0) {
-            await upsertSearchCache(
-              scannedMatches
-                .map(({ msg, bodyText }) => buildCacheRow(accountKey, host, username, folder, msg, bodyText))
-                .filter(Boolean) as SearchCacheRow[],
-            );
           }
         }
 

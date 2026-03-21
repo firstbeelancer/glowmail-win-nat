@@ -371,13 +371,11 @@ function MailApp() {
 }
 
 const Index = () => {
-  const [loggedIn, setLoggedIn] = useState(() => {
-    return !!localStorage.getItem('glowmail_credentials');
-  });
+  const [loggedIn, setLoggedIn] = useState(() => hasCredentials());
 
   if (!loggedIn) {
     return <Login onLogin={(creds) => {
-      localStorage.setItem('glowmail_credentials', JSON.stringify(creds));
+      saveCredentials(creds);
       setLoggedIn(true);
     }} />;
   }
@@ -410,24 +408,19 @@ function MailAppWithCreds() {
   const { updateSettings } = useMail();
 
   useEffect(() => {
-    const raw = localStorage.getItem('glowmail_credentials');
-    if (raw) {
-      try {
-        const creds = JSON.parse(raw);
-        updateSettings({
-          account: { name: creds.name, email: creds.email },
-          server: {
-            imapHost: creds.imapHost,
-            imapPort: creds.imapPort,
-            smtpHost: creds.smtpHost,
-            smtpPort: creds.smtpPort,
-            secure: true,
-            authMethod: 'app-password',
-          },
-        });
-      } catch {
-        // ignore broken stored creds
-      }
+    const creds = loadCredentials();
+    if (creds) {
+      updateSettings({
+        account: { name: creds.name, email: creds.email },
+        server: {
+          imapHost: creds.imapHost,
+          imapPort: creds.imapPort,
+          smtpHost: creds.smtpHost,
+          smtpPort: creds.smtpPort,
+          secure: true,
+          authMethod: 'app-password',
+        },
+      });
     }
   }, []);
 

@@ -1550,8 +1550,9 @@ Deno.serve(async (req) => {
 
         matchedUids = [...matchedUidSet];
 
-        const shouldForceContentScan = !term.includes("@")
-          && (matchedUids.length === 0 || useUtf8Search);
+        // Only do full content scan for ASCII queries with zero results — never for Cyrillic
+        // (Cyrillic search relies on cache + IMAP SEARCH; full scan exceeds CPU limits)
+        const shouldForceContentScan = !useUtf8Search && !term.includes("@") && matchedUids.length === 0;
 
         if (shouldForceContentScan) {
           console.log(`[search] last-resort content scan, no results from cache or IMAP`);

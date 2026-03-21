@@ -1075,21 +1075,28 @@ Deno.serve(async (req) => {
         client = null;
 
         // Backfill body_text into search cache for this email
-        if (bodyText) {
+        {
           try {
-            const cleanedBody = cleanBodyText(bodyText);
-            if (cleanedBody) {
+            // Use plain text first; if empty, strip HTML for searchable text
+            let searchableBody = bodyText ? cleanBodyText(bodyText) : "";
+            if (!searchableBody && finalHtml) {
+              searchableBody = cleanBodyText(stripHtmlForSearch(maybeDecodeQuotedPrintable(finalHtml)));
+            }
+            if (searchableBody) {
               const db = getAdminClient();
               if (db) {
                 const accountKey = makeAccountKey(host, username);
-                await db
+                const { count } = await db
                   .from("email_search_cache")
-                  .update({ body_text: cleanedBody })
+                  .update({ body_text: searchableBody })
                   .eq("account_key", accountKey)
                   .eq("folder_id", folder)
                   .eq("uid", resolvedUid)
-                  .eq("body_text", ""); // only update if empty
-                console.log("[fetch] backfilled body_text for uid:", resolvedUid, "len:", cleanedBody.length);
+                  .eq("body_text", "")
+                  .select("uid", { count: "exact", head: true });
+                if (count && count > 0) {
+                  console.log("[fetch] backfilled body_text for uid:", resolvedUid, "len:", searchableBody.length);
+                }
               }
             }
           } catch (backfillErr) {

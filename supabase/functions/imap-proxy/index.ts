@@ -1426,25 +1426,24 @@ Deno.serve(async (req) => {
           matchesNormalizedTerm: boolean;
         }> = [];
 
+        // Lightweight body_text populate: max 1 round of 30 emails to stay within CPU limits
         if (admin && cacheTotal > 0 && cacheWithBody < cacheTotal) {
           try {
             let populatedCount = 0;
             let populateMissingRawCount = 0;
-            const maxPopulateRounds = useUtf8Search ? 20 : 5;
 
-            for (let round = 0; round < maxPopulateRounds; round++) {
-              const { data: emptyBodyRows } = await admin
-                .from("email_search_cache")
-                .select("uid")
-                .eq("account_key", accountKey)
-                .eq("folder_id", folder)
-                .eq("body_text", "")
-                .limit(100);
+            const { data: emptyBodyRows } = await admin
+              .from("email_search_cache")
+              .select("uid")
+              .eq("account_key", accountKey)
+              .eq("folder_id", folder)
+              .eq("body_text", "")
+              .limit(30);
 
-              const emptyUids = (emptyBodyRows || []).map((r: any) => Number(r.uid)).filter(Number.isFinite);
-              if (emptyUids.length === 0) break;
+            const emptyUids = (emptyBodyRows || []).map((r: any) => Number(r.uid)).filter(Number.isFinite);
 
-              console.log(`[search] populating body_text round=${round + 1} count=${emptyUids.length}`);
+            if (emptyUids.length > 0) {
+              console.log(`[search] populating body_text count=${emptyUids.length}`);
 
               for (let i = 0; i < emptyUids.length; i += 10) {
                 const batchUids = emptyUids.slice(i, i + 10);
@@ -1493,8 +1492,6 @@ Deno.serve(async (req) => {
                   console.error("[search] body populate batch failed:", batchErr);
                 }
               }
-
-              if (!useUtf8Search && populatedCount > 0) break;
             }
 
             console.log(`[search] body populate done: populated=${populatedCount} missingRaw=${populateMissingRawCount}`);

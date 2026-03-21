@@ -226,7 +226,6 @@ export function MailProvider({ children }: { children: ReactNode }) {
         smtpPort: 465,
         secure: true,
         authMethod: parsedSettings.server?.authMethod || 'password',
-        oauthProvider: parsedSettings.server?.oauthProvider || '',
       },
       signature: defaultSignature,
       signatures,

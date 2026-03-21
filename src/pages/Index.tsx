@@ -15,7 +15,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [composeData, setComposeData] = useState<Partial<Email> | null>(null);
-  const { markAsRead, settings, sendEmail, currentFolder, emails } = useMail();
+  const { markAsRead, settings, sendEmail, saveDraft, currentFolder, emails } = useMail();
 
   // Get sorted email list for next/prev navigation
   const folderEmails = emails.filter(e => e.folderId === currentFolder)

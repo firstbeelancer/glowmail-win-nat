@@ -90,8 +90,6 @@ export type UserSettings = {
   groupBy: 'none' | 'date' | 'sender' | 'tag';
   layoutMode: 'vertical' | 'horizontal';
   markAsReadDelay: number;
-  ldapServer: string;
-  ldapBaseDn: string;
   language: 'en' | 'ru';
   aiEnabled: boolean;
   folderColors: Record<string, string>;

@@ -159,6 +159,23 @@ function findHtmlPartPath(node: any, path = ""): string | null {
   return findTextPartPath(node, "html", path);
 }
 
+function findPartNode(node: any, targetPath: string, path = ""): any | null {
+  if (!node) return null;
+  const resolvedPath = node.part || path || "1";
+  if (resolvedPath === targetPath) return node;
+
+  const children = node.childNodes || node.parts || [];
+  if (Array.isArray(children)) {
+    for (let i = 0; i < children.length; i++) {
+      const childPath = path ? `${path}.${i + 1}` : `${i + 1}`;
+      const result = findPartNode(children[i], targetPath, childPath);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}
+
 /** Decode quoted-printable encoded string */
 function decodeQuotedPrintable(input: string, charset = "utf-8"): string {
   // Remove soft line breaks
@@ -338,6 +355,40 @@ function toSearchableBytes(value: unknown): Uint8Array | null {
   return null;
 }
 
+function decodeBase64ToBytes(value: string): Uint8Array | null {
+  try {
+    const normalized = value.replace(/\s+/g, "");
+    if (!normalized) return null;
+    const binary = atob(normalized);
+    return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  } catch {
+    return null;
+  }
+}
+
+function decodeMimePartBody(bytes: Uint8Array, partNode: any) {
+  const rawText = new TextDecoder().decode(bytes);
+  const transferEncoding = String(
+    partNode?.encoding
+      || partNode?.contentTransferEncoding
+      || partNode?.transferEncoding
+      || "",
+  ).toLowerCase();
+
+  if (transferEncoding.includes("base64")) {
+    const decodedBytes = decodeBase64ToBytes(rawText);
+    if (decodedBytes && decodedBytes.length > 0) {
+      return decodeBytesWithCharsetGuess(decodedBytes);
+    }
+  }
+
+  if (transferEncoding.includes("quoted-printable")) {
+    return maybeDecodeQuotedPrintable(rawText);
+  }
+
+  return maybeDecodeQuotedPrintable(decodeBytesWithCharsetGuess(bytes) || rawText);
+}
+
 function extractInlineBodyCandidates(msg: any): Array<{ bytes: Uint8Array; source: string }> {
   const candidates: Array<{ bytes: Uint8Array; source: string }> = [];
   const pushCandidate = (value: unknown, source: string) => {
@@ -439,6 +490,7 @@ async function fetchSearchableBodyFromParts(client: ImapClient, uid: number, bod
 
   for (const candidate of candidateParts) {
     try {
+      const partNode = findPartNode(bodyStructure, candidate.path, "");
       const partMsgs = await (client as any).fetch(String(uid), {
         byUid: true,
         uid: true,
@@ -460,7 +512,7 @@ async function fetchSearchableBodyFromParts(client: ImapClient, uid: number, bod
       const bytes = toSearchableBytes(partContent);
       if (!bytes || bytes.length === 0) continue;
 
-      const decoded = maybeDecodeQuotedPrintable(decodeBytesWithCharsetGuess(bytes));
+      const decoded = decodeMimePartBody(bytes, partNode);
       const normalized = candidate.kind === "html" ? stripHtmlForSearch(decoded) : decoded;
       if (normalized.trim()) {
         textParts.push(normalized);

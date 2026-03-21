@@ -241,8 +241,6 @@ export function MailProvider({ children }: { children: ReactNode }) {
       groupBy: parsedSettings.groupBy || 'none',
       layoutMode: parsedSettings.layoutMode || (legacyLayout === 'horizontal' ? 'horizontal' : 'vertical'),
       markAsReadDelay: parsedSettings.markAsReadDelay ?? 0,
-      ldapServer: parsedSettings.ldapServer || '',
-      ldapBaseDn: parsedSettings.ldapBaseDn || '',
       language: parsedSettings.language || 'en',
       availableTags: parsedSettings.availableTags || [
         { id: '1', name: 'work', color: '#3b82f6' },

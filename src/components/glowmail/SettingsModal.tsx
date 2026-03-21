@@ -322,64 +322,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
                   >
                     <option value="password">{t('settings.authPassword', lang)}</option>
-                    <option value="encrypted-password">{t('settings.authEncryptedPassword', lang)}</option>
-                    <option value="oauth2">{t('settings.authOAuth2', lang)}</option>
                     <option value="app-password">{t('settings.authAppPassword', lang)}</option>
-                    <option value="kerberos">{t('settings.authKerberos', lang)}</option>
-                    <option value="ntlm">{t('settings.authNtlm', lang)}</option>
-                    <option value="tls-certificate">{t('settings.authTlsCert', lang)}</option>
                   </select>
-                  {localSettings.server.authMethod === 'oauth2' && (
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-zinc-500">{t('settings.oauthProvider', lang)}</label>
-                      <select
-                        value={localSettings.server.oauthProvider || ''}
-                        onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, oauthProvider: e.target.value } })}
-                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
-                      >
-                        <option value="">—</option>
-                        <option value="google">Google</option>
-                        <option value="microsoft">Microsoft / Outlook</option>
-                        <option value="yahoo">Yahoo</option>
-                      </select>
-                    </div>
-                  )}
-                  {localSettings.server.authMethod === 'kerberos' && (
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-zinc-500">{t('settings.kerberosRealm', lang)}</label>
-                      <input
-                        type="text"
-                        value={(localSettings.server as any).kerberosRealm || ''}
-                        onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, kerberosRealm: e.target.value } as any })}
-                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
-                        placeholder="EXAMPLE.COM"
-                      />
-                    </div>
-                  )}
-                  {localSettings.server.authMethod === 'tls-certificate' && (
-                    <div className="space-y-3">
-                      <div className="space-y-2">
-                        <label className="text-xs font-medium text-zinc-500">{t('settings.tlsCertPath', lang)}</label>
-                        <input
-                          type="text"
-                          value={(localSettings.server as any).tlsCertPath || ''}
-                          onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, tlsCertPath: e.target.value } as any })}
-                          className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
-                          placeholder="/path/to/cert.pem"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-medium text-zinc-500">{t('settings.tlsKeyPath', lang)}</label>
-                        <input
-                          type="text"
-                          value={(localSettings.server as any).tlsKeyPath || ''}
-                          onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, tlsKeyPath: e.target.value } as any })}
-                          className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
-                          placeholder="/path/to/key.pem"
-                        />
-                      </div>
-                    </div>
-                  )}
+                  <p className="text-xs text-zinc-500">
+                    {lang === 'ru'
+                      ? 'Для Gmail, Yandex и других провайдеров рекомендуется использовать пароль приложения.'
+                      : 'For Gmail, Yandex, and other providers, we recommend using an app password.'}
+                  </p>
                 </div>
 
                 {/* Fetch Folders from Server */}
@@ -406,28 +355,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     {isFetchingFolders ? t('settings.fetchingFolders', lang) : t('settings.fetchFolders', lang)}
                   </button>
                 </div>
-
-                {/* LDAP */}
-                <div className="space-y-4 pt-4 border-t border-zinc-800/50">
-                  <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2">{t('settings.ldapSection', lang)}</h4>
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-zinc-500">{t('settings.ldapServer', lang)}</label>
-                      <input
-                        type="text"
-                        value={localSettings.ldapServer}
-                        onChange={(e) => setLocalSettings({ ...localSettings, ldapServer: e.target.value })}
-                        placeholder="ldap://ldap.example.com:389"
-                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-zinc-500">{t('settings.ldapBaseDn', lang)}</label>
-                      <input
-                        type="text"
-                        value={localSettings.ldapBaseDn}
-                        onChange={(e) => setLocalSettings({ ...localSettings, ldapBaseDn: e.target.value })}
-                        placeholder="ou=people,dc=example,dc=com"
                         className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
                       />
                     </div>

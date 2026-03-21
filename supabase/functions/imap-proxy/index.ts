@@ -318,52 +318,95 @@ function searchEmailFromEnvelope(msg: any, term: string) {
   return haystack.includes(term);
 }
 
+function toSearchableBytes(value: unknown): Uint8Array | null {
+  if (value instanceof Uint8Array) return value;
+  if (typeof value === "string") return new TextEncoder().encode(value);
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (value && typeof value === "object" && (value as { buffer?: unknown }).buffer instanceof ArrayBuffer) {
+    const offset = typeof (value as { byteOffset?: unknown }).byteOffset === "number"
+      ? (value as { byteOffset: number }).byteOffset
+      : 0;
+    const length = typeof (value as { byteLength?: unknown }).byteLength === "number"
+      ? (value as { byteLength: number }).byteLength
+      : undefined;
+    return new Uint8Array((value as { buffer: ArrayBuffer }).buffer, offset, length);
+  }
+  return null;
+}
+
+function extractInlineBodyCandidates(msg: any): Array<{ bytes: Uint8Array; source: string }> {
+  const candidates: Array<{ bytes: Uint8Array; source: string }> = [];
+  const pushCandidate = (value: unknown, source: string) => {
+    const bytes = toSearchableBytes(value);
+    if (bytes && bytes.length > 0) {
+      candidates.push({ bytes, source });
+    }
+  };
+
+  pushCandidate(msg?.raw, "msg.raw");
+  pushCandidate(msg?.source, "msg.source");
+  pushCandidate(msg?.["body[]"], "msg.body[]");
+
+  if (msg?.bodyParts instanceof Map) {
+    for (const [partKey, partValue] of msg.bodyParts.entries()) {
+      pushCandidate(partValue, `msg.bodyParts.${String(partKey || "root")}`);
+    }
+  }
+
+  if (msg?.body instanceof Map) {
+    for (const [partKey, partValue] of msg.body.entries()) {
+      pushCandidate(partValue, `msg.body.${String(partKey || "root")}`);
+    }
+  }
+
+  if (Array.isArray(msg?.parts)) {
+    msg.parts.forEach((part: any, index: number) => {
+      pushCandidate(part?.body, `msg.parts.${index}.body`);
+    });
+  }
+
+  return candidates;
+}
+
 async function extractSearchableBody(msg: any) {
-  const rawCandidate = msg?.raw ?? msg?.source;
-  if (!rawCandidate) {
+  const byteCandidates = extractInlineBodyCandidates(msg);
+  if (byteCandidates.length === 0) {
     return { normalizedText: "", plainText: "", source: "missing-raw" };
   }
 
-  let bytes: Uint8Array | null = null;
-  if (rawCandidate instanceof Uint8Array) {
-    bytes = rawCandidate;
-  } else if (typeof rawCandidate === "string") {
-    bytes = new TextEncoder().encode(rawCandidate);
-  } else if (rawCandidate instanceof ArrayBuffer) {
-    bytes = new Uint8Array(rawCandidate);
-  } else if (rawCandidate && typeof rawCandidate === "object" && rawCandidate.buffer instanceof ArrayBuffer) {
-    const offset = typeof rawCandidate.byteOffset === "number" ? rawCandidate.byteOffset : 0;
-    const length = typeof rawCandidate.byteLength === "number" ? rawCandidate.byteLength : undefined;
-    bytes = new Uint8Array(rawCandidate.buffer, offset, length);
-  }
-
-  if (!bytes || bytes.length === 0) {
-    return { normalizedText: "", plainText: "", source: "empty-raw" };
-  }
-
   const textParts: string[] = [];
-  let source = "postal-mime";
+  let source = byteCandidates[0]?.source || "unknown";
 
-  try {
-    const parsed = await PostalMime.parse(bytes);
-    const parsedText = typeof parsed.text === "string" ? maybeDecodeQuotedPrintable(parsed.text) : "";
-    const parsedHtml = typeof parsed.html === "string"
-      ? maybeDecodeQuotedPrintable(stripHtmlForSearch(parsed.html))
-      : "";
+  for (const candidate of byteCandidates) {
+    const bytes = candidate.bytes;
+    if (!bytes || bytes.length === 0) continue;
 
-    if (parsedText) textParts.push(parsedText);
-    if (parsedHtml) textParts.push(parsedHtml);
-  } catch {
-    source = "raw-decode-fallback";
-  }
+    source = candidate.source;
 
-  if (textParts.length === 0) {
+    try {
+      const parsed = await PostalMime.parse(bytes);
+      const parsedText = typeof parsed.text === "string" ? maybeDecodeQuotedPrintable(parsed.text) : "";
+      const parsedHtml = typeof parsed.html === "string"
+        ? maybeDecodeQuotedPrintable(stripHtmlForSearch(parsed.html))
+        : "";
+
+      if (parsedText) textParts.push(parsedText);
+      if (parsedHtml) textParts.push(parsedHtml);
+      if (textParts.length > 0) break;
+    } catch {
+      // Try raw decoding below for body part payloads and malformed sources.
+    }
+
     const decodedRaw = decodeBytesWithCharsetGuess(bytes);
     if (decodedRaw) {
       const mimeBody = decodedRaw.replace(/^[\s\S]*?\r?\n\r?\n/, " ");
       const qpDecoded = maybeDecodeQuotedPrintable(mimeBody);
-      textParts.push(stripHtmlForSearch(qpDecoded));
-      source = "raw-decode-fallback";
+      const stripped = stripHtmlForSearch(qpDecoded);
+      if (stripped.trim()) {
+        textParts.push(stripped);
+        source = `${candidate.source}-raw-decode-fallback`;
+        break;
+      }
     }
   }
 
@@ -373,7 +416,7 @@ async function extractSearchableBody(msg: any) {
   return {
     normalizedText,
     plainText,
-    source,
+    source: plainText ? source : "empty-raw",
   };
 }
 
@@ -506,7 +549,7 @@ async function fetchEnvelopeBatch(client: ImapClient, sequence: string, byUid = 
     flags: true,
     bodyStructure: true,
     size: true,
-    ...(includeSource ? { source: true } : {}),
+    ...(includeSource ? { source: true, bodyParts: [""] } : {}),
   });
   return (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
 }
@@ -1206,6 +1249,7 @@ Deno.serve(async (req) => {
         console.log(`[search] request folder="${folder}" query="${term}" page=${safePage} pageSize=${safePageSize}`);
 
         const normalizedTerm = normalizeSearchTerm(term);
+        const useUtf8Search = hasNonAscii(term);
         let matchedUids: number[] = [];
         const matchedUidSet = new Set<number>();
 
@@ -1243,21 +1287,24 @@ Deno.serve(async (req) => {
         // This targeted fetch is much cheaper than a full content scan
         if (admin && cacheTotal > 0 && cacheWithBody < cacheTotal) {
           try {
-            const { data: emptyBodyRows } = await admin
-              .from("email_search_cache")
-              .select("uid")
-              .eq("account_key", accountKey)
-              .eq("folder_id", folder)
-              .eq("body_text", "")
-              .limit(100); // batch limit to avoid timeout
+            let populatedCount = 0;
+            let missingRawCount = 0;
+            const maxPopulateRounds = useUtf8Search ? 20 : 5;
 
-            const emptyUids = (emptyBodyRows || []).map((r: any) => Number(r.uid)).filter(Number.isFinite);
-            if (emptyUids.length > 0) {
-              console.log(`[search] populating body_text for ${emptyUids.length} cached emails`);
-              let populatedCount = 0;
-              let missingRawCount = 0;
+            for (let round = 0; round < maxPopulateRounds; round++) {
+              const { data: emptyBodyRows } = await admin
+                .from("email_search_cache")
+                .select("uid")
+                .eq("account_key", accountKey)
+                .eq("folder_id", folder)
+                .eq("body_text", "")
+                .limit(100);
 
-              // Fetch source in batches of 10
+              const emptyUids = (emptyBodyRows || []).map((r: any) => Number(r.uid)).filter(Number.isFinite);
+              if (emptyUids.length === 0) break;
+
+              console.log(`[search] populating body_text round=${round + 1} count=${emptyUids.length}`);
+
               for (let i = 0; i < emptyUids.length; i += 10) {
                 const batchUids = emptyUids.slice(i, i + 10);
                 try {
@@ -1265,7 +1312,9 @@ Deno.serve(async (req) => {
                   const msgs = await (client as any).fetch(uidRange, {
                     byUid: true,
                     uid: true,
+                    bodyStructure: true,
                     source: true,
+                    bodyParts: [""],
                   });
                   const fetched = (Array.isArray(msgs) ? msgs : [msgs]).filter(Boolean);
 
@@ -1293,14 +1342,16 @@ Deno.serve(async (req) => {
                   console.error("[search] body populate batch failed:", batchErr);
                 }
               }
-              console.log(`[search] body populate done: populated=${populatedCount} missingRaw=${missingRawCount}`);
 
-              // Re-run cache search with newly populated body_text
-              if (populatedCount > 0) {
-                const newCachedUids = await querySearchCacheByTerm(accountKey, folder, term);
-                newCachedUids.forEach((uid) => matchedUidSet.add(uid));
-                console.log(`[search] re-cached matches after populate: ${newCachedUids.length} (was ${cachedMatchedUids.length})`);
-              }
+              if (!useUtf8Search && populatedCount > 0) break;
+            }
+
+            console.log(`[search] body populate done: populated=${populatedCount} missingRaw=${missingRawCount}`);
+
+            if (populatedCount > 0) {
+              const newCachedUids = await querySearchCacheByTerm(accountKey, folder, term);
+              newCachedUids.forEach((uid) => matchedUidSet.add(uid));
+              console.log(`[search] re-cached matches after populate: ${newCachedUids.length} (was ${cachedMatchedUids.length})`);
             }
           } catch (populateErr) {
             console.error("[search] body populate failed:", populateErr);
@@ -1318,7 +1369,6 @@ Deno.serve(async (req) => {
           { label: "Cc", criteria: { header: [{ field: "Cc", value: term }] } },
         ];
         let anySearchWorked = false;
-        const useUtf8Search = hasNonAscii(term);
 
         for (const attempt of searchAttempts) {
           try {
@@ -1344,7 +1394,8 @@ Deno.serve(async (req) => {
         matchedUids = [...matchedUidSet];
 
         // --- Phase 4: Full content scan fallback (only if cache + IMAP gave nothing) ---
-        const shouldForceContentScan = matchedUids.length === 0 && !term.includes("@");
+        const shouldForceContentScan = !term.includes("@")
+          && (matchedUids.length === 0 || useUtf8Search);
 
         if (shouldForceContentScan) {
           console.log(`[search] last-resort content scan, no results from cache or IMAP`);

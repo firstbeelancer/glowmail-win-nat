@@ -1426,85 +1426,8 @@ Deno.serve(async (req) => {
           matchesNormalizedTerm: boolean;
         }> = [];
 
-        // Lightweight body_text populate: max 1 round of 30 emails to stay within CPU limits
-        if (admin && cacheTotal > 0 && cacheWithBody < cacheTotal) {
-          try {
-            let populatedCount = 0;
-            let populateMissingRawCount = 0;
-
-            const { data: emptyBodyRows } = await admin
-              .from("email_search_cache")
-              .select("uid")
-              .eq("account_key", accountKey)
-              .eq("folder_id", folder)
-              .eq("body_text", "")
-              .limit(30);
-
-            const emptyUids = (emptyBodyRows || []).map((r: any) => Number(r.uid)).filter(Number.isFinite);
-
-            if (emptyUids.length > 0) {
-              console.log(`[search] populating body_text count=${emptyUids.length}`);
-
-              for (let i = 0; i < emptyUids.length; i += 10) {
-                const batchUids = emptyUids.slice(i, i + 10);
-                try {
-                  const uidRange = batchUids.join(",");
-                  const msgs = await (client as any).fetch(uidRange, {
-                    byUid: true,
-                    uid: true,
-                    bodyStructure: true,
-                    source: true,
-                    bodyParts: [""],
-                  });
-                  const fetched = (Array.isArray(msgs) ? msgs : [msgs]).filter(Boolean);
-
-                  for (const msg of fetched) {
-                    const msgUid = Number(msg?.uid);
-                    if (!Number.isFinite(msgUid)) continue;
-
-                    let extracted = await extractSearchableBody(msg);
-                    if ((!extracted.plainText || extracted.source === "missing-raw" || extracted.source === "empty-raw") && msg?.bodyStructure) {
-                      const partFallback = await fetchSearchableBodyFromParts(client, msgUid, msg.bodyStructure);
-                      if (partFallback.plainText) {
-                        extracted = {
-                          normalizedText: normalizeSearchTerm(partFallback.plainText),
-                          plainText: partFallback.plainText,
-                          source: partFallback.source,
-                        };
-                      }
-                    }
-                    if (extracted.source === "missing-raw" || extracted.source === "empty-raw") {
-                      populateMissingRawCount++;
-                      continue;
-                    }
-                    if (!extracted.plainText) continue;
-
-                    await admin
-                      .from("email_search_cache")
-                      .update({ body_text: extracted.plainText })
-                      .eq("account_key", accountKey)
-                      .eq("folder_id", folder)
-                      .eq("uid", msgUid)
-                      .eq("body_text", "");
-                    populatedCount++;
-                  }
-                } catch (batchErr) {
-                  console.error("[search] body populate batch failed:", batchErr);
-                }
-              }
-            }
-
-            console.log(`[search] body populate done: populated=${populatedCount} missingRaw=${populateMissingRawCount}`);
-
-            if (populatedCount > 0) {
-              const newCachedUids = await querySearchCacheByTerm(accountKey, folder, term);
-              newCachedUids.forEach((uid) => matchedUidSet.add(uid));
-              console.log(`[search] re-cached matches after populate: ${newCachedUids.length} (was ${cachedMatchedUids.length})`);
-            }
-          } catch (populateErr) {
-            console.error("[search] body populate failed:", populateErr);
-          }
-        }
+        // Body populate is too expensive for search — use reindex-search-cache action instead.
+        // Search relies on whatever is already in cache + IMAP SEARCH.
 
         const searchAttempts: Array<{ label: string; criteria: Record<string, unknown> }> = [
           { label: "Text", criteria: { text: term } },

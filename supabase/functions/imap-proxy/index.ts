@@ -1547,8 +1547,7 @@ Deno.serve(async (req) => {
 
         matchedUids = [...matchedUidSet];
 
-        const shouldForceContentScan = !term.includes("@")
-          && (matchedUids.length === 0 || useUtf8Search);
+        const shouldForceContentScan = !term.includes("@") && matchedUids.length === 0;
 
         if (shouldForceContentScan) {
           console.log(`[search] last-resort content scan, no results from cache or IMAP`);

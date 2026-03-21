@@ -1433,7 +1433,7 @@ Deno.serve(async (req) => {
           try {
             let populatedCount = 0;
             let populateMissingRawCount = 0;
-            const maxPopulateRounds = useUtf8Search ? 20 : 5;
+            const maxPopulateRounds = 5;
 
             for (let round = 0; round < maxPopulateRounds; round++) {
               const { data: emptyBodyRows } = await admin
@@ -1497,7 +1497,7 @@ Deno.serve(async (req) => {
                 }
               }
 
-              if (!useUtf8Search && populatedCount > 0) break;
+              if (populatedCount > 0) break;
             }
 
             console.log(`[search] body populate done: populated=${populatedCount} missingRaw=${populateMissingRawCount}`);

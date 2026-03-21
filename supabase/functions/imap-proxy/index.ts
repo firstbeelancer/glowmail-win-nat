@@ -274,6 +274,14 @@ function cleanBodyText(value: string) {
     .trim();
 }
 
+function buildSafeDebugPreview(value: string, maxLength = 200) {
+  if (!value) return "";
+  return value
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
 function buildCacheRow(
   accountKey: string,
   host: string,
@@ -1343,7 +1351,14 @@ Deno.serve(async (req) => {
       }
 
       case "search": {
-        const { folder = "INBOX", query: searchQuery, page = 1, pageSize = 30 } = body;
+        const {
+          folder = "INBOX",
+          query: searchQuery,
+          page = 1,
+          pageSize = 30,
+          debugSearch = false,
+          debugSampleLimit = 15,
+        } = body;
         if (!searchQuery || typeof searchQuery !== "string") return err("Missing query", 400);
 
         await client.selectMailbox(folder);
@@ -1364,6 +1379,8 @@ Deno.serve(async (req) => {
         const useUtf8Search = hasNonAscii(term);
         let matchedUids: number[] = [];
         const matchedUidSet = new Set<number>();
+        const shouldLogDebug = debugSearch === true;
+        const safeDebugSampleLimit = Math.min(20, Math.max(1, Number(debugSampleLimit) || 15));
 
         const cachedMatchedUids = await querySearchCacheByTerm(accountKey, folder, term);
         cachedMatchedUids.forEach((uid) => matchedUidSet.add(uid));
@@ -1393,10 +1410,21 @@ Deno.serve(async (req) => {
         }
         console.log(`[search] cache coverage: total=${cacheTotal} withBody=${cacheWithBody} cachedMatches=${cachedMatchedUids.length}`);
 
+        let scannedCount = 0;
+        let extractedBodyCount = 0;
+        let missingRawCount = 0;
+        const fullScanSamples: Array<{
+          uid: number;
+          source: string;
+          bodyTextLength: number;
+          bodyPreview: string;
+          matchesNormalizedTerm: boolean;
+        }> = [];
+
         if (admin && cacheTotal > 0 && cacheWithBody < cacheTotal) {
           try {
             let populatedCount = 0;
-            let missingRawCount = 0;
+            let populateMissingRawCount = 0;
             const maxPopulateRounds = useUtf8Search ? 20 : 5;
 
             for (let round = 0; round < maxPopulateRounds; round++) {
@@ -1442,7 +1470,7 @@ Deno.serve(async (req) => {
                       }
                     }
                     if (extracted.source === "missing-raw" || extracted.source === "empty-raw") {
-                      missingRawCount++;
+                      populateMissingRawCount++;
                       continue;
                     }
                     if (!extracted.plainText) continue;
@@ -1464,7 +1492,7 @@ Deno.serve(async (req) => {
               if (!useUtf8Search && populatedCount > 0) break;
             }
 
-            console.log(`[search] body populate done: populated=${populatedCount} missingRaw=${missingRawCount}`);
+            console.log(`[search] body populate done: populated=${populatedCount} missingRaw=${populateMissingRawCount}`);
 
             if (populatedCount > 0) {
               const newCachedUids = await querySearchCacheByTerm(accountKey, folder, term);
@@ -1507,6 +1535,8 @@ Deno.serve(async (req) => {
           }
         }
 
+        const matchedAfterImapSearch = matchedUidSet.size;
+
         matchedUids = [...matchedUidSet];
 
         const shouldForceContentScan = !term.includes("@")
@@ -1518,9 +1548,6 @@ Deno.serve(async (req) => {
           const totalMessages = Number((mailboxStatus as any)?.exists ?? (mailboxStatus as any)?.messages ?? 0);
           const batchSize = 200;
           const scannedCacheRows: SearchCacheRow[] = [];
-          let scannedCount = 0;
-          let extractedBodyCount = 0;
-          let missingRawCount = 0;
 
           for (let seqEnd = totalMessages; seqEnd >= 1; seqEnd -= batchSize) {
             const seqStart = Math.max(1, seqEnd - batchSize + 1);
@@ -1544,6 +1571,16 @@ Deno.serve(async (req) => {
               if (contentResult.matched) {
                 matchedUidSet.add(Number(msg.uid));
               }
+
+              if (shouldLogDebug && fullScanSamples.length < safeDebugSampleLimit) {
+                fullScanSamples.push({
+                  uid: Number(msg.uid),
+                  source: contentResult.source,
+                  bodyTextLength: contentResult.bodyText?.length || 0,
+                  bodyPreview: buildSafeDebugPreview(contentResult.bodyText || ""),
+                  matchesNormalizedTerm: contentResult.normalizedBody.includes(normalizedTerm),
+                });
+              }
             }
           }
 
@@ -1561,6 +1598,26 @@ Deno.serve(async (req) => {
         matchedUids = [...matchedUidSet];
         matchedUids.sort((a, b) => b - a);
         const totalFound = matchedUids.length;
+
+        console.log(
+          `[search][diag] ${JSON.stringify({
+            folder,
+            term,
+            normalizedTerm,
+            useUtf8Search,
+            cacheTotal,
+            cacheWithBody,
+            cachedMatchedUidsLength: cachedMatchedUids.length,
+            matchedAfterImapSearch,
+            scannedCount,
+            extractedBodyCount,
+            missingRawCount,
+          })}`,
+        );
+
+        if (shouldLogDebug && fullScanSamples.length > 0) {
+          console.log(`[search][diag][samples] ${JSON.stringify(fullScanSamples)}`);
+        }
 
         console.log(`[search] matched UIDs=${totalFound}`);
 
@@ -1620,6 +1677,298 @@ Deno.serve(async (req) => {
         await client.disconnect();
         client = null;
         return ok({ emails, total: totalFound, page: safePage, pageSize: safePageSize, hasMore });
+      }
+
+      case "debug-search-email": {
+        const { folder = "INBOX", uid, query = "" } = body;
+        const targetUid = Number(uid);
+        if (!Number.isFinite(targetUid)) return err("Missing or invalid uid", 400);
+
+        await client.selectMailbox(folder);
+
+        const queryTerm = typeof query === "string" ? query.trim() : "";
+        const normalizedTerm = normalizeSearchTerm(queryTerm);
+
+        const admin = getAdminClient();
+        let cacheRow: SearchCacheRow | null = null;
+        if (admin) {
+          const { data } = await admin
+            .from("email_search_cache")
+            .select("*")
+            .eq("account_key", accountKey)
+            .eq("folder_id", folder)
+            .eq("uid", targetUid)
+            .maybeSingle();
+          cacheRow = (data as SearchCacheRow | null) || null;
+        }
+
+        const cachedBodyText = cleanBodyText(cacheRow?.body_text || "");
+        const normalizedCachedBody = normalizeSearchTerm(cachedBodyText);
+
+        const cacheQueryMatches = queryTerm
+          ? await querySearchCacheByTerm(accountKey, folder, queryTerm)
+          : [];
+
+        const messages = await (client as any).fetch(String(targetUid), {
+          byUid: true,
+          uid: true,
+          envelope: true,
+          flags: true,
+          bodyStructure: true,
+          source: true,
+          bodyParts: [""],
+        });
+
+        const fetched = (Array.isArray(messages) ? messages : [messages]).filter(Boolean);
+        const msg = fetched.find((item: any) => Number(item?.uid) === targetUid) || fetched[0];
+
+        if (!msg) {
+          await client.disconnect();
+          client = null;
+          return ok({
+            folder,
+            uid: targetUid,
+            query: queryTerm,
+            normalizedQuery: normalizedTerm,
+            found: false,
+            reason: "message_not_found",
+          });
+        }
+
+        const envelope = msg.envelope || {};
+        const extracted = await extractSearchableBody(msg);
+        const partExtracted = msg.bodyStructure
+          ? await fetchSearchableBodyFromParts(client, targetUid, msg.bodyStructure)
+          : { plainText: "", source: "missing-part-path" };
+
+        const normalizedRawExtracted = normalizeSearchTerm(extracted.plainText || "");
+        const normalizedPartExtracted = normalizeSearchTerm(partExtracted.plainText || "");
+
+        const rawMatches = normalizedTerm ? normalizedRawExtracted.includes(normalizedTerm) : false;
+        const partMatches = normalizedTerm ? normalizedPartExtracted.includes(normalizedTerm) : false;
+        const cachedMatches = normalizedTerm ? normalizedCachedBody.includes(normalizedTerm) : false;
+
+        const stageHints: string[] = [];
+        if (!cacheRow) {
+          stageHints.push("cache_row_missing");
+        } else if (!cachedBodyText) {
+          stageHints.push("cache_body_text_empty");
+        }
+
+        if (extracted.source === "missing-raw" || extracted.source === "empty-raw") {
+          stageHints.push("inline_raw_missing_or_empty");
+        }
+
+        if (!extracted.plainText && partExtracted.plainText) {
+          stageHints.push("imap_part_fallback_required");
+        }
+
+        if ((rawMatches || partMatches) && !cachedMatches) {
+          stageHints.push("cache_stale_not_backfilled");
+        }
+
+        const cacheRpcContainsUid = cacheQueryMatches.includes(targetUid);
+        if (cachedMatches && !cacheRpcContainsUid) {
+          stageHints.push("cache_sql_search_mismatch");
+        }
+
+        if (!rawMatches && !partMatches && !cachedMatches) {
+          stageHints.push("query_not_found_in_any_source");
+        }
+
+        const chosenSource = extracted.plainText
+          ? extracted.source
+          : partExtracted.plainText
+            ? partExtracted.source
+            : "missing-raw";
+
+        const response = {
+          folder,
+          uid: targetUid,
+          query: queryTerm,
+          normalizedQuery: normalizedTerm,
+          envelope: {
+            subject: envelope.subject || "",
+            from: normalizeAddress(envelope.from?.[0]),
+            to: (envelope.to || []).slice(0, 5).map(normalizeAddress),
+            cc: (envelope.cc || []).slice(0, 5).map(normalizeAddress),
+            date: envelope.date || "",
+            messageId: envelope.messageId || "",
+          },
+          cache: {
+            exists: !!cacheRow,
+            bodyTextLength: cachedBodyText.length,
+            bodyTextPreview: buildSafeDebugPreview(cachedBodyText),
+            querySearchCacheByTerm: {
+              matchedCount: cacheQueryMatches.length,
+              containsUid: cacheRpcContainsUid,
+              sampleUids: cacheQueryMatches.slice(0, 20),
+            },
+          },
+          extraction: {
+            selectedSource: chosenSource,
+            raw: {
+              source: extracted.source,
+              bodyTextLength: extracted.plainText.length,
+              bodyTextPreview: buildSafeDebugPreview(extracted.plainText),
+              matchesQuery: rawMatches,
+            },
+            part: {
+              source: partExtracted.source,
+              bodyTextLength: partExtracted.plainText.length,
+              bodyTextPreview: buildSafeDebugPreview(partExtracted.plainText),
+              matchesQuery: partMatches,
+            },
+            cacheBodyMatchesQuery: cachedMatches,
+          },
+          stageHints,
+        };
+
+        await client.disconnect();
+        client = null;
+        return ok(response);
+      }
+
+      case "reindex-search-cache": {
+        const { folder = "INBOX", limit = 50, cursor = null, debugSampleLimit = 20 } = body;
+        await client.selectMailbox(folder);
+
+        const admin = getAdminClient();
+        if (!admin) return err("Database client unavailable", 500);
+
+        const safeLimit = Math.min(200, Math.max(1, Number(limit) || 50));
+        const safeCursor = Number(cursor);
+        const safeDebugSampleLimit = Math.min(20, Math.max(1, Number(debugSampleLimit) || 20));
+
+        let emptyRowsQuery = admin
+          .from("email_search_cache")
+          .select("uid")
+          .eq("account_key", accountKey)
+          .eq("folder_id", folder)
+          .eq("body_text", "")
+          .order("uid", { ascending: false })
+          .limit(safeLimit);
+
+        if (Number.isFinite(safeCursor) && safeCursor > 0) {
+          emptyRowsQuery = emptyRowsQuery.lt("uid", safeCursor);
+        }
+
+        const { data: emptyRows, error: emptyRowsError } = await emptyRowsQuery;
+        if (emptyRowsError) {
+          return err(`Failed to load cache rows: ${emptyRowsError.message}`, 500);
+        }
+
+        const pendingUids = (emptyRows || [])
+          .map((row: { uid?: number | string }) => Number(row?.uid))
+          .filter((value) => Number.isFinite(value));
+
+        if (pendingUids.length === 0) {
+          await client.disconnect();
+          client = null;
+          return ok({
+            folder,
+            limit: safeLimit,
+            cursor: Number.isFinite(safeCursor) ? safeCursor : null,
+            nextCursor: null,
+            hasMore: false,
+            scannedCount: 0,
+            extractedBodyCount: 0,
+            missingRawCount: 0,
+            samples: [],
+          });
+        }
+
+        let scannedCount = 0;
+        let extractedBodyCount = 0;
+        let missingRawCount = 0;
+        const samples: Array<{
+          uid: number;
+          source: string;
+          bodyTextLength: number;
+          bodyPreview: string;
+        }> = [];
+
+        for (let i = 0; i < pendingUids.length; i += 10) {
+          const batchUids = pendingUids.slice(i, i + 10);
+          const msgs = await (client as any).fetch(batchUids.join(","), {
+            byUid: true,
+            uid: true,
+            envelope: true,
+            bodyStructure: true,
+            source: true,
+            bodyParts: [""],
+          });
+
+          const fetched = (Array.isArray(msgs) ? msgs : [msgs]).filter(Boolean);
+
+          for (const msg of fetched) {
+            const msgUid = Number(msg?.uid);
+            if (!Number.isFinite(msgUid)) continue;
+            scannedCount++;
+
+            let extracted = await extractSearchableBody(msg);
+            if ((!extracted.plainText || extracted.source === "missing-raw" || extracted.source === "empty-raw") && msg?.bodyStructure) {
+              const partFallback = await fetchSearchableBodyFromParts(client, msgUid, msg.bodyStructure);
+              if (partFallback.plainText) {
+                extracted = {
+                  normalizedText: normalizeSearchTerm(partFallback.plainText),
+                  plainText: partFallback.plainText,
+                  source: partFallback.source,
+                };
+              }
+            }
+
+            if (samples.length < safeDebugSampleLimit) {
+              samples.push({
+                uid: msgUid,
+                source: extracted.source,
+                bodyTextLength: extracted.plainText?.length || 0,
+                bodyPreview: buildSafeDebugPreview(extracted.plainText || ""),
+              });
+            }
+
+            if (!extracted.plainText || extracted.source === "missing-raw" || extracted.source === "empty-raw") {
+              missingRawCount++;
+              continue;
+            }
+
+            const { error: updateError } = await admin
+              .from("email_search_cache")
+              .update({ body_text: extracted.plainText })
+              .eq("account_key", accountKey)
+              .eq("folder_id", folder)
+              .eq("uid", msgUid)
+              .eq("body_text", "");
+
+            if (!updateError) extractedBodyCount++;
+          }
+        }
+
+        const nextCursor = Math.min(...pendingUids);
+        const { data: remainingRows } = await admin
+          .from("email_search_cache")
+          .select("uid")
+          .eq("account_key", accountKey)
+          .eq("folder_id", folder)
+          .eq("body_text", "")
+          .lt("uid", nextCursor)
+          .limit(1);
+
+        const hasMore = (remainingRows || []).length > 0;
+
+        await client.disconnect();
+        client = null;
+        return ok({
+          folder,
+          limit: safeLimit,
+          cursor: Number.isFinite(safeCursor) ? safeCursor : null,
+          nextCursor,
+          hasMore,
+          scannedCount,
+          extractedBodyCount,
+          missingRawCount,
+          samples,
+        });
       }
 
       case "delete": {

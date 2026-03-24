@@ -53,7 +53,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
   }, []);
 
   return (
-    <div className="flex h-screen w-full bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
+    <div className="flex h-screen w-full bg-zinc-950 text-zinc-100 overflow-hidden font-sans dark">
       {/* Mobile Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (

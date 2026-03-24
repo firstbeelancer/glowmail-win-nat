@@ -386,14 +386,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 {/* Authentication Method */}
                 <div className="space-y-4 pt-4 border-t border-zinc-800/50">
                   <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2">{t('settings.authMethod', lang)}</h4>
-                  <select
+                  <Select
                     value={localSettings.server.authMethod}
-                    onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, authMethod: e.target.value as any } })}
-                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                    onValueChange={(v) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, authMethod: v as any } })}
                   >
-                    <option value="password">{t('settings.authPassword', lang)}</option>
-                    <option value="app-password">{t('settings.authAppPassword', lang)}</option>
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="password">{t('settings.authPassword', lang)}</SelectItem>
+                      <SelectItem value="app-password">{t('settings.authAppPassword', lang)}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-zinc-500">
                     {lang === 'ru'
                       ? 'Для Gmail, Yandex и других провайдеров рекомендуется использовать пароль приложения.'

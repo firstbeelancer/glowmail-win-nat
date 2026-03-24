@@ -283,7 +283,7 @@ function SidebarContent({
         <div className="px-3 py-2 mb-1 flex items-center gap-2">
           <Mail className="w-3.5 h-3.5 text-emerald-400" />
           <span className="text-xs font-extrabold text-emerald-300 tracking-wide">
-            {emails.length} {lang === 'ru' ? 'писем' : 'emails'}
+            {totalEmails || emails.length} {lang === 'ru' ? 'писем' : 'emails'}
           </span>
         </div>
         <div className="flex items-center justify-between px-3 mt-1 mb-2">

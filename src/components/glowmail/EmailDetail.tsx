@@ -667,7 +667,7 @@ export const EmailDetail: React.FC<{
                           </button>
                           {settings.tigerMediaHub?.enabled && (
                             <button
-                              onClick={async (e) => {
+                              onClick={(e) => {
                                 e.stopPropagation();
                                 const tmh = settings.tigerMediaHub;
                                 if (!tmh?.projectUrl || !tmh?.apiKey || !tmh?.userId) {
@@ -678,31 +678,7 @@ export const EmailDetail: React.FC<{
                                   toast(lang === 'ru' ? 'Файл ещё не загружен' : 'File not loaded yet', { icon: '⚠️' });
                                   return;
                                 }
-                                setTmhSendingId(att.id);
-                                try {
-                                  // Fetch file as base64
-                                  const resp = await fetch(att.url);
-                                  const blob = await resp.blob();
-                                  const reader = new FileReader();
-                                  const base64 = await new Promise<string>((resolve) => {
-                                    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-                                    reader.readAsDataURL(blob);
-                                  });
-                                  await sendToTigerMediaHub({
-                                    projectUrl: tmh.projectUrl,
-                                    apiKey: tmh.apiKey,
-                                    userId: tmh.userId,
-                                    folder: tmh.defaultFolder,
-                                    fileName: att.name,
-                                    fileBase64: base64,
-                                    fileType: att.type,
-                                  });
-                                  toast.success(t('tmh.sent', lang));
-                                } catch (err: any) {
-                                  toast.error(`${t('tmh.error', lang)}: ${err.message}`);
-                                } finally {
-                                  setTmhSendingId(null);
-                                }
+                                setTmhFolderPrompt({ attId: att.id, folder: tmh.defaultFolder || '' });
                               }}
                               disabled={tmhSendingId === att.id}
                               className="p-2 bg-zinc-900/80 rounded-full text-zinc-200 hover:text-orange-400 hover:scale-110 transition-all shadow-lg disabled:opacity-50"

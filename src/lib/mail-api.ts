@@ -104,3 +104,21 @@ export async function sendEmail(params: {
   if (data?.error) throw new Error(data.error);
   return data;
 }
+
+export async function sendToTigerMediaHub(params: {
+  projectUrl: string;
+  apiKey: string;
+  userId: string;
+  folder?: string;
+  fileName: string;
+  fileBase64: string;
+  fileType: string;
+}) {
+  const { data, error } = await supabase.functions.invoke("tmh-proxy", {
+    body: params,
+  });
+
+  if (error) throw new Error(error.message || "TMH request failed");
+  if (data?.error) throw new Error(data.error);
+  return data;
+}

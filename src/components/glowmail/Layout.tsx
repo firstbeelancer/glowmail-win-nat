@@ -270,7 +270,7 @@ function SidebarContent({
           </button>
           <button
             onClick={() => onCompose?.()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500 text-zinc-950 rounded-xl font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_25px_rgba(16,185,129,0.4)] hover:-translate-y-0.5 transition-all"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 text-zinc-950 rounded-xl font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.35),0_0_40px_rgba(16,185,129,0.15)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5),0_0_60px_rgba(16,185,129,0.25)] hover:-translate-y-0.5 transition-all"
           >
             <Edit3 className="w-4 h-4" />
             {t('layout.compose', lang)}

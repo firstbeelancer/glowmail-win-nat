@@ -647,7 +647,7 @@ export const EmailDetail: React.FC<{
                           <File className="w-10 h-10 text-zinc-500" />
                         )}
                         
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -661,9 +661,60 @@ export const EmailDetail: React.FC<{
                               }
                             }}
                             className="p-2 bg-zinc-900/80 rounded-full text-zinc-200 hover:text-emerald-400 hover:scale-110 transition-all shadow-lg"
+                            title={lang === 'ru' ? 'Скачать' : 'Download'}
                           >
                             <Download className="w-5 h-5" />
                           </button>
+                          {settings.tigerMediaHub?.enabled && (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const tmh = settings.tigerMediaHub;
+                                if (!tmh?.projectUrl || !tmh?.apiKey || !tmh?.userId) {
+                                  toast.error(t('tmh.notConfigured', lang));
+                                  return;
+                                }
+                                if (!att.url) {
+                                  toast(lang === 'ru' ? 'Файл ещё не загружен' : 'File not loaded yet', { icon: '⚠️' });
+                                  return;
+                                }
+                                setTmhSendingId(att.id);
+                                try {
+                                  // Fetch file as base64
+                                  const resp = await fetch(att.url);
+                                  const blob = await resp.blob();
+                                  const reader = new FileReader();
+                                  const base64 = await new Promise<string>((resolve) => {
+                                    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+                                    reader.readAsDataURL(blob);
+                                  });
+                                  await sendToTigerMediaHub({
+                                    projectUrl: tmh.projectUrl,
+                                    apiKey: tmh.apiKey,
+                                    userId: tmh.userId,
+                                    folder: tmh.defaultFolder,
+                                    fileName: att.name,
+                                    fileBase64: base64,
+                                    fileType: att.type,
+                                  });
+                                  toast.success(t('tmh.sent', lang));
+                                } catch (err: any) {
+                                  toast.error(`${t('tmh.error', lang)}: ${err.message}`);
+                                } finally {
+                                  setTmhSendingId(null);
+                                }
+                              }}
+                              disabled={tmhSendingId === att.id}
+                              className="p-2 bg-zinc-900/80 rounded-full text-zinc-200 hover:text-orange-400 hover:scale-110 transition-all shadow-lg disabled:opacity-50"
+                              title={t('tmh.sendToTmh', lang)}
+                            >
+                              {tmhSendingId === att.id ? (
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                              ) : (
+                                <Upload className="w-5 h-5" />
+                              )}
+                            </button>
+                          )}
                         </div>
                       </div>
                       

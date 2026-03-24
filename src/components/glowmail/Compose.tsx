@@ -558,19 +558,23 @@ export function Compose({
             />
             <div className="flex items-center gap-2 ml-4">
               <span className="text-xs text-zinc-500">{t('compose.importance', lang)}</span>
-              <select
+              <Select
                 value={importance}
-                onChange={(e) => setImportance(e.target.value as 'high' | 'normal' | 'low')}
-                className={cn(
-                  "bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-xs outline-none cursor-pointer transition-colors",
-                  importance === 'high' ? "text-red-400 border-red-500/30 bg-red-500/10" :
-                  importance === 'low' ? "text-zinc-400" : "text-emerald-400"
-                )}
+                onValueChange={(v) => setImportance(v as 'high' | 'normal' | 'low')}
               >
-                <option value="high">{t('compose.high', lang)}</option>
-                <option value="normal">{t('compose.normal', lang)}</option>
-                <option value="low">{t('compose.low', lang)}</option>
-              </select>
+                <SelectTrigger className={cn(
+                  "w-auto h-7 px-2 text-xs gap-1 rounded-lg",
+                  importance === 'high' ? "text-red-400 border-red-500/30 bg-red-500/10" :
+                  importance === 'low' ? "text-muted-foreground" : "text-primary"
+                )}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="high">{t('compose.high', lang)}</SelectItem>
+                  <SelectItem value="normal">{t('compose.normal', lang)}</SelectItem>
+                  <SelectItem value="low">{t('compose.low', lang)}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

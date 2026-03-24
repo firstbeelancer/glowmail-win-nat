@@ -70,6 +70,12 @@ export async function searchEmails(folder: string, query: string, page = 1, page
   return data;
 }
 
+export async function reindexSearchCache(folder = "INBOX", limit = 50, cursor: number | null = null) {
+  const data = await callImap("reindex-search-cache", { folder, limit, cursor });
+  return data;
+}
+
+
 export async function sendEmail(params: {
   to: string[];
   cc?: string[];

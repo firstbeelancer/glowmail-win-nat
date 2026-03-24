@@ -1,10 +1,55 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useMail } from '../../store';
 import { motion } from 'framer-motion';
-import { X, User, Server, Palette, PenTool, Tags, Plus, Trash2, Image as ImageIcon, Globe, FolderTree, Loader2, Layers, Sparkles } from 'lucide-react';
+import { X, User, Server, Palette, PenTool, Tags, Plus, Trash2, Image as ImageIcon, Globe, FolderTree, Loader2, Layers, Sparkles, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { t } from '@/lib/i18n';
+import { reindexSearchCache } from '@/lib/mail-api';
+
+function ReindexButton({ lang }: { lang: string }) {
+  const [isRunning, setIsRunning] = useState(false);
+  const [progress, setProgress] = useState('');
+
+  const handleReindex = useCallback(async () => {
+    setIsRunning(true);
+    setProgress(lang === 'ru' ? 'Запуск...' : 'Starting...');
+    let cursor: number | null = null;
+    let totalProcessed = 0;
+    const BATCH = 30;
+    try {
+      for (let i = 0; i < 100; i++) {
+        const result = await reindexSearchCache("INBOX", BATCH, cursor);
+        const processed = result?.processed || 0;
+        totalProcessed += processed;
+        setProgress(lang === 'ru' ? `Обработано: ${totalProcessed}` : `Processed: ${totalProcessed}`);
+        if (!result?.nextCursor || processed < BATCH) break;
+        cursor = result.nextCursor;
+      }
+      setProgress(lang === 'ru' ? `Готово! Обработано: ${totalProcessed}` : `Done! Processed: ${totalProcessed}`);
+      toast.success(lang === 'ru' ? 'Индекс перестроен' : 'Index rebuilt');
+    } catch (e: any) {
+      setProgress(`Error: ${e.message}`);
+      toast.error(e.message);
+    } finally {
+      setIsRunning(false);
+    }
+  }, [lang]);
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        onClick={handleReindex}
+        disabled={isRunning}
+        className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-sm text-white font-medium transition-all"
+      >
+        {isRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+        {lang === 'ru' ? 'Перестроить' : 'Rebuild'}
+      </button>
+      {progress && <span className="text-xs text-zinc-400">{progress}</span>}
+    </div>
+  );
+}
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { settings, updateSettings, addFolder, addContact, allFoldersFlat } = useMail();
@@ -249,6 +294,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                       <span className="text-sm font-medium">{t('settings.russian', lang)}</span>
                     </button>
                   </div>
+                </div>
+
+                {/* Rebuild Search Index */}
+                <div className="space-y-2 pt-4 border-t border-zinc-800/50">
+                  <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4" />
+                    {lang === 'ru' ? 'Индексация поиска' : 'Search Index'}
+                  </label>
+                  <p className="text-xs text-zinc-500">
+                    {lang === 'ru'
+                      ? 'Перестроить кэш поиска для корректной работы поиска по телу писем (в т.ч. кириллица).'
+                      : 'Rebuild search cache for full-text body search (including Cyrillic).'}
+                  </p>
+                  <ReindexButton lang={lang} />
                 </div>
               </div>
             )}

@@ -68,6 +68,19 @@ function normalizeAddress(address: any): Address {
   };
 }
 
+function sanitizeDate(raw: string | undefined): string {
+  if (!raw) return new Date().toISOString();
+  try {
+    // Strip RFC 2822 comment like "(GMT)", "(UTC)", "(MSK)" etc.
+    const cleaned = raw.replace(/\s*\([^)]*\)\s*$/, "").trim();
+    const d = new Date(cleaned);
+    if (isNaN(d.getTime())) return new Date().toISOString();
+    return d.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
+
 function normalizeSearchTerm(value: string) {
   // NFKD decomposes Cyrillic: й→и+breve, ё→е+diaeresis, then diacritic strip destroys them.
   // Skip NFKD for strings containing Cyrillic — just lowercase directly.
@@ -331,7 +344,7 @@ function buildCacheRow(
     flags: msg.flags || [],
     message_id: env.messageId || "",
     in_reply_to: env.inReplyTo || "",
-    sent_at: env.date || new Date().toISOString(),
+    sent_at: sanitizeDate(env.date),
     ...(normalizedBodyText ? { body_text: normalizedBodyText } : {}),
   };
 }
@@ -1825,8 +1838,8 @@ Deno.serve(async (req) => {
           bodyPreview: string;
         }> = [];
 
-        for (let i = 0; i < pendingUids.length; i += 10) {
-          const batchUids = pendingUids.slice(i, i + 10);
+        for (let i = 0; i < pendingUids.length; i += 5) {
+          const batchUids = pendingUids.slice(i, i + 5);
           const msgs = await (client as any).fetch(batchUids.join(","), {
             byUid: true,
             uid: true,

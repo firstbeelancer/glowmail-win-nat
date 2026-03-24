@@ -97,6 +97,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     { id: 'appearance', label: t('settings.appearance', lang), icon: Palette },
     { id: 'signature', label: t('settings.signature', lang), icon: PenTool },
     { id: 'tags', label: t('settings.tags', lang), icon: Tags },
+    { id: 'integrations', label: t('settings.integrations', lang), icon: Plug },
   ] as const;
 
   return (

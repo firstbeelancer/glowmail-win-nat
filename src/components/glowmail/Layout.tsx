@@ -70,8 +70,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-              className="fixed inset-y-0 left-0 w-72 sidebar-force-dark border-r z-50 flex flex-col md:hidden"
-              style={{ background: 'linear-gradient(to bottom, rgba(6,78,59,0.4), rgba(24,24,27,0.7), rgba(24,24,27,0.5))', borderColor: 'rgba(6,95,70,0.3)' }}
+              className="fixed inset-y-0 left-0 w-72 sidebar-force-dark sidebar-force-dark-surface border-r z-50 flex flex-col md:hidden"
             >
               <SidebarContent
                 folders={folders}
@@ -92,7 +91,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
       </AnimatePresence>
 
       {/* Desktop Sidebar - resizable */}
-      <aside className="hidden md:flex sidebar-force-dark border-r flex-col relative font-medium" style={{ width: sidebarWidth, minWidth: 180, maxWidth: 400, background: 'linear-gradient(to bottom, rgba(6,78,59,0.4), rgba(24,24,27,0.7), rgba(24,24,27,0.5))', borderColor: 'rgba(6,95,70,0.3)' }}>
+      <aside className="hidden md:flex sidebar-force-dark sidebar-force-dark-surface border-r flex-col relative font-medium" style={{ width: sidebarWidth, minWidth: 180, maxWidth: 400 }}>
         <SidebarContent
           folders={folders}
           currentFolder={currentFolder}

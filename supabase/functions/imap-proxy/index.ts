@@ -87,7 +87,9 @@ function hasNonAscii(value: string) {
 
 function decodeMimeWords(value: string) {
   if (!value) return "";
-  return value.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (_match, charset, encoding, text) => {
+  // RFC 2047 §6.2: whitespace between adjacent encoded-words must be ignored
+  const collapsed = value.replace(/\?=\s+=\?/g, "?==?");
+  return collapsed.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (_match, charset, encoding, text) => {
     try {
       if (encoding.toUpperCase() === "B") {
         const binary = atob(text);

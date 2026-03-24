@@ -801,7 +801,7 @@ export function Compose({
         )}
 
         {/* Footer */}
-        <div className="h-16 border-t border-zinc-800/50 flex items-center justify-between px-4 bg-zinc-950 shrink-0">
+        <div className="border-t border-zinc-800/50 flex flex-col sm:flex-row sm:items-center sm:justify-between px-3 sm:px-4 py-2 sm:py-0 sm:h-16 bg-zinc-950 shrink-0 gap-2 sm:gap-0">
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -809,10 +809,10 @@ export function Compose({
             className="hidden" 
             multiple 
           />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <button 
               onClick={() => fileInputRef.current?.click()}
-              className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+              className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors shrink-0"
               title={t('compose.attachFiles', lang)}
             >
               <Paperclip className="w-5 h-5" />
@@ -821,7 +821,7 @@ export function Compose({
               <select
                 value={selectedSignatureId || ''}
                 onChange={(e) => setSelectedSignatureId(e.target.value)}
-                className="bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-300 px-2 py-1.5 focus:outline-none focus:border-emerald-500/50"
+                className="bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-300 px-2 py-1.5 focus:outline-none focus:border-emerald-500/50 min-w-0 max-w-[120px] sm:max-w-none truncate"
               >
                 <option value="">{t('compose.noSignature', lang)}</option>
                 {settings.signatures.map(sig => (
@@ -831,16 +831,16 @@ export function Compose({
             )}
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 justify-end">
             <button 
               onClick={handleSaveDraft}
-              className="px-4 py-2.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-sm font-medium transition-colors"
+              className="px-3 sm:px-4 py-2 sm:py-2.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-sm font-medium transition-colors whitespace-nowrap"
             >
               {t('compose.saveDraft', lang)}
             </button>
             <button
               onClick={handleSend}
-              className="flex items-center gap-2 px-6 py-2.5 bg-emerald-500 text-zinc-950 rounded-full font-semibold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] hover:scale-105 transition-all active:scale-95"
+              className="flex items-center gap-2 px-5 sm:px-6 py-2 sm:py-2.5 bg-emerald-500 text-zinc-950 rounded-full font-semibold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:shadow-[0_0_30px_rgba(16,185,129,0.6)] hover:scale-105 transition-all active:scale-95 whitespace-nowrap shrink-0"
             >
               <Send className="w-4 h-4" />
               {t('compose.send', lang)}

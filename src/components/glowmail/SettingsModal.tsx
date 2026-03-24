@@ -258,14 +258,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     <Layers className="w-4 h-4" />
                     {t('settings.layoutMode', lang)}
                   </label>
-                  <select
+                  <Select
                     value={localSettings.layoutMode}
-                    onChange={(e) => setLocalSettings({ ...localSettings, layoutMode: e.target.value as 'vertical' | 'horizontal' })}
-                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                    onValueChange={(v) => setLocalSettings({ ...localSettings, layoutMode: v as 'vertical' | 'horizontal' })}
                   >
-                    <option value="vertical">{t('settings.layoutVertical', lang)}</option>
-                    <option value="horizontal">{t('settings.layoutHorizontal', lang)}</option>
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="vertical">{t('settings.layoutVertical', lang)}</SelectItem>
+                      <SelectItem value="horizontal">{t('settings.layoutHorizontal', lang)}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-zinc-500">{t('settings.layoutModeDesc', lang)}</p>
                 </div>
 

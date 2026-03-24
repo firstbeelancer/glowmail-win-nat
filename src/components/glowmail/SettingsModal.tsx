@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useMail } from '../../store';
 import { motion } from 'framer-motion';
 import { X, User, Server, Palette, PenTool, Tags, Plus, Trash2, Image as ImageIcon, Globe, FolderTree, Loader2, Layers, Sparkles } from 'lucide-react';

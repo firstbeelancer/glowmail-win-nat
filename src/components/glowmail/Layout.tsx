@@ -263,7 +263,7 @@ function SidebarContent({
           <button
             onClick={handleFetch}
             disabled={isFetching}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 rounded-xl font-medium text-sm border border-zinc-700/50 transition-all disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 rounded-xl font-medium text-sm border transition-all disabled:opacity-50 border-[#5b8078]"
           >
             <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin text-emerald-400")} />
             {t('layout.getMail', lang)}

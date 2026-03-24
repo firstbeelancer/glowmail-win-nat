@@ -70,7 +70,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-              className="fixed inset-y-0 left-0 w-72 bg-gradient-to-b from-emerald-950/40 via-zinc-900/70 to-zinc-900/50 border-r border-emerald-800/30 z-50 flex flex-col md:hidden"
+              className="fixed inset-y-0 left-0 w-72 sidebar-force-dark bg-gradient-to-b from-emerald-950/40 via-zinc-900/70 to-zinc-900/50 border-r border-emerald-800/30 z-50 flex flex-col md:hidden"
             >
               <SidebarContent
                 folders={folders}
@@ -91,7 +91,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
       </AnimatePresence>
 
       {/* Desktop Sidebar - resizable */}
-      <aside className="hidden md:flex bg-gradient-to-b from-emerald-950/40 via-zinc-900/70 to-zinc-900/50 border-r border-emerald-800/30 flex-col relative font-medium" style={{ width: sidebarWidth, minWidth: 180, maxWidth: 400 }}>
+      <aside className="hidden md:flex sidebar-force-dark bg-gradient-to-b from-emerald-950/40 via-zinc-900/70 to-zinc-900/50 border-r border-emerald-800/30 flex-col relative font-medium" style={{ width: sidebarWidth, minWidth: 180, maxWidth: 400 }}>
         <SidebarContent
           folders={folders}
           currentFolder={currentFolder}
@@ -196,7 +196,7 @@ function SidebarContent({
   onCompose?: (prefill?: { to?: string }) => void;
   lang: 'en' | 'ru';
 }) {
-  const { fetchEmails, addFolder, emails, contacts, addContact, moveEmailToFolder, settings: mailSettings } = useMail();
+  const { fetchEmails, addFolder, emails, contacts, addContact, moveEmailToFolder, settings: mailSettings, totalEmails } = useMail();
   const folderColors = mailSettings.folderColors || {};
   const [isFetching, setIsFetching] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({ INBOX: true });
@@ -283,7 +283,7 @@ function SidebarContent({
         <div className="px-3 py-2 mb-1 flex items-center gap-2">
           <Mail className="w-3.5 h-3.5 text-emerald-400" />
           <span className="text-xs font-extrabold text-emerald-300 tracking-wide">
-            {emails.length} {lang === 'ru' ? 'писем' : 'emails'}
+            {totalEmails || emails.length} {lang === 'ru' ? 'писем' : 'emails'}
           </span>
         </div>
         <div className="flex items-center justify-between px-3 mt-1 mb-2">

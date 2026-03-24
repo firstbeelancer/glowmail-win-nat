@@ -834,16 +834,20 @@ export function Compose({
               <Paperclip className="w-5 h-5" />
             </button>
             {settings.signatures && settings.signatures.length > 0 && (
-              <select
+              <Select
                 value={selectedSignatureId || ''}
-                onChange={(e) => setSelectedSignatureId(e.target.value)}
-                className="bg-zinc-900 border border-zinc-800 rounded-lg text-sm text-zinc-300 px-2 py-1.5 focus:outline-none focus:border-emerald-500/50 min-w-0 max-w-[120px] sm:max-w-none truncate"
+                onValueChange={(v) => setSelectedSignatureId(v)}
               >
-                <option value="">{t('compose.noSignature', lang)}</option>
-                {settings.signatures.map(sig => (
-                  <option key={sig.id} value={sig.id}>{sig.name}</option>
-                ))}
-              </select>
+                <SelectTrigger className="w-auto h-8 px-2 text-xs gap-1 rounded-lg min-w-0 max-w-[140px]">
+                  <SelectValue placeholder={t('compose.noSignature', lang)} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">{t('compose.noSignature', lang)}</SelectItem>
+                  {settings.signatures.map(sig => (
+                    <SelectItem key={sig.id} value={sig.id}>{sig.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
           

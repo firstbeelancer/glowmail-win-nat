@@ -88,6 +88,17 @@
     color: hsl(240 5% 96%);
   }
 
+  .sidebar-force-dark-surface {
+    background-color: hsl(var(--zinc-950));
+    background-image: linear-gradient(
+      to bottom,
+      hsl(160 84% 24% / 0.45),
+      hsl(var(--zinc-900) / 0.94) 38%,
+      hsl(var(--zinc-900) / 0.98)
+    );
+    border-color: hsl(160 84% 22% / 0.35);
+  }
+
   body {
     @apply antialiased;
     background-color: hsl(var(--zinc-950));

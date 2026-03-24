@@ -296,8 +296,8 @@ function SidebarContent({
               <div
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]"
+                    isActive
+                    ? "bg-emerald-500/15 text-emerald-300 font-bold shadow-[inset_0_0_20px_rgba(16,185,129,0.08)]"
                     : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200",
                   dragOverFolder === folder.id && "ring-2 ring-emerald-400/50 bg-emerald-500/10"
                 )}

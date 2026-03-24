@@ -70,7 +70,8 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-              className="fixed inset-y-0 left-0 w-72 sidebar-force-dark bg-gradient-to-b from-emerald-950/40 via-zinc-900/70 to-zinc-900/50 border-r border-emerald-800/30 z-50 flex flex-col md:hidden"
+              className="fixed inset-y-0 left-0 w-72 sidebar-force-dark border-r z-50 flex flex-col md:hidden"
+              style={{ background: 'linear-gradient(to bottom, rgba(6,78,59,0.4), rgba(24,24,27,0.7), rgba(24,24,27,0.5))', borderColor: 'rgba(6,95,70,0.3)' }}
             >
               <SidebarContent
                 folders={folders}

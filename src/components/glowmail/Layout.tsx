@@ -279,7 +279,14 @@ function SidebarContent({
       )}
 
       <div className="flex-1 overflow-y-auto py-2 px-3 space-y-1">
-        <div className="flex items-center justify-between px-3 mt-2 mb-2">
+        {/* Total email counter */}
+        <div className="px-3 py-2 mb-1 flex items-center gap-2">
+          <Mail className="w-3.5 h-3.5 text-emerald-400" />
+          <span className="text-xs font-extrabold text-emerald-300 tracking-wide">
+            {emails.length} {lang === 'ru' ? 'писем' : 'emails'}
+          </span>
+        </div>
+        <div className="flex items-center justify-between px-3 mt-1 mb-2">
           <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">{t('layout.folders', lang)}</span>
           <button onClick={() => setShowNewFolderModal(true)} className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-zinc-200 transition-colors">
             <Plus className="w-3.5 h-3.5" />

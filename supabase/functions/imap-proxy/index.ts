@@ -68,7 +68,20 @@ function normalizeAddress(address: any): Address {
   };
 }
 
-function normalizeSearchTerm(value: string) {
+function sanitizeDate(raw: string | undefined): string {
+  if (!raw) return new Date().toISOString();
+  try {
+    // Strip RFC 2822 comment like "(GMT)", "(UTC)", "(MSK)" etc.
+    const cleaned = raw.replace(/\s*\([^)]*\)\s*$/, "").trim();
+    const d = new Date(cleaned);
+    if (isNaN(d.getTime())) return new Date().toISOString();
+    return d.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
+
+
   // NFKD decomposes Cyrillic: й→и+breve, ё→е+diaeresis, then diacritic strip destroys them.
   // Skip NFKD for strings containing Cyrillic — just lowercase directly.
   if (/[\u0400-\u04ff]/.test(value)) {

@@ -93,4 +93,11 @@ export type UserSettings = {
   language: 'en' | 'ru';
   aiEnabled: boolean;
   folderColors: Record<string, string>;
+  tigerMediaHub: {
+    enabled: boolean;
+    projectUrl: string;
+    apiKey: string;
+    userId: string;
+    defaultFolder: string;
+  };
 };

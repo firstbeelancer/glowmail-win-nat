@@ -186,6 +186,26 @@ const translations = {
     'settings.ldapSection': 'LDAP Address Book',
     'layout.openInWindow': 'Open in new window',
     'compose.tagsLabel': 'Tags:',
+
+    // Tiger Media Hub
+    'settings.integrations': 'Integrations',
+    'settings.integrationsSettings': 'Integrations',
+    'tmh.title': 'Tiger Media Hub',
+    'tmh.enabled': 'Enable Tiger Media Hub',
+    'tmh.enabledDesc': 'Send email attachments directly to your Tiger Media Hub storage.',
+    'tmh.projectUrl': 'Project URL',
+    'tmh.projectUrlPlaceholder': 'https://xxx.supabase.co',
+    'tmh.apiKey': 'API Key',
+    'tmh.apiKeyPlaceholder': 'Your TMH API key',
+    'tmh.userId': 'User ID',
+    'tmh.userIdPlaceholder': 'Your TMH user ID (UUID)',
+    'tmh.defaultFolder': 'Default Folder',
+    'tmh.defaultFolderPlaceholder': 'e.g., Email Attachments',
+    'tmh.sendToTmh': 'Send to TMH',
+    'tmh.sending': 'Sending...',
+    'tmh.sent': 'Sent to Tiger Media Hub!',
+    'tmh.error': 'Failed to send to TMH',
+    'tmh.notConfigured': 'Tiger Media Hub is not configured. Go to Settings → Integrations.',
   },
   ru: {
     // Layout
@@ -372,6 +392,26 @@ const translations = {
     'settings.ldapSection': 'Адресная книга LDAP',
     'layout.openInWindow': 'Открыть в новом окне',
     'compose.tagsLabel': 'Теги:',
+
+    // Tiger Media Hub
+    'settings.integrations': 'Интеграции',
+    'settings.integrationsSettings': 'Интеграции',
+    'tmh.title': 'Tiger Media Hub',
+    'tmh.enabled': 'Включить Tiger Media Hub',
+    'tmh.enabledDesc': 'Отправляйте вложения из писем напрямую в хранилище Tiger Media Hub.',
+    'tmh.projectUrl': 'URL проекта',
+    'tmh.projectUrlPlaceholder': 'https://xxx.supabase.co',
+    'tmh.apiKey': 'API-ключ',
+    'tmh.apiKeyPlaceholder': 'Ваш TMH API-ключ',
+    'tmh.userId': 'ID пользователя',
+    'tmh.userIdPlaceholder': 'UUID пользователя TMH',
+    'tmh.defaultFolder': 'Папка по умолчанию',
+    'tmh.defaultFolderPlaceholder': 'напр., Вложения из почты',
+    'tmh.sendToTmh': 'Отправить в TMH',
+    'tmh.sending': 'Отправка...',
+    'tmh.sent': 'Отправлено в Tiger Media Hub!',
+    'tmh.error': 'Ошибка отправки в TMH',
+    'tmh.notConfigured': 'Tiger Media Hub не настроен. Перейдите в Настройки → Интеграции.',
   },
 } as const;
 

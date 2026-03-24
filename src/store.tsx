@@ -251,6 +251,13 @@ export function MailProvider({ children }: { children: ReactNode }) {
       ],
       aiEnabled: true,
       folderColors: {},
+      tigerMediaHub: {
+        enabled: false,
+        projectUrl: '',
+        apiKey: '',
+        userId: '',
+        defaultFolder: '',
+      },
       ...parsedSettings,
     };
   });

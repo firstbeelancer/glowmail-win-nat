@@ -186,6 +186,26 @@ const translations = {
     'settings.ldapSection': 'LDAP Address Book',
     'layout.openInWindow': 'Open in new window',
     'compose.tagsLabel': 'Tags:',
+
+    // Tiger Media Hub
+    'settings.integrations': 'Integrations',
+    'settings.integrationsSettings': 'Integrations',
+    'tmh.title': 'Tiger Media Hub',
+    'tmh.enabled': 'Enable Tiger Media Hub',
+    'tmh.enabledDesc': 'Send email attachments directly to your Tiger Media Hub storage.',
+    'tmh.projectUrl': 'Project URL',
+    'tmh.projectUrlPlaceholder': 'https://xxx.supabase.co',
+    'tmh.apiKey': 'API Key',
+    'tmh.apiKeyPlaceholder': 'Your TMH API key',
+    'tmh.userId': 'User ID',
+    'tmh.userIdPlaceholder': 'Your TMH user ID (UUID)',
+    'tmh.defaultFolder': 'Default Folder',
+    'tmh.defaultFolderPlaceholder': 'e.g., Email Attachments',
+    'tmh.sendToTmh': 'Send to TMH',
+    'tmh.sending': 'Sending...',
+    'tmh.sent': 'Sent to Tiger Media Hub!',
+    'tmh.error': 'Failed to send to TMH',
+    'tmh.notConfigured': 'Tiger Media Hub is not configured. Go to Settings → Integrations.',
   },
   ru: {
     // Layout

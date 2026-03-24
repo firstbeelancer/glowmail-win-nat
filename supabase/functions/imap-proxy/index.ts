@@ -1838,8 +1838,8 @@ Deno.serve(async (req) => {
           bodyPreview: string;
         }> = [];
 
-        for (let i = 0; i < pendingUids.length; i += 10) {
-          const batchUids = pendingUids.slice(i, i + 10);
+        for (let i = 0; i < pendingUids.length; i += 5) {
+          const batchUids = pendingUids.slice(i, i + 5);
           const msgs = await (client as any).fetch(batchUids.join(","), {
             byUid: true,
             uid: true,

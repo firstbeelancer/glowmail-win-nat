@@ -386,7 +386,7 @@ function SidebarContent({
       <div className="px-3 py-2 border-t border-zinc-800/50">
         <button
           onClick={() => setShowAddressBook(!showAddressBook)}
-          className="flex items-center gap-2 w-full px-3 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider hover:text-zinc-300 transition-colors"
+          className="flex items-center gap-2 w-full px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors text-[#528e7a]"
         >
           <BookUser className="w-3.5 h-3.5" />
           <span className="flex-1 text-left">{t('layout.addressBook', lang)}</span>

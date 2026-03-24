@@ -427,7 +427,7 @@ export const EmailDetail: React.FC<{
         <div className="max-w-3xl mx-auto">
           {/* External sender warning */}
           {isExternalSender && (
-            <div className="mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-yellow-500/5 border border-yellow-500/20 text-yellow-500 text-xs">
+            <div className="mb-4 flex items-center gap-2 px-3 py-2 rounded-lg bg-yellow-500/5 border border-yellow-500/20 text-xs text-[#d3980d]">
               <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
               {lang === 'ru' ? `Внешний отправитель (${senderDomain})` : `External sender (${senderDomain})`}
             </div>

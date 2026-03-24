@@ -331,7 +331,7 @@ function buildCacheRow(
     flags: msg.flags || [],
     message_id: env.messageId || "",
     in_reply_to: env.inReplyTo || "",
-    sent_at: env.date || new Date().toISOString(),
+    sent_at: sanitizeDate(env.date),
     ...(normalizedBodyText ? { body_text: normalizedBodyText } : {}),
   };
 }

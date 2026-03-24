@@ -34,9 +34,20 @@ export default defineConfig(({ mode }) => ({
         start_url: "/",
         icons: [
           {
+            src: "/GlowMail_icon_192.png",
+            sizes: "192x192",
+            type: "image/png",
+          },
+          {
             src: "/GlowMail_icon.png",
             sizes: "512x512",
             type: "image/png",
+          },
+          {
+            src: "/GlowMail_icon_192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
           },
           {
             src: "/GlowMail_icon.png",

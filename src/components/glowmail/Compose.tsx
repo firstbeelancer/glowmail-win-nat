@@ -19,7 +19,7 @@ export function Compose({
   const [to, setTo] = useState(initialData?.to?.map((c) => c.email).join(', ') || '');
   const [cc, setCc] = useState(initialData?.cc?.map((c) => c.email).join(', ') || '');
   const [bcc, setBcc] = useState(initialData?.bcc?.map((c) => c.email).join(', ') || '');
-  const [showCcBcc, setShowCcBcc] = useState(true);
+  const [showCcBcc, setShowCcBcc] = useState(!!(initialData?.cc?.length || initialData?.bcc?.length));
   const [subject, setSubject] = useState(initialData?.subject || '');
   const [body, setBody] = useState(initialData?.body || '');
   const [importance, setImportance] = useState<'high' | 'normal' | 'low'>(initialData?.importance || 'normal');

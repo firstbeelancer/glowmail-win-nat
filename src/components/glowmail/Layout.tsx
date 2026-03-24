@@ -323,14 +323,14 @@ function SidebarContent({
                 >
                 <Icon className={cn("w-4 h-4", isActive ? "text-emerald-400" : "text-zinc-500")} />
                 <span className="flex-1 text-left">{translateFolderName(folder.id, folder.name, lang)}</span>
-                {count > 0 && (
+                 {count > 0 && (
                   <span className={cn(
-                    "px-2 py-0.5 rounded-full text-xs font-bold",
-                    isActive ? "bg-emerald-500/20 text-emerald-400" : "bg-zinc-800 text-zinc-300"
+                    "px-2 py-0.5 rounded-full text-xs font-extrabold",
+                    isActive ? "bg-emerald-500/25 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.3)]" : "bg-zinc-800 text-zinc-300"
                   )}>
                     {count}
                   </span>
-                )}
+                 )}
                 </button>
               </div>
               {hasChildren && isExpanded && (

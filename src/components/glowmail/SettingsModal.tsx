@@ -604,16 +604,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     <Layers className="w-4 h-4" />
                     {t('settings.groupBy', lang)}
                   </label>
-                  <select
+                  <Select
                     value={localSettings.groupBy}
-                    onChange={(e) => setLocalSettings({ ...localSettings, groupBy: e.target.value as any })}
-                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                    onValueChange={(v) => setLocalSettings({ ...localSettings, groupBy: v as any })}
                   >
-                    <option value="none">{t('settings.groupNone', lang)}</option>
-                    <option value="date">{t('settings.groupDate', lang)}</option>
-                    <option value="sender">{t('settings.groupSender', lang)}</option>
-                    <option value="tag">{t('settings.groupTag', lang)}</option>
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">{t('settings.groupNone', lang)}</SelectItem>
+                      <SelectItem value="date">{t('settings.groupDate', lang)}</SelectItem>
+                      <SelectItem value="sender">{t('settings.groupSender', lang)}</SelectItem>
+                      <SelectItem value="tag">{t('settings.groupTag', lang)}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-zinc-500">{t('settings.groupDesc', lang)}</p>
                 </div>
               </div>

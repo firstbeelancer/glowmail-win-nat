@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { t, translateFolderName } from '@/lib/i18n';
 import { EmailHtmlViewer, EmailTextViewer } from './EmailHtmlViewer';
 import toast from 'react-hot-toast';
+import { sendToTigerMediaHub } from '@/lib/mail-api';
+import { fetchEmailBody } from '@/lib/mail-api';
 
 export const EmailDetail: React.FC<{
   email: Email;

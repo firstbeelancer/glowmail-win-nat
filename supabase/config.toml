@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.smtp-proxy]
 verify_jwt = false
+
+[functions.tmh-proxy]
+verify_jwt = false

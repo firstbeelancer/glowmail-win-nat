@@ -392,6 +392,26 @@ const translations = {
     'settings.ldapSection': 'Адресная книга LDAP',
     'layout.openInWindow': 'Открыть в новом окне',
     'compose.tagsLabel': 'Теги:',
+
+    // Tiger Media Hub
+    'settings.integrations': 'Интеграции',
+    'settings.integrationsSettings': 'Интеграции',
+    'tmh.title': 'Tiger Media Hub',
+    'tmh.enabled': 'Включить Tiger Media Hub',
+    'tmh.enabledDesc': 'Отправляйте вложения из писем напрямую в хранилище Tiger Media Hub.',
+    'tmh.projectUrl': 'URL проекта',
+    'tmh.projectUrlPlaceholder': 'https://xxx.supabase.co',
+    'tmh.apiKey': 'API-ключ',
+    'tmh.apiKeyPlaceholder': 'Ваш TMH API-ключ',
+    'tmh.userId': 'ID пользователя',
+    'tmh.userIdPlaceholder': 'UUID пользователя TMH',
+    'tmh.defaultFolder': 'Папка по умолчанию',
+    'tmh.defaultFolderPlaceholder': 'напр., Вложения из почты',
+    'tmh.sendToTmh': 'Отправить в TMH',
+    'tmh.sending': 'Отправка...',
+    'tmh.sent': 'Отправлено в Tiger Media Hub!',
+    'tmh.error': 'Ошибка отправки в TMH',
+    'tmh.notConfigured': 'Tiger Media Hub не настроен. Перейдите в Настройки → Интеграции.',
   },
 } as const;
 

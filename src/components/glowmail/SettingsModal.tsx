@@ -763,6 +763,88 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             )}
+
+            {activeTab === 'integrations' && (
+              <div className="space-y-6 max-w-md">
+                {/* Tiger Media Hub */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2 flex items-center gap-2">
+                    🐯 {t('tmh.title', lang)}
+                  </h4>
+
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.tigerMediaHub?.enabled || false}
+                      onChange={(e) => setLocalSettings({
+                        ...localSettings,
+                        tigerMediaHub: { ...localSettings.tigerMediaHub, enabled: e.target.checked }
+                      })}
+                      className="w-4 h-4 rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500/50 bg-zinc-900"
+                    />
+                    <span className="text-sm text-zinc-300">{t('tmh.enabled', lang)}</span>
+                  </label>
+                  <p className="text-xs text-zinc-500 ml-7 -mt-2">{t('tmh.enabledDesc', lang)}</p>
+
+                  {localSettings.tigerMediaHub?.enabled && (
+                    <div className="space-y-4 pl-2 border-l-2 border-emerald-500/20 ml-2">
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-zinc-500">{t('tmh.projectUrl', lang)}</label>
+                        <input
+                          type="url"
+                          value={localSettings.tigerMediaHub?.projectUrl || ''}
+                          onChange={(e) => setLocalSettings({
+                            ...localSettings,
+                            tigerMediaHub: { ...localSettings.tigerMediaHub, projectUrl: e.target.value }
+                          })}
+                          placeholder={t('tmh.projectUrlPlaceholder', lang)}
+                          className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-zinc-500">{t('tmh.apiKey', lang)}</label>
+                        <input
+                          type="password"
+                          value={localSettings.tigerMediaHub?.apiKey || ''}
+                          onChange={(e) => setLocalSettings({
+                            ...localSettings,
+                            tigerMediaHub: { ...localSettings.tigerMediaHub, apiKey: e.target.value }
+                          })}
+                          placeholder={t('tmh.apiKeyPlaceholder', lang)}
+                          className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-zinc-500">{t('tmh.userId', lang)}</label>
+                        <input
+                          type="text"
+                          value={localSettings.tigerMediaHub?.userId || ''}
+                          onChange={(e) => setLocalSettings({
+                            ...localSettings,
+                            tigerMediaHub: { ...localSettings.tigerMediaHub, userId: e.target.value }
+                          })}
+                          placeholder={t('tmh.userIdPlaceholder', lang)}
+                          className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-zinc-500">{t('tmh.defaultFolder', lang)}</label>
+                        <input
+                          type="text"
+                          value={localSettings.tigerMediaHub?.defaultFolder || ''}
+                          onChange={(e) => setLocalSettings({
+                            ...localSettings,
+                            tigerMediaHub: { ...localSettings.tigerMediaHub, defaultFolder: e.target.value }
+                          })}
+                          placeholder={t('tmh.defaultFolderPlaceholder', lang)}
+                          className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="h-16 border-t border-zinc-800/50 flex items-center justify-end px-6 gap-3 shrink-0 bg-zinc-900/30">

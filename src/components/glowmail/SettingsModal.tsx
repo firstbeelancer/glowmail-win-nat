@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { t } from '@/lib/i18n';
 import { reindexSearchCache } from '@/lib/mail-api';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 function ReindexButton({ lang }: { lang: string }) {
   const [isRunning, setIsRunning] = useState(false);
@@ -190,19 +191,23 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-zinc-400">{t('settings.syncInterval', lang)}</label>
-                  <select
-                    value={localSettings.syncInterval}
-                    onChange={(e) => setLocalSettings({ ...localSettings, syncInterval: parseInt(e.target.value) })}
-                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                  <Select
+                    value={String(localSettings.syncInterval)}
+                    onValueChange={(v) => setLocalSettings({ ...localSettings, syncInterval: parseInt(v) })}
                   >
-                    <option value={1}>1 {t('settings.minutes', lang)}</option>
-                    <option value={5}>5 {t('settings.minutes', lang)}</option>
-                    <option value={10}>10 {t('settings.minutes', lang)}</option>
-                    <option value={15}>15 {t('settings.minutes', lang)}</option>
-                    <option value={30}>30 {t('settings.minutes', lang)}</option>
-                    <option value={60}>60 {t('settings.minutes', lang)}</option>
-                    <option value={0}>{t('settings.syncManual', lang)}</option>
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 {t('settings.minutes', lang)}</SelectItem>
+                      <SelectItem value="5">5 {t('settings.minutes', lang)}</SelectItem>
+                      <SelectItem value="10">10 {t('settings.minutes', lang)}</SelectItem>
+                      <SelectItem value="15">15 {t('settings.minutes', lang)}</SelectItem>
+                      <SelectItem value="30">30 {t('settings.minutes', lang)}</SelectItem>
+                      <SelectItem value="60">60 {t('settings.minutes', lang)}</SelectItem>
+                      <SelectItem value="0">{t('settings.syncManual', lang)}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-zinc-500">{t('settings.syncDesc', lang)}</p>
                 </div>
 
@@ -253,14 +258,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     <Layers className="w-4 h-4" />
                     {t('settings.layoutMode', lang)}
                   </label>
-                  <select
+                  <Select
                     value={localSettings.layoutMode}
-                    onChange={(e) => setLocalSettings({ ...localSettings, layoutMode: e.target.value as 'vertical' | 'horizontal' })}
-                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                    onValueChange={(v) => setLocalSettings({ ...localSettings, layoutMode: v as 'vertical' | 'horizontal' })}
                   >
-                    <option value="vertical">{t('settings.layoutVertical', lang)}</option>
-                    <option value="horizontal">{t('settings.layoutHorizontal', lang)}</option>
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="vertical">{t('settings.layoutVertical', lang)}</SelectItem>
+                      <SelectItem value="horizontal">{t('settings.layoutHorizontal', lang)}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-zinc-500">{t('settings.layoutModeDesc', lang)}</p>
                 </div>
 
@@ -377,14 +386,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 {/* Authentication Method */}
                 <div className="space-y-4 pt-4 border-t border-zinc-800/50">
                   <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2">{t('settings.authMethod', lang)}</h4>
-                  <select
+                  <Select
                     value={localSettings.server.authMethod}
-                    onChange={(e) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, authMethod: e.target.value as any } })}
-                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                    onValueChange={(v) => setLocalSettings({ ...localSettings, server: { ...localSettings.server, authMethod: v as any } })}
                   >
-                    <option value="password">{t('settings.authPassword', lang)}</option>
-                    <option value="app-password">{t('settings.authAppPassword', lang)}</option>
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="password">{t('settings.authPassword', lang)}</SelectItem>
+                      <SelectItem value="app-password">{t('settings.authAppPassword', lang)}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-zinc-500">
                     {lang === 'ru'
                       ? 'Для Gmail, Yandex и других провайдеров рекомендуется использовать пароль приложения.'
@@ -483,21 +496,25 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
                 <div className="space-y-4 pt-4 border-t border-zinc-800/50">
                   <label className="text-sm font-medium text-zinc-400">{lang === 'ru' ? 'Шрифт композера' : 'Composer Font'}</label>
-                  <select
+                  <Select
                     value={localSettings.composerFont || 'Involve'}
-                    onChange={(e) => setLocalSettings({ ...localSettings, composerFont: e.target.value })}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-zinc-300 outline-none cursor-pointer"
+                    onValueChange={(v) => setLocalSettings({ ...localSettings, composerFont: v })}
                   >
-                    <option value="Involve">Involve</option>
-                    <option value="Inter">Inter</option>
-                    <option value="Arial">Arial</option>
-                    <option value="Times New Roman">Times New Roman</option>
-                    <option value="Courier New">Courier New</option>
-                    <option value="Arimo">Arimo</option>
-                    {localSettings.customFonts?.map(font => (
-                      <option key={font.name} value={font.name}>{font.name}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Involve">Involve</SelectItem>
+                      <SelectItem value="Inter">Inter</SelectItem>
+                      <SelectItem value="Arial">Arial</SelectItem>
+                      <SelectItem value="Times New Roman">Times New Roman</SelectItem>
+                      <SelectItem value="Courier New">Courier New</SelectItem>
+                      <SelectItem value="Arimo">Arimo</SelectItem>
+                      {localSettings.customFonts?.map(font => (
+                        <SelectItem key={font.name} value={font.name}>{font.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-4 pt-4 border-t border-zinc-800/50">
@@ -587,16 +604,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     <Layers className="w-4 h-4" />
                     {t('settings.groupBy', lang)}
                   </label>
-                  <select
+                  <Select
                     value={localSettings.groupBy}
-                    onChange={(e) => setLocalSettings({ ...localSettings, groupBy: e.target.value as any })}
-                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                    onValueChange={(v) => setLocalSettings({ ...localSettings, groupBy: v as any })}
                   >
-                    <option value="none">{t('settings.groupNone', lang)}</option>
-                    <option value="date">{t('settings.groupDate', lang)}</option>
-                    <option value="sender">{t('settings.groupSender', lang)}</option>
-                    <option value="tag">{t('settings.groupTag', lang)}</option>
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">{t('settings.groupNone', lang)}</SelectItem>
+                      <SelectItem value="date">{t('settings.groupDate', lang)}</SelectItem>
+                      <SelectItem value="sender">{t('settings.groupSender', lang)}</SelectItem>
+                      <SelectItem value="tag">{t('settings.groupTag', lang)}</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-zinc-500">{t('settings.groupDesc', lang)}</p>
                 </div>
               </div>

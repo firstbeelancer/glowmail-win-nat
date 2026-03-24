@@ -92,7 +92,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
       </AnimatePresence>
 
       {/* Desktop Sidebar - resizable */}
-      <aside className="hidden md:flex sidebar-force-dark bg-gradient-to-b from-emerald-950/40 via-zinc-900/70 to-zinc-900/50 border-r border-emerald-800/30 flex-col relative font-medium" style={{ width: sidebarWidth, minWidth: 180, maxWidth: 400 }}>
+      <aside className="hidden md:flex sidebar-force-dark border-r flex-col relative font-medium" style={{ width: sidebarWidth, minWidth: 180, maxWidth: 400, background: 'linear-gradient(to bottom, rgba(6,78,59,0.4), rgba(24,24,27,0.7), rgba(24,24,27,0.5))', borderColor: 'rgba(6,95,70,0.3)' }}>
         <SidebarContent
           folders={folders}
           currentFolder={currentFolder}

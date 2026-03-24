@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { t } from '@/lib/i18n';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function Compose({
   onClose,

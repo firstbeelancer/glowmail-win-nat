@@ -145,7 +145,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
           </div>
 
           <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-full hover:bg-zinc-800 transition-colors" title={lang === 'ru' ? 'Настройки' : 'Settings'}>
-            <Settings className="w-5 h-5 text-zinc-400" />
+            <Settings className="w-5 h-5 text-[#72cbab] font-bold" />
           </button>
           <button
             onClick={() => {
@@ -263,7 +263,7 @@ function SidebarContent({
           <button
             onClick={handleFetch}
             disabled={isFetching}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 rounded-xl font-medium text-sm border border-zinc-700/50 transition-all disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 rounded-xl font-medium text-sm border transition-all disabled:opacity-50 border-[#5b8078]"
           >
             <RefreshCw className={cn("w-4 h-4", isFetching && "animate-spin text-emerald-400")} />
             {t('layout.getMail', lang)}
@@ -386,7 +386,7 @@ function SidebarContent({
       <div className="px-3 py-2 border-t border-zinc-800/50">
         <button
           onClick={() => setShowAddressBook(!showAddressBook)}
-          className="flex items-center gap-2 w-full px-3 py-2 text-xs font-semibold text-zinc-500 uppercase tracking-wider hover:text-zinc-300 transition-colors"
+          className="flex items-center gap-2 w-full px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-colors text-[#528e7a]"
         >
           <BookUser className="w-3.5 h-3.5" />
           <span className="flex-1 text-left">{t('layout.addressBook', lang)}</span>

@@ -625,31 +625,39 @@ export function Compose({
         </div>
 
         <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/30 shrink-0 overflow-x-auto overflow-y-visible relative" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
-          <select 
-            onChange={(e) => execCommand('fontName', e.target.value)}
+          <Select
+            onValueChange={(v) => execCommand('fontName', v)}
             defaultValue={settings.composerFont || 'Involve'}
-            className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 outline-none cursor-pointer mr-1"
           >
-            <option value="Involve">Involve</option>
-            <option value="Inter">Inter</option>
-            <option value="Arial">Arial</option>
-            <option value="Times New Roman">Times New Roman</option>
-            <option value="Courier New">Courier New</option>
-            <option value="Arimo">Arimo</option>
-            {settings.customFonts?.map(font => (
-              <option key={font.name} value={font.name}>{font.name}</option>
-            ))}
-          </select>
-          <select 
-            onChange={(e) => execCommand('fontSize', e.target.value)}
+            <SelectTrigger className="w-auto h-7 px-2 text-xs gap-1 rounded-lg mr-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Involve">Involve</SelectItem>
+              <SelectItem value="Inter">Inter</SelectItem>
+              <SelectItem value="Arial">Arial</SelectItem>
+              <SelectItem value="Times New Roman">Times New Roman</SelectItem>
+              <SelectItem value="Courier New">Courier New</SelectItem>
+              <SelectItem value="Arimo">Arimo</SelectItem>
+              {settings.customFonts?.map(font => (
+                <SelectItem key={font.name} value={font.name}>{font.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            onValueChange={(v) => execCommand('fontSize', v)}
             defaultValue="3"
-            className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs text-zinc-300 outline-none cursor-pointer mr-2"
           >
-            <option value="1">{t('compose.small', lang)}</option>
-            <option value="3">{t('compose.normal', lang)}</option>
-            <option value="5">{t('compose.large', lang)}</option>
-            <option value="7">{t('compose.huge', lang)}</option>
-          </select>
+            <SelectTrigger className="w-auto h-7 px-2 text-xs gap-1 rounded-lg mr-2">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">{t('compose.small', lang)}</SelectItem>
+              <SelectItem value="3">{t('compose.normal', lang)}</SelectItem>
+              <SelectItem value="5">{t('compose.large', lang)}</SelectItem>
+              <SelectItem value="7">{t('compose.huge', lang)}</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="w-px h-4 bg-zinc-800 mx-1" />
           <button onClick={() => execCommand('bold')} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"><Bold className="w-4 h-4" /></button>
           <button onClick={() => execCommand('italic')} className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 transition-colors"><Italic className="w-4 h-4" /></button>

@@ -145,7 +145,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
           </div>
 
           <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-full hover:bg-zinc-800 transition-colors" title={lang === 'ru' ? 'Настройки' : 'Settings'}>
-            <Settings className="w-5 h-5 text-zinc-400" />
+            <Settings className="w-5 h-5 text-[#72cbab] font-bold" />
           </button>
           <button
             onClick={() => {

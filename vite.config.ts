@@ -34,17 +34,12 @@ export default defineConfig(({ mode }) => ({
         start_url: "/",
         icons: [
           {
-            src: "/pwa-icon-192.png",
-            sizes: "192x192",
-            type: "image/png",
-          },
-          {
-            src: "/pwa-icon-512.png",
+            src: "/GlowMail_icon.png",
             sizes: "512x512",
             type: "image/png",
           },
           {
-            src: "/pwa-icon-512.png",
+            src: "/GlowMail_icon.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",

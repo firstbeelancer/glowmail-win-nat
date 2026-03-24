@@ -178,8 +178,8 @@ function MailApp() {
     }
 
     return settings.language === 'ru'
-      ? '<p style="opacity:0.7">Текст письма не удалось загрузить.</p>'
-      : '<p style="opacity:0.7">Could not load email text.</p>';
+      ? '<p style="opacity:0.7">Письмо загружается... Оставайтесь на связи</p>'
+      : '<p style="opacity:0.7">Email is loading... Stay tuned</p>';
   };
 
   const handleSelectEmail = async (email: Email) => {

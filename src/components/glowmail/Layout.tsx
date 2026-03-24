@@ -70,7 +70,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-              className="fixed inset-y-0 left-0 w-72 bg-zinc-900 border-r border-zinc-800/50 z-50 flex flex-col md:hidden"
+              className="fixed inset-y-0 left-0 w-72 bg-gradient-to-b from-emerald-950/40 via-zinc-900/70 to-zinc-900/50 border-r border-emerald-800/30 z-50 flex flex-col md:hidden"
             >
               <SidebarContent
                 folders={folders}
@@ -91,7 +91,7 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
       </AnimatePresence>
 
       {/* Desktop Sidebar - resizable */}
-      <aside className="hidden md:flex bg-zinc-900/50 border-r border-zinc-800/50 flex-col relative font-medium" style={{ width: sidebarWidth, minWidth: 180, maxWidth: 400 }}>
+      <aside className="hidden md:flex bg-gradient-to-b from-emerald-950/40 via-zinc-900/70 to-zinc-900/50 border-r border-emerald-800/30 flex-col relative font-medium" style={{ width: sidebarWidth, minWidth: 180, maxWidth: 400 }}>
         <SidebarContent
           folders={folders}
           currentFolder={currentFolder}
@@ -270,7 +270,7 @@ function SidebarContent({
           </button>
           <button
             onClick={() => onCompose?.()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500 text-zinc-950 rounded-xl font-bold text-sm shadow-[0_0_15px_rgba(16,185,129,0.2)] hover:shadow-[0_0_25px_rgba(16,185,129,0.4)] hover:-translate-y-0.5 transition-all"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 text-zinc-950 rounded-xl font-bold text-sm shadow-[0_0_20px_rgba(16,185,129,0.35),0_0_40px_rgba(16,185,129,0.15)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5),0_0_60px_rgba(16,185,129,0.25)] hover:-translate-y-0.5 transition-all"
           >
             <Edit3 className="w-4 h-4" />
             {t('layout.compose', lang)}
@@ -279,7 +279,14 @@ function SidebarContent({
       )}
 
       <div className="flex-1 overflow-y-auto py-2 px-3 space-y-1">
-        <div className="flex items-center justify-between px-3 mt-2 mb-2">
+        {/* Total email counter */}
+        <div className="px-3 py-2 mb-1 flex items-center gap-2">
+          <Mail className="w-3.5 h-3.5 text-emerald-400" />
+          <span className="text-xs font-extrabold text-emerald-300 tracking-wide">
+            {emails.length} {lang === 'ru' ? 'писем' : 'emails'}
+          </span>
+        </div>
+        <div className="flex items-center justify-between px-3 mt-1 mb-2">
           <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">{t('layout.folders', lang)}</span>
           <button onClick={() => setShowNewFolderModal(true)} className="p-1 hover:bg-zinc-800 rounded text-zinc-400 hover:text-zinc-200 transition-colors">
             <Plus className="w-3.5 h-3.5" />
@@ -296,8 +303,8 @@ function SidebarContent({
               <div
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
-                  isActive
-                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]"
+                    isActive
+                    ? "bg-emerald-500/15 text-emerald-300 font-bold shadow-[inset_0_0_20px_rgba(16,185,129,0.08)]"
                     : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200",
                   dragOverFolder === folder.id && "ring-2 ring-emerald-400/50 bg-emerald-500/10"
                 )}
@@ -323,14 +330,14 @@ function SidebarContent({
                 >
                 <Icon className={cn("w-4 h-4", isActive ? "text-emerald-400" : "text-zinc-500")} />
                 <span className="flex-1 text-left">{translateFolderName(folder.id, folder.name, lang)}</span>
-                {count > 0 && (
+                 {count > 0 && (
                   <span className={cn(
-                    "px-2 py-0.5 rounded-full text-xs font-bold",
-                    isActive ? "bg-emerald-500/20 text-emerald-400" : "bg-zinc-800 text-zinc-300"
+                    "px-2 py-0.5 rounded-full text-xs font-extrabold",
+                    isActive ? "bg-emerald-500/25 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.3)]" : "bg-zinc-800 text-zinc-300"
                   )}>
                     {count}
                   </span>
-                )}
+                 )}
                 </button>
               </div>
               {hasChildren && isExpanded && (

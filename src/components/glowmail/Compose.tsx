@@ -691,37 +691,40 @@ export function Compose({
               <Code className="w-4 h-4" />
             </button>
             {showCodeMenu && (
-              <div className="absolute left-0 bottom-full mb-2 w-52 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-[60]">
-                <div className="p-1 flex flex-col">
-                  <span className="px-3 py-1.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">{lang === 'ru' ? 'Вставить код' : 'Insert Code'}</span>
+              <div className="absolute left-0 bottom-full mb-2 w-52 rounded-2xl shadow-2xl overflow-hidden z-[60]" style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}>
+                <div className="p-2 flex flex-col gap-0.5">
+                  <span className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'hsl(var(--zinc-500))' }}>{lang === 'ru' ? 'Вставить код' : 'Insert Code'}</span>
                   <button
                     onClick={() => insertCodeElement('inline')}
-                    className="flex items-center gap-2.5 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                    className="flex items-center gap-2.5 text-left px-3 py-2.5 text-sm rounded-xl transition-colors" style={{ color: 'hsl(var(--foreground))' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--zinc-200))'; }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <Braces className="w-4 h-4 text-zinc-500" />
+                    <Braces className="w-4 h-4" style={{ color: 'hsl(var(--zinc-500))' }} />
                     <div>
                       <div className="font-medium">Inline code</div>
-                      <div className="text-[11px] text-zinc-500">{lang === 'ru' ? 'Код внутри строки' : 'Code within text'}</div>
+                      <div className="text-[11px]" style={{ color: 'hsl(var(--zinc-500))' }}>{lang === 'ru' ? 'Код внутри строки' : 'Code within text'}</div>
                     </div>
                   </button>
                   <button
                     onClick={() => insertCodeElement('block')}
-                    className="flex items-center gap-2.5 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                    className="flex items-center gap-2.5 text-left px-3 py-2.5 text-sm rounded-xl transition-colors" style={{ color: 'hsl(var(--foreground))' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--zinc-200))'; }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <Code className="w-4 h-4 text-zinc-500" />
+                    <Code className="w-4 h-4" style={{ color: 'hsl(var(--zinc-500))' }} />
                     <div>
                       <div className="font-medium">Code block</div>
-                      <div className="text-[11px] text-zinc-500">{lang === 'ru' ? 'Многострочный код' : 'Multi-line code'}</div>
+                      <div className="text-[11px]" style={{ color: 'hsl(var(--zinc-500))' }}>{lang === 'ru' ? 'Многострочный код' : 'Multi-line code'}</div>
                     </div>
                   </button>
                   <button
                     onClick={() => insertCodeElement('log')}
-                    className="flex items-center gap-2.5 text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors"
+                    className="flex items-center gap-2.5 text-left px-3 py-2.5 text-sm rounded-xl transition-colors" style={{ color: 'hsl(var(--foreground))' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--zinc-200))'; }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <Terminal className="w-4 h-4 text-zinc-500" />
+                    <Terminal className="w-4 h-4" style={{ color: 'hsl(var(--zinc-500))' }} />
                     <div>
                       <div className="font-medium">{lang === 'ru' ? 'Лог / Терминал' : 'Log / Terminal'}</div>
-                      <div className="text-[11px] text-zinc-500">{lang === 'ru' ? 'Логи, конфиги, вывод' : 'Logs, configs, output'}</div>
+                      <div className="text-[11px]" style={{ color: 'hsl(var(--zinc-500))' }}>{lang === 'ru' ? 'Логи, конфиги, вывод' : 'Logs, configs, output'}</div>
                     </div>
                   </button>
                 </div>

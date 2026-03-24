@@ -748,13 +748,13 @@ export function Compose({
             </button>
 
             {showAiMenu && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-[60]">
+              <div className="absolute right-0 top-full mt-2 w-48 bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-[60]">
                 <div className="p-1 flex flex-col">
-                  <button onClick={() => handleAiAction('spellcheck')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">{t('compose.proofread', lang)}</button>
-                  <button onClick={() => handleAiAction('professional')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">{t('compose.makeProfessional', lang)}</button>
-                  <button onClick={() => handleAiAction('friendly')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">{t('compose.makeFriendly', lang)}</button>
-                  <button onClick={() => handleAiAction('rewrite')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">{t('compose.rewrite', lang)}</button>
-                  <button onClick={() => handleAiAction('translate')} className="text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 rounded-lg transition-colors">{t('compose.autoTranslate', lang)}</button>
+                  <button onClick={() => handleAiAction('spellcheck')} className="text-left px-3 py-2 text-sm text-foreground/70 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors">{t('compose.proofread', lang)}</button>
+                  <button onClick={() => handleAiAction('professional')} className="text-left px-3 py-2 text-sm text-foreground/70 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors">{t('compose.makeProfessional', lang)}</button>
+                  <button onClick={() => handleAiAction('friendly')} className="text-left px-3 py-2 text-sm text-foreground/70 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors">{t('compose.makeFriendly', lang)}</button>
+                  <button onClick={() => handleAiAction('rewrite')} className="text-left px-3 py-2 text-sm text-foreground/70 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors">{t('compose.rewrite', lang)}</button>
+                  <button onClick={() => handleAiAction('translate')} className="text-left px-3 py-2 text-sm text-foreground/70 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors">{t('compose.autoTranslate', lang)}</button>
                 </div>
               </div>
             )}

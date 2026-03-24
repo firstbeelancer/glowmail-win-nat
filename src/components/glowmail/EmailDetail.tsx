@@ -31,6 +31,7 @@ export const EmailDetail: React.FC<{
   const [showMovePicker, setShowMovePicker] = useState(false);
   const [showCopyPicker, setShowCopyPicker] = useState(false);
   const [tmhSendingId, setTmhSendingId] = useState<string | null>(null);
+  const [tmhFolderPrompt, setTmhFolderPrompt] = useState<{ attId: string; folder: string } | null>(null);
 
   // Keyboard shortcuts for next/prev
   useEffect(() => {
@@ -666,7 +667,7 @@ export const EmailDetail: React.FC<{
                           </button>
                           {settings.tigerMediaHub?.enabled && (
                             <button
-                              onClick={async (e) => {
+                              onClick={(e) => {
                                 e.stopPropagation();
                                 const tmh = settings.tigerMediaHub;
                                 if (!tmh?.projectUrl || !tmh?.apiKey || !tmh?.userId) {
@@ -677,31 +678,7 @@ export const EmailDetail: React.FC<{
                                   toast(lang === 'ru' ? 'Файл ещё не загружен' : 'File not loaded yet', { icon: '⚠️' });
                                   return;
                                 }
-                                setTmhSendingId(att.id);
-                                try {
-                                  // Fetch file as base64
-                                  const resp = await fetch(att.url);
-                                  const blob = await resp.blob();
-                                  const reader = new FileReader();
-                                  const base64 = await new Promise<string>((resolve) => {
-                                    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-                                    reader.readAsDataURL(blob);
-                                  });
-                                  await sendToTigerMediaHub({
-                                    projectUrl: tmh.projectUrl,
-                                    apiKey: tmh.apiKey,
-                                    userId: tmh.userId,
-                                    folder: tmh.defaultFolder,
-                                    fileName: att.name,
-                                    fileBase64: base64,
-                                    fileType: att.type,
-                                  });
-                                  toast.success(t('tmh.sent', lang));
-                                } catch (err: any) {
-                                  toast.error(`${t('tmh.error', lang)}: ${err.message}`);
-                                } finally {
-                                  setTmhSendingId(null);
-                                }
+                                setTmhFolderPrompt({ attId: att.id, folder: tmh.defaultFolder || '' });
                               }}
                               disabled={tmhSendingId === att.id}
                               className="p-2 bg-zinc-900/80 rounded-full text-zinc-200 hover:text-orange-400 hover:scale-110 transition-all shadow-lg disabled:opacity-50"
@@ -787,6 +764,83 @@ export const EmailDetail: React.FC<{
           <ChevronDown className="w-4 h-4" />
         </button>
       </div>
+
+      {/* TMH Folder Selection Modal */}
+      <AnimatePresence>
+        {tmhFolderPrompt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setTmhFolderPrompt(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 w-80 shadow-2xl"
+            >
+              <h3 className="text-sm font-semibold text-zinc-200 mb-3">
+                {lang === 'ru' ? 'Папка в Tiger Media Hub' : 'Tiger Media Hub Folder'}
+              </h3>
+              <input
+                type="text"
+                value={tmhFolderPrompt.folder}
+                onChange={(e) => setTmhFolderPrompt({ ...tmhFolderPrompt, folder: e.target.value })}
+                placeholder={lang === 'ru' ? 'Папка (пусто = корень)' : 'Folder (empty = root)'}
+                className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-orange-500 mb-4"
+                autoFocus
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setTmhFolderPrompt(null)}
+                  className="px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-200 transition-colors"
+                >
+                  {lang === 'ru' ? 'Отмена' : 'Cancel'}
+                </button>
+                <button
+                  onClick={async () => {
+                    const att = email.attachments.find(a => a.id === tmhFolderPrompt.attId);
+                    if (!att || !att.url) return;
+                    const tmh = settings.tigerMediaHub;
+                    const folder = tmhFolderPrompt.folder;
+                    setTmhFolderPrompt(null);
+                    setTmhSendingId(att.id);
+                    try {
+                      const resp = await fetch(att.url);
+                      const blob = await resp.blob();
+                      const reader = new FileReader();
+                      const base64 = await new Promise<string>((resolve) => {
+                        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+                        reader.readAsDataURL(blob);
+                      });
+                      await sendToTigerMediaHub({
+                        projectUrl: tmh.projectUrl,
+                        apiKey: tmh.apiKey,
+                        userId: tmh.userId,
+                        folder,
+                        fileName: att.name,
+                        fileBase64: base64,
+                        fileType: att.type,
+                      });
+                      toast.success(t('tmh.sent', lang));
+                    } catch (err: any) {
+                      toast.error(`${t('tmh.error', lang)}: ${err.message}`);
+                    } finally {
+                      setTmhSendingId(null);
+                    }
+                  }}
+                  className="px-4 py-1.5 text-sm bg-orange-600 hover:bg-orange-500 text-white rounded-lg transition-colors"
+                >
+                  {lang === 'ru' ? 'Отправить' : 'Send'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

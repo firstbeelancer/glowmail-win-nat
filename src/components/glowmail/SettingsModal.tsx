@@ -250,6 +250,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     </button>
                   </div>
                 </div>
+
+                {/* Rebuild Search Index */}
+                <div className="space-y-2 pt-4 border-t border-zinc-800/50">
+                  <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4" />
+                    {lang === 'ru' ? 'Индексация поиска' : 'Search Index'}
+                  </label>
+                  <p className="text-xs text-zinc-500">
+                    {lang === 'ru'
+                      ? 'Перестроить кэш поиска для корректной работы поиска по телу писем (в т.ч. кириллица).'
+                      : 'Rebuild search cache for full-text body search (including Cyrillic).'}
+                  </p>
+                  <ReindexButton lang={lang} />
+                </div>
               </div>
             )}
 

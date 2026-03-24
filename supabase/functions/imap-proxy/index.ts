@@ -81,7 +81,7 @@ function sanitizeDate(raw: string | undefined): string {
   }
 }
 
-
+function normalizeSearchTerm(value: string) {
   // NFKD decomposes Cyrillic: й→и+breve, ё→е+diaeresis, then diacritic strip destroys them.
   // Skip NFKD for strings containing Cyrillic — just lowercase directly.
   if (/[\u0400-\u04ff]/.test(value)) {

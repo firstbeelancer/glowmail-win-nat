@@ -80,6 +80,12 @@
     --zinc-950: 240 10% 4%;
     --emerald-400: #34d399;
     --emerald-500: #10b981;
+    --background: 240 10% 4%;
+    --foreground: 240 5% 96%;
+    --border: 240 4% 16%;
+    --card: 240 6% 10%;
+    --card-foreground: 240 5% 96%;
+    color: hsl(240 5% 96%);
   }
 
   body {

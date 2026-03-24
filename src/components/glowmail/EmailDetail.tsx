@@ -31,6 +31,7 @@ export const EmailDetail: React.FC<{
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [showMovePicker, setShowMovePicker] = useState(false);
   const [showCopyPicker, setShowCopyPicker] = useState(false);
+  const [tmhSendingId, setTmhSendingId] = useState<string | null>(null);
 
   // Keyboard shortcuts for next/prev
   useEffect(() => {

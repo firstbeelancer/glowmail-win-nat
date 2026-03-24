@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "pwa-icon-192.png", "pwa-icon-512.png", "fonts/Involve-VF.ttf"],
+      includeAssets: ["GlowMail_icon.png", "fonts/Involve-VF.ttf"],
       workbox: {
         navigateFallbackDenylist: [/^\/~oauth/],
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,ttf}"],

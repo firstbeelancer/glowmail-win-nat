@@ -751,13 +751,13 @@ export function Compose({
             </button>
 
             {showAiMenu && (
-              <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl shadow-2xl overflow-hidden z-[60]">
+              <div className="absolute right-0 bottom-full mb-2 w-56 rounded-2xl shadow-2xl overflow-hidden z-[60]" style={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}>
                 <div className="p-2 flex flex-col gap-0.5">
                   <button onClick={() => handleAiAction('spellcheck')} className="text-left px-4 py-2.5 text-sm font-medium text-white bg-[#1CA88E] rounded-xl transition-colors hover:bg-[#179b82]">{t('compose.proofread', lang)}</button>
-                  <button onClick={() => handleAiAction('professional')} className="text-left px-4 py-2.5 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors">{t('compose.makeProfessional', lang)}</button>
-                  <button onClick={() => handleAiAction('friendly')} className="text-left px-4 py-2.5 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors">{t('compose.makeFriendly', lang)}</button>
-                  <button onClick={() => handleAiAction('rewrite')} className="text-left px-4 py-2.5 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors">{t('compose.rewrite', lang)}</button>
-                  <button onClick={() => handleAiAction('translate')} className="text-left px-4 py-2.5 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors">{t('compose.autoTranslate', lang)}</button>
+                  <button onClick={() => handleAiAction('professional')} className="text-left px-4 py-2.5 text-sm rounded-xl transition-colors" style={{ color: 'hsl(var(--foreground))' }} onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--zinc-200))'; }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>{t('compose.makeProfessional', lang)}</button>
+                  <button onClick={() => handleAiAction('friendly')} className="text-left px-4 py-2.5 text-sm rounded-xl transition-colors" style={{ color: 'hsl(var(--foreground))' }} onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--zinc-200))'; }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>{t('compose.makeFriendly', lang)}</button>
+                  <button onClick={() => handleAiAction('rewrite')} className="text-left px-4 py-2.5 text-sm rounded-xl transition-colors" style={{ color: 'hsl(var(--foreground))' }} onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--zinc-200))'; }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>{t('compose.rewrite', lang)}</button>
+                  <button onClick={() => handleAiAction('translate')} className="text-left px-4 py-2.5 text-sm rounded-xl transition-colors" style={{ color: 'hsl(var(--foreground))' }} onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--zinc-200))'; }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>{t('compose.autoTranslate', lang)}</button>
                 </div>
               </div>
             )}

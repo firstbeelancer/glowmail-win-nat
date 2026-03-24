@@ -496,21 +496,25 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
                 <div className="space-y-4 pt-4 border-t border-zinc-800/50">
                   <label className="text-sm font-medium text-zinc-400">{lang === 'ru' ? 'Шрифт композера' : 'Composer Font'}</label>
-                  <select
+                  <Select
                     value={localSettings.composerFont || 'Involve'}
-                    onChange={(e) => setLocalSettings({ ...localSettings, composerFont: e.target.value })}
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-zinc-300 outline-none cursor-pointer"
+                    onValueChange={(v) => setLocalSettings({ ...localSettings, composerFont: v })}
                   >
-                    <option value="Involve">Involve</option>
-                    <option value="Inter">Inter</option>
-                    <option value="Arial">Arial</option>
-                    <option value="Times New Roman">Times New Roman</option>
-                    <option value="Courier New">Courier New</option>
-                    <option value="Arimo">Arimo</option>
-                    {localSettings.customFonts?.map(font => (
-                      <option key={font.name} value={font.name}>{font.name}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Involve">Involve</SelectItem>
+                      <SelectItem value="Inter">Inter</SelectItem>
+                      <SelectItem value="Arial">Arial</SelectItem>
+                      <SelectItem value="Times New Roman">Times New Roman</SelectItem>
+                      <SelectItem value="Courier New">Courier New</SelectItem>
+                      <SelectItem value="Arimo">Arimo</SelectItem>
+                      {localSettings.customFonts?.map(font => (
+                        <SelectItem key={font.name} value={font.name}>{font.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-4 pt-4 border-t border-zinc-800/50">

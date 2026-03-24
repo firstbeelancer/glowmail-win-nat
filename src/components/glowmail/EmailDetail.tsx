@@ -612,7 +612,7 @@ export const EmailDetail: React.FC<{
             }
             return (
               <p className="text-zinc-500 text-sm italic">
-                {settings.language === 'ru' ? 'Текст письма не удалось загрузить.' : 'Could not load email text.'}
+                {settings.language === 'ru' ? 'Письмо загружается....Оставайтесь на связи' : 'Email is loading....Stay tuned'}
               </p>
             );
           })()}

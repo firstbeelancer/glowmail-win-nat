@@ -60,6 +60,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [newTagColor, setNewTagColor] = useState('#10b981');
   const [isFetchingFolders, setIsFetchingFolders] = useState(false);
   const [isLoadingLdap, setIsLoadingLdap] = useState(false);
+  const smimeCertRef = useRef<HTMLInputElement>(null);
+  const smimeKeyRef = useRef<HTMLInputElement>(null);
+  const pgpPubRef = useRef<HTMLInputElement>(null);
+  const pgpPrivRef = useRef<HTMLInputElement>(null);
   const lang = localSettings.language;
 
   const handleSave = () => {

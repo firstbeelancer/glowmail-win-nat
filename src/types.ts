@@ -118,4 +118,8 @@ export type UserSettings = {
     userId: string;
     defaultFolder: string;
   };
+  cryptoKeys: CryptoKeys;
+  cryptoSignOutgoing: boolean;
+  cryptoEncryptOutgoing: boolean;
+  cryptoPreferredType: 'smime' | 'pgp';
 };

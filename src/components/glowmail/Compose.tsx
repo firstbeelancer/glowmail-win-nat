@@ -94,7 +94,9 @@ export function Compose({
   const [subjectWarningShown, setSubjectWarningShown] = useState(false);
   const [attachmentWarningShown, setAttachmentWarningShown] = useState(false);
 
-  const doSend = () => {
+  const [isCryptoProcessing, setIsCryptoProcessing] = useState(false);
+
+  const doSend = async () => {
     const toContacts: Contact[] = to.split(',').map((emailStr) => {
       const email = emailStr.trim();
       const existing = contacts.find((c) => c.email === email);
@@ -113,7 +115,41 @@ export function Compose({
       return existing || { id: `c${Date.now()}`, name: email.split('@')[0], email };
     }) : [];
 
-    const finalBody = editorRef.current?.innerHTML || '';
+    let finalBody = editorRef.current?.innerHTML || '';
+    const plainText = editorRef.current?.innerText || '';
+
+    // Apply PGP signing/encryption if enabled
+    if (settings.cryptoPreferredType === 'pgp') {
+      try {
+        setIsCryptoProcessing(true);
+
+        if (settings.cryptoSignOutgoing && settings.cryptoKeys?.pgpPrivateKey) {
+          const result = await pgpSignMessage({
+            text: plainText,
+            privateKeyArmored: settings.cryptoKeys.pgpPrivateKey,
+            passphrase: settings.cryptoKeys.pgpPassphrase,
+          });
+          finalBody = `<pre style="white-space:pre-wrap">${result.signed}</pre>`;
+        }
+
+        if (settings.cryptoEncryptOutgoing && settings.cryptoKeys?.pgpPublicKey) {
+          const recipientKeys = [settings.cryptoKeys.pgpPublicKey];
+          const result = await pgpEncryptMessage({
+            text: plainText,
+            recipientPublicKeys: recipientKeys,
+            privateKeyArmored: settings.cryptoSignOutgoing ? settings.cryptoKeys.pgpPrivateKey : undefined,
+            passphrase: settings.cryptoKeys.pgpPassphrase,
+          });
+          finalBody = `<pre style="white-space:pre-wrap">${result.encrypted}</pre>`;
+        }
+      } catch (e) {
+        toast.error(lang === 'ru' ? 'Ошибка криптографии: ' + (e instanceof Error ? e.message : '') : 'Crypto error: ' + (e instanceof Error ? e.message : ''));
+        setIsCryptoProcessing(false);
+        return;
+      } finally {
+        setIsCryptoProcessing(false);
+      }
+    }
 
     sendEmail({
       id: initialData?.id,

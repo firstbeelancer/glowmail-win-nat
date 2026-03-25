@@ -1971,6 +1971,55 @@ Deno.serve(async (req) => {
         });
       }
 
+      case "flags": {
+        const { folder = "INBOX", uid: flagUid, addFlags, removeFlags } = body;
+        if (!flagUid) return err("Missing uid", 400);
+
+        await client.selectMailbox(folder);
+
+        if (Array.isArray(addFlags) && addFlags.length > 0) {
+          await client.setFlags(String(flagUid), addFlags, "add", true);
+        }
+        if (Array.isArray(removeFlags) && removeFlags.length > 0) {
+          await client.setFlags(String(flagUid), removeFlags, "remove", true);
+        }
+
+        // Update flags in search cache too
+        const admin = getAdminClient();
+        if (admin) {
+          // Fetch current flags from cache
+          const { data: cacheRow } = await admin
+            .from("email_search_cache")
+            .select("flags")
+            .eq("account_key", accountKey)
+            .eq("folder_id", folder)
+            .eq("uid", Number(flagUid))
+            .maybeSingle();
+
+          if (cacheRow) {
+            let currentFlags: string[] = cacheRow.flags || [];
+            if (Array.isArray(addFlags)) {
+              for (const f of addFlags) {
+                if (!currentFlags.includes(f)) currentFlags.push(f);
+              }
+            }
+            if (Array.isArray(removeFlags)) {
+              currentFlags = currentFlags.filter((f: string) => !removeFlags.includes(f));
+            }
+            await admin
+              .from("email_search_cache")
+              .update({ flags: currentFlags })
+              .eq("account_key", accountKey)
+              .eq("folder_id", folder)
+              .eq("uid", Number(flagUid));
+          }
+        }
+
+        await client.disconnect();
+        client = null;
+        return ok({ success: true });
+      }
+
       case "delete": {
         const { folder = "INBOX", uid: delUid } = body;
         if (!delUid) return err("Missing uid", 400);

@@ -36,6 +36,10 @@ export function Compose({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
+  // Per-message crypto toggles (initialized from global settings)
+  const [signThis, setSignThis] = useState(settings.cryptoSignOutgoing || false);
+  const [encryptThis, setEncryptThis] = useState(settings.cryptoEncryptOutgoing || false);
+
   // Resizable state
   const [size, setSize] = useState({ width: 720, height: 600 });
   const isResizing = useRef(false);
@@ -123,7 +127,7 @@ export function Compose({
       try {
         setIsCryptoProcessing(true);
 
-        if (settings.cryptoSignOutgoing && settings.cryptoKeys?.pgpPrivateKey) {
+        if (signThis && settings.cryptoKeys?.pgpPrivateKey) {
           const result = await pgpSignMessage({
             text: plainText,
             privateKeyArmored: settings.cryptoKeys.pgpPrivateKey,
@@ -132,12 +136,12 @@ export function Compose({
           finalBody = `<pre style="white-space:pre-wrap">${result.signed}</pre>`;
         }
 
-        if (settings.cryptoEncryptOutgoing && settings.cryptoKeys?.pgpPublicKey) {
+        if (encryptThis && settings.cryptoKeys?.pgpPublicKey) {
           const recipientKeys = [settings.cryptoKeys.pgpPublicKey];
           const result = await pgpEncryptMessage({
             text: plainText,
             recipientPublicKeys: recipientKeys,
-            privateKeyArmored: settings.cryptoSignOutgoing ? settings.cryptoKeys.pgpPrivateKey : undefined,
+            privateKeyArmored: signThis ? settings.cryptoKeys.pgpPrivateKey : undefined,
             passphrase: settings.cryptoKeys.pgpPassphrase,
           });
           finalBody = `<pre style="white-space:pre-wrap">${result.encrypted}</pre>`;
@@ -870,19 +874,33 @@ export function Compose({
             >
               <Paperclip className="w-5 h-5" />
             </button>
-            {/* Crypto sign/encrypt indicators */}
-            {settings.cryptoSignOutgoing && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs font-medium border border-emerald-500/20" title={lang === 'ru' ? 'Письмо будет подписано' : 'Email will be signed'}>
-                <Shield className="w-3 h-3" />
-                {settings.cryptoPreferredType === 'smime' ? 'S/MIME' : 'PGP'}
-              </span>
-            )}
-            {settings.cryptoEncryptOutgoing && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 text-amber-400 text-xs font-medium border border-amber-500/20" title={lang === 'ru' ? 'Письмо будет зашифровано' : 'Email will be encrypted'}>
-                <Lock className="w-3 h-3" />
-                {lang === 'ru' ? 'Шифр.' : 'Enc.'}
-              </span>
-            )}
+            {/* Crypto sign/encrypt toggles (per-message) */}
+            <button
+              onClick={() => setSignThis(!signThis)}
+              className={cn(
+                "inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border transition-all",
+                signThis
+                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                  : "bg-zinc-800/50 text-zinc-500 border-zinc-700/30 hover:text-zinc-300"
+              )}
+              title={lang === 'ru' ? (signThis ? 'Подпись включена' : 'Подпись выключена') : (signThis ? 'Signing enabled' : 'Signing disabled')}
+            >
+              <Shield className="w-3 h-3" />
+              {settings.cryptoPreferredType === 'smime' ? 'S/MIME' : 'PGP'}
+            </button>
+            <button
+              onClick={() => setEncryptThis(!encryptThis)}
+              className={cn(
+                "inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border transition-all",
+                encryptThis
+                  ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                  : "bg-zinc-800/50 text-zinc-500 border-zinc-700/30 hover:text-zinc-300"
+              )}
+              title={lang === 'ru' ? (encryptThis ? 'Шифрование включено' : 'Шифрование выключено') : (encryptThis ? 'Encryption enabled' : 'Encryption disabled')}
+            >
+              <Lock className="w-3 h-3" />
+              {lang === 'ru' ? 'Шифр.' : 'Enc.'}
+            </button>
             {settings.signatures && settings.signatures.length > 0 && (
               <Select
                 value={selectedSignatureId || ''}

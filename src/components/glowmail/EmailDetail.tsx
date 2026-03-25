@@ -32,6 +32,8 @@ export const EmailDetail: React.FC<{
   const [showCopyPicker, setShowCopyPicker] = useState(false);
   const [tmhSendingId, setTmhSendingId] = useState<string | null>(null);
   const [tmhFolderPrompt, setTmhFolderPrompt] = useState<{ attId: string; folder: string } | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<{ verified: boolean; error?: string } | null>(null);
 
   // Keyboard shortcuts for next/prev
   useEffect(() => {

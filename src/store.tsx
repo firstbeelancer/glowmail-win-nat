@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Email, Folder, Contact, UserSettings, TagDef } from './types';
 import * as mailApi from './lib/mail-api';
+import { toast } from '@/hooks/use-toast';
 
 /** Decode RFC 2047 MIME-encoded words (=?charset?encoding?text?=) */
 function decodeMime(str: string): string {

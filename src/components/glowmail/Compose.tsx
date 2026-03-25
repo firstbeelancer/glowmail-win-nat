@@ -672,6 +672,71 @@ export function Compose({
                           }
                         } catch(e) { console.error(e); }
                       }
+                      // Image resize functionality
+                      (function() {
+                        var editor = document.getElementById('body');
+                        var activeImg = null;
+                        var overlay = null;
+                        function removeOverlay() {
+                          if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                          overlay = null; activeImg = null;
+                        }
+                        function createOverlay(img) {
+                          removeOverlay();
+                          activeImg = img;
+                          var w = document.createElement('div');
+                          w.setAttribute('data-img-overlay','1');
+                          w.style.cssText = 'position:absolute;pointer-events:none;z-index:50;border:2px solid #10b981;border-radius:2px;';
+                          var label = document.createElement('div');
+                          label.style.cssText = 'position:absolute;top:-24px;left:50%;transform:translateX(-50%);background:#10b981;color:#000;font-size:11px;padding:2px 6px;border-radius:4px;white-space:nowrap;pointer-events:none;font-weight:600;';
+                          label.textContent = Math.round(img.width) + ' × ' + Math.round(img.height);
+                          w.appendChild(label);
+                          function makeHandle(css, corner) {
+                            var h = document.createElement('div');
+                            h.style.cssText = 'position:absolute;width:12px;height:12px;background:#10b981;border-radius:2px;pointer-events:auto;cursor:' + (corner==='br'?'nwse':'nesw') + '-resize;' + css;
+                            h.addEventListener('mousedown', function(e) {
+                              e.preventDefault(); e.stopPropagation();
+                              if (!activeImg) return;
+                              var startX = e.clientX, startW = activeImg.width;
+                              var ar = activeImg.naturalHeight / activeImg.naturalWidth;
+                              function onMove(ev) {
+                                if (!activeImg) return;
+                                var dx = corner==='br' ? ev.clientX-startX : startX-ev.clientX;
+                                var nw = Math.max(32, startW+dx);
+                                activeImg.style.width = nw+'px';
+                                activeImg.style.height = Math.round(nw*ar)+'px';
+                                activeImg.removeAttribute('width'); activeImg.removeAttribute('height');
+                                updatePos(); label.textContent = Math.round(nw)+' × '+Math.round(nw*ar);
+                              }
+                              function onUp() { document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); }
+                              document.addEventListener('mousemove',onMove);
+                              document.addEventListener('mouseup',onUp);
+                            });
+                            return h;
+                          }
+                          w.appendChild(makeHandle('right:-5px;bottom:-5px;','br'));
+                          w.appendChild(makeHandle('left:-5px;bottom:-5px;','bl'));
+                          function updatePos() {
+                            if (!activeImg || !editor) return;
+                            var er = editor.getBoundingClientRect(), ir = activeImg.getBoundingClientRect();
+                            w.style.left = (ir.left-er.left+editor.scrollLeft)+'px';
+                            w.style.top = (ir.top-er.top+editor.scrollTop)+'px';
+                            w.style.width = ir.width+'px'; w.style.height = ir.height+'px';
+                          }
+                          updatePos();
+                          editor.style.position = 'relative';
+                          editor.appendChild(w);
+                          overlay = w;
+                        }
+                        editor.addEventListener('click', function(e) {
+                          if (e.target.tagName === 'IMG') createOverlay(e.target);
+                          else if (!e.target.hasAttribute('data-img-overlay') && (!overlay || !overlay.contains(e.target))) removeOverlay();
+                        });
+                        editor.addEventListener('input', removeOverlay);
+                        document.addEventListener('click', function(e) {
+                          if (!editor.contains(e.target) && (!overlay || !overlay.contains(e.target))) removeOverlay();
+                        });
+                      })();
                     <\/script>
                   </body></html>`);
                   w.document.close();

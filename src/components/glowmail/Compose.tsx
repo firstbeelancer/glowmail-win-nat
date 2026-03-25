@@ -438,12 +438,28 @@ export function Compose({
                     </div>
                     <div id="att-list" class="att-list"></div>
                     <div class="editor" contenteditable="true" id="body">${editorRef.current?.innerHTML || body}</div>
+                    <style>
+                      .crypto-toggle { display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border-radius:8px; font-size:12px; font-weight:500; border:1px solid; cursor:pointer; transition:all 0.2s; background:none; }
+                      .crypto-toggle.active-sign { background:rgba(16,185,129,0.1); color:#34d399; border-color:rgba(16,185,129,0.2); }
+                      .crypto-toggle.inactive { background:${subtleBg}; color:${mutedText}; border-color:${borderColor}; }
+                      .crypto-toggle.inactive:hover { color:${fg}; }
+                      .crypto-toggle.active-enc { background:rgba(245,158,11,0.1); color:#fbbf24; border-color:rgba(245,158,11,0.2); }
+                      .crypto-toggle svg { width:12px; height:12px; }
+                    </style>
                     <div class="footer-bar">
                       <div style="display:flex;align-items:center;gap:8px;">
                         <button class="btn-draft" onclick="document.getElementById('file-attach').click();" style="padding:8px 12px;border-radius:8px;">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                         </button>
                         <input type="file" id="file-attach" multiple style="display:none;" onchange="addAttachments(this.files);this.value='';" />
+                        <button id="sign-toggle" class="crypto-toggle ${signThis ? 'active-sign' : 'inactive'}" onclick="toggleSign()">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+                          ${settings.cryptoPreferredType === 'smime' ? 'S/MIME' : 'PGP'}
+                        </button>
+                        <button id="enc-toggle" class="crypto-toggle ${encryptThis ? 'active-enc' : 'inactive'}" onclick="toggleEnc()">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                          ${lang === 'ru' ? 'Шифр.' : 'Enc.'}
+                        </button>
                         <select id="sig-select" onchange="applySig(this.value)">
                           <option value="">${t('compose.noSignature', lang)}</option>
                           ${sigOptions}

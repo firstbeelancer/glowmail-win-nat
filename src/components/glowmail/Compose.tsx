@@ -389,7 +389,7 @@ export function Compose({
                       .footer-bar select:focus { border-color: rgba(16,185,129,0.5); }
                     </style></head><body>
                     <h2 style="margin-bottom:16px;font-size:18px;">${t('compose.newMessage', lang)}</h2>
-                    <div class="field"><label>${t('compose.to', lang)}</label><input id="to" value="${to}" /><a href="#" id="toggle-ccbcc" onclick="var el=document.getElementById('ccbcc-rows');el.style.display=el.style.display==='none'?'':'none';this.textContent=el.style.display==='none'?'${t('compose.ccBcc', lang)}':'${lang === 'ru' ? 'Скрыть' : 'Hide'}';return false;" style="color:${mutedText};font-size:12px;white-space:nowrap;text-decoration:none;">${t('compose.ccBcc', lang)}</a></div>
+                    <div class="field"><label>${t('compose.to', lang)}</label><input id="to" value="${to}" /><a href="#" id="toggle-ccbcc" onclick="var el=document.getElementById('ccbcc-rows');el.style.display=el.style.display==='none'?'':'none';this.textContent=el.style.display==='none'?'${lang === 'ru' ? 'Копия/Скрытая' : 'Cc/Bcc'}':'${lang === 'ru' ? 'Скрыть' : 'Hide'}';return false;" style="color:${mutedText};font-size:12px;white-space:nowrap;text-decoration:none;">${lang === 'ru' ? 'Копия/Скрытая' : 'Cc/Bcc'}</a></div>
                     <div id="ccbcc-rows" style="display:none;">
                     <div class="field"><label>${t('compose.cc', lang)}</label><input id="cc" value="${cc}" /></div>
                     <div class="field"><label>${t('compose.bcc', lang)}</label><input id="bcc" value="${bcc}" /></div>

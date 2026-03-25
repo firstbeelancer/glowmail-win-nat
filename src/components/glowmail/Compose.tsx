@@ -36,6 +36,10 @@ export function Compose({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
+  // Per-message crypto toggles (initialized from global settings)
+  const [signThis, setSignThis] = useState(settings.cryptoSignOutgoing || false);
+  const [encryptThis, setEncryptThis] = useState(settings.cryptoEncryptOutgoing || false);
+
   // Resizable state
   const [size, setSize] = useState({ width: 720, height: 600 });
   const isResizing = useRef(false);

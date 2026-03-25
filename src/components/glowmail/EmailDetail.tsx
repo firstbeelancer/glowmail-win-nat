@@ -433,7 +433,7 @@ export const EmailDetail: React.FC<{
             </div>
           )}
 
-          <div className="flex items-center gap-3 mb-6">
+          <div className="flex items-center gap-3 mb-4">
             {email.importance === 'high' && (
               <div className="flex items-center justify-center w-8 h-8 rounded-full bg-red-500/10 border border-red-500/30 text-red-400" title="High Importance">
                 <AlertTriangle className="w-4 h-4" />
@@ -443,6 +443,30 @@ export const EmailDetail: React.FC<{
               {email.subject}
             </h1>
           </div>
+
+          {/* Crypto badges */}
+          {email.cryptoInfo && (email.cryptoInfo.signed || email.cryptoInfo.encrypted) && (
+            <div className="mb-6 flex items-center gap-2 flex-wrap">
+              {email.cryptoInfo.signed && (
+                <span className={cn(
+                  "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border",
+                  email.cryptoInfo.verified === true
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                    : email.cryptoInfo.verified === false
+                      ? "bg-red-500/10 border-red-500/30 text-red-400"
+                      : "bg-blue-500/10 border-blue-500/30 text-blue-400"
+                )}>
+                  {email.cryptoInfo.verified === true ? '✓' : email.cryptoInfo.verified === false ? '✗' : '🖊'}
+                  {t('crypto.signed', lang)} ({email.cryptoInfo.type === 'smime' ? 'S/MIME' : 'PGP'})
+                </span>
+              )}
+              {email.cryptoInfo.encrypted && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border bg-amber-500/10 border-amber-500/30 text-amber-400">
+                  🔒 {t('crypto.encrypted', lang)} ({email.cryptoInfo.type === 'smime' ? 'S/MIME' : 'PGP'})
+                </span>
+              )}
+            </div>
+          )}
 
           <div className="flex items-start justify-between mb-8">
             <div className="flex items-center gap-4">

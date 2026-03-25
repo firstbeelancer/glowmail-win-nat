@@ -76,6 +76,10 @@ export async function reindexSearchCache(folder = "INBOX", limit = 50, cursor: n
 }
 
 
+export async function appendToFolder(folder: string, rawMessage: string, flags?: string[]) {
+  return callImap("append", { folder, rawMessage, flags });
+}
+
 export async function sendEmail(params: {
   to: string[];
   cc?: string[];

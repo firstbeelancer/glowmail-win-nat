@@ -2053,6 +2053,25 @@ Deno.serve(async (req) => {
         return ok({ success: true });
       }
 
+      case "append": {
+        const { folder: appendFolder, rawMessage, flags: appendFlags, date: appendDate } = body;
+        if (!appendFolder || !rawMessage) {
+          await client.disconnect();
+          client = null;
+          return err("Missing folder or rawMessage for append", 400);
+        }
+        await client.selectMailbox(appendFolder);
+        await (client as any).appendMessage(
+          appendFolder,
+          rawMessage,
+          appendFlags || ["\\Seen"],
+          appendDate ? new Date(appendDate) : undefined,
+        );
+        await client.disconnect();
+        client = null;
+        return ok({ success: true });
+      }
+
       default:
         await client.disconnect();
         client = null;

@@ -94,6 +94,125 @@ export function Compose({
     }
   }, [settings.fontColor]);
 
+  // Image resize functionality in editor
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    let activeImg: HTMLImageElement | null = null;
+    let resizeOverlay: HTMLDivElement | null = null;
+
+    const removeOverlay = () => {
+      if (resizeOverlay && resizeOverlay.parentNode) {
+        resizeOverlay.parentNode.removeChild(resizeOverlay);
+      }
+      resizeOverlay = null;
+      activeImg = null;
+    };
+
+    const createOverlay = (img: HTMLImageElement) => {
+      removeOverlay();
+      activeImg = img;
+
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'position:absolute;pointer-events:none;z-index:50;';
+      wrapper.setAttribute('data-img-resize-overlay', 'true');
+
+      const updatePosition = () => {
+        if (!activeImg || !editor) return;
+        const editorRect = editor.getBoundingClientRect();
+        const imgRect = activeImg.getBoundingClientRect();
+        wrapper.style.left = `${imgRect.left - editorRect.left + editor.scrollLeft}px`;
+        wrapper.style.top = `${imgRect.top - editorRect.top + editor.scrollTop}px`;
+        wrapper.style.width = `${imgRect.width}px`;
+        wrapper.style.height = `${imgRect.height}px`;
+      };
+      updatePosition();
+
+      // Border
+      wrapper.style.border = '2px solid #10b981';
+      wrapper.style.borderRadius = '2px';
+
+      // Size label
+      const sizeLabel = document.createElement('div');
+      sizeLabel.style.cssText = 'position:absolute;top:-24px;left:50%;transform:translateX(-50%);background:#10b981;color:#000;font-size:11px;padding:2px 6px;border-radius:4px;white-space:nowrap;pointer-events:none;font-weight:600;';
+      sizeLabel.textContent = `${Math.round(img.width)} × ${Math.round(img.height)}`;
+      wrapper.appendChild(sizeLabel);
+
+      // Resize handle (bottom-right)
+      const handle = document.createElement('div');
+      handle.style.cssText = 'position:absolute;right:-5px;bottom:-5px;width:12px;height:12px;background:#10b981;border-radius:2px;cursor:nwse-resize;pointer-events:auto;';
+      wrapper.appendChild(handle);
+
+      // Resize handle (bottom-left)
+      const handleBL = document.createElement('div');
+      handleBL.style.cssText = 'position:absolute;left:-5px;bottom:-5px;width:12px;height:12px;background:#10b981;border-radius:2px;cursor:nesw-resize;pointer-events:auto;';
+      wrapper.appendChild(handleBL);
+
+      const startResize = (e: MouseEvent, corner: 'br' | 'bl') => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!activeImg) return;
+        const startX = e.clientX;
+        const startW = activeImg.width;
+        const aspectRatio = activeImg.naturalHeight / activeImg.naturalWidth;
+
+        const onMove = (ev: MouseEvent) => {
+          if (!activeImg) return;
+          const dx = corner === 'br' ? ev.clientX - startX : startX - ev.clientX;
+          const newW = Math.max(32, startW + dx);
+          activeImg.style.width = `${newW}px`;
+          activeImg.style.height = `${Math.round(newW * aspectRatio)}px`;
+          activeImg.removeAttribute('width');
+          activeImg.removeAttribute('height');
+          updatePosition();
+          sizeLabel.textContent = `${Math.round(newW)} × ${Math.round(newW * aspectRatio)}`;
+        };
+        const onUp = () => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          setBody(editor.innerHTML);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      };
+
+      handle.addEventListener('mousedown', (e) => startResize(e, 'br'));
+      handleBL.addEventListener('mousedown', (e) => startResize(e, 'bl'));
+
+      editor.style.position = 'relative';
+      editor.appendChild(wrapper);
+      resizeOverlay = wrapper;
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'IMG' && editor.contains(target)) {
+        createOverlay(target as HTMLImageElement);
+      } else if (!(target as HTMLElement).hasAttribute?.('data-img-resize-overlay') && !resizeOverlay?.contains(target)) {
+        removeOverlay();
+      }
+    };
+
+    const handleInput = () => {
+      removeOverlay();
+    };
+
+    editor.addEventListener('click', handleClick);
+    editor.addEventListener('input', handleInput);
+    document.addEventListener('click', (e) => {
+      if (!editor.contains(e.target as Node) && !resizeOverlay?.contains(e.target as Node)) {
+        removeOverlay();
+      }
+    });
+
+    return () => {
+      editor.removeEventListener('click', handleClick);
+      editor.removeEventListener('input', handleInput);
+      removeOverlay();
+    };
+  }, []);
+
   const [pendingSend, setPendingSend] = useState(false);
   const [subjectWarningShown, setSubjectWarningShown] = useState(false);
   const [attachmentWarningShown, setAttachmentWarningShown] = useState(false);

@@ -478,6 +478,18 @@ export function Compose({
                     <script>
                       var attachments = [];
                       var sigData = ${JSON.stringify(settings.signatures || [])};
+                      var signEnabled = ${signThis};
+                      var encEnabled = ${encryptThis};
+                      function toggleSign() {
+                        signEnabled = !signEnabled;
+                        var btn = document.getElementById('sign-toggle');
+                        btn.className = 'crypto-toggle ' + (signEnabled ? 'active-sign' : 'inactive');
+                      }
+                      function toggleEnc() {
+                        encEnabled = !encEnabled;
+                        var btn = document.getElementById('enc-toggle');
+                        btn.className = 'crypto-toggle ' + (encEnabled ? 'active-enc' : 'inactive');
+                      }
                       function addAttachments(files) {
                         var list = document.getElementById('att-list');
                         for(var i=0;i<files.length;i++) {

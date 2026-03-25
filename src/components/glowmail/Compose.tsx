@@ -695,7 +695,7 @@ export function Compose({
           </div>
         </div>
 
-        <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/30 shrink-0 overflow-x-auto overflow-y-visible relative" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+        <div className="flex items-center gap-1 px-4 py-2 border-b border-zinc-800/50 bg-zinc-900/30 shrink-0 overflow-visible relative" style={{ scrollbarWidth: 'none' }}>
           <Select
             onValueChange={(v) => execCommand('fontName', v)}
             defaultValue={settings.composerFont || 'Involve'}

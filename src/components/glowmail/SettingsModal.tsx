@@ -129,7 +129,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap",
                   isActive
-                    ? "bg-emerald-500/10 text-emerald-400 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]"
+                    ? "bg-emerald-600/10 text-emerald-400 shadow-[inset_0_0_20px_rgba(16,185,129,0.05)]"
                     : "text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200"
                 )}
               >

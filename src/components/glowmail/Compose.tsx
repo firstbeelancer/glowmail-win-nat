@@ -833,6 +833,19 @@ export function Compose({
             >
               <Paperclip className="w-5 h-5" />
             </button>
+            {/* Crypto sign/encrypt indicators */}
+            {settings.cryptoSignOutgoing && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 text-xs font-medium border border-emerald-500/20" title={lang === 'ru' ? 'Письмо будет подписано' : 'Email will be signed'}>
+                <Shield className="w-3 h-3" />
+                {settings.cryptoPreferredType === 'smime' ? 'S/MIME' : 'PGP'}
+              </span>
+            )}
+            {settings.cryptoEncryptOutgoing && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 text-amber-400 text-xs font-medium border border-amber-500/20" title={lang === 'ru' ? 'Письмо будет зашифровано' : 'Email will be encrypted'}>
+                <Lock className="w-3 h-3" />
+                {lang === 'ru' ? 'Шифр.' : 'Enc.'}
+              </span>
+            )}
             {settings.signatures && settings.signatures.length > 0 && (
               <Select
                 value={selectedSignatureId || ''}

@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Email } from '../../types';
 import { useMail } from '../../store';
 import { format } from 'date-fns';
-import { ArrowLeft, Reply, ReplyAll, Forward, MoreVertical, Star, Paperclip, Download, Trash2, Tag, File, Image as ImageIcon, FileText, AlertTriangle, Sparkles, Loader2, Edit3, Printer, FolderInput, Copy, ChevronUp, ChevronDown, Mail, MailOpen, Code, ClipboardCopy, ChevronRight, ExternalLink, Upload } from 'lucide-react';
+import { ArrowLeft, Reply, ReplyAll, Forward, MoreVertical, Star, Paperclip, Download, Trash2, Tag, File, Image as ImageIcon, FileText, AlertTriangle, Sparkles, Loader2, Edit3, Printer, FolderInput, Copy, ChevronUp, ChevronDown, Mail, MailOpen, Code, ClipboardCopy, ChevronRight, ExternalLink, Upload, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { t, translateFolderName } from '@/lib/i18n';
 import { EmailHtmlViewer, EmailTextViewer } from './EmailHtmlViewer';
 import toast from 'react-hot-toast';
-import { sendToTigerMediaHub } from '@/lib/mail-api';
+import { sendToTigerMediaHub, pgpVerifySignature } from '@/lib/mail-api';
 
 export const EmailDetail: React.FC<{
   email: Email;
@@ -32,6 +32,8 @@ export const EmailDetail: React.FC<{
   const [showCopyPicker, setShowCopyPicker] = useState(false);
   const [tmhSendingId, setTmhSendingId] = useState<string | null>(null);
   const [tmhFolderPrompt, setTmhFolderPrompt] = useState<{ attId: string; folder: string } | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<{ verified: boolean; error?: string } | null>(null);
 
   // Keyboard shortcuts for next/prev
   useEffect(() => {
@@ -450,13 +452,13 @@ export const EmailDetail: React.FC<{
               {email.cryptoInfo.signed && (
                 <span className={cn(
                   "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border",
-                  email.cryptoInfo.verified === true
+                  verifyResult?.verified === true || email.cryptoInfo.verified === true
                     ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                    : email.cryptoInfo.verified === false
+                    : verifyResult?.verified === false || email.cryptoInfo.verified === false
                       ? "bg-red-500/10 border-red-500/30 text-red-400"
                       : "bg-blue-500/10 border-blue-500/30 text-blue-400"
                 )}>
-                  {email.cryptoInfo.verified === true ? '✓' : email.cryptoInfo.verified === false ? '✗' : '🖊'}
+                  {(verifyResult?.verified ?? email.cryptoInfo.verified) === true ? '✓' : (verifyResult?.verified ?? email.cryptoInfo.verified) === false ? '✗' : '🖊'}
                   {t('crypto.signed', lang)} ({email.cryptoInfo.type === 'smime' ? 'S/MIME' : 'PGP'})
                 </span>
               )}
@@ -464,6 +466,37 @@ export const EmailDetail: React.FC<{
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border bg-amber-500/10 border-amber-500/30 text-amber-400">
                   🔒 {t('crypto.encrypted', lang)} ({email.cryptoInfo.type === 'smime' ? 'S/MIME' : 'PGP'})
                 </span>
+              )}
+              {/* Verify button for PGP signed emails */}
+              {email.cryptoInfo.signed && email.cryptoInfo.type === 'pgp' && !verifyResult && settings.cryptoKeys?.pgpPublicKey && (
+                <button
+                  onClick={async () => {
+                    setVerifying(true);
+                    try {
+                      const body = email.body || '';
+                      const isCleartext = body.includes('-----BEGIN PGP SIGNED MESSAGE-----');
+                      const result = await pgpVerifySignature({
+                        ...(isCleartext ? { cleartext: body } : { armoredMessage: body }),
+                        publicKeyArmored: settings.cryptoKeys.pgpPublicKey!,
+                      });
+                      setVerifyResult(result);
+                      toast.success(result.verified ? (lang === 'ru' ? 'Подпись верна' : 'Signature valid') : (lang === 'ru' ? 'Подпись невалидна' : 'Signature invalid'));
+                    } catch (e) {
+                      setVerifyResult({ verified: false, error: e instanceof Error ? e.message : 'Error' });
+                      toast.error(lang === 'ru' ? 'Ошибка верификации' : 'Verification error');
+                    } finally {
+                      setVerifying(false);
+                    }
+                  }}
+                  disabled={verifying}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border bg-zinc-800/50 border-zinc-700/50 text-zinc-300 hover:bg-zinc-700/50 transition-colors disabled:opacity-50"
+                >
+                  {verifying ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
+                  {lang === 'ru' ? 'Проверить подпись' : 'Verify'}
+                </button>
+              )}
+              {verifyResult && !verifyResult.verified && verifyResult.error && (
+                <span className="text-xs text-red-400">{verifyResult.error}</span>
               )}
             </div>
           )}

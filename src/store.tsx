@@ -258,6 +258,10 @@ export function MailProvider({ children }: { children: ReactNode }) {
         userId: '',
         defaultFolder: '',
       },
+      cryptoKeys: {},
+      cryptoSignOutgoing: false,
+      cryptoEncryptOutgoing: false,
+      cryptoPreferredType: 'smime' as const,
       ...parsedSettings,
     };
   });

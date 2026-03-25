@@ -712,15 +712,69 @@ export function MailProvider({ children }: { children: ReactNode }) {
 
   const handleSendEmail = async (email: Partial<Email>) => {
     try {
+      const toList = (email.to || []).map(c => c.email);
+      const ccList = (email.cc || []).map(c => c.email);
+      const bccList = (email.bcc || []).map(c => c.email);
+      const subj = email.subject || '(No Subject)';
+      const htmlBody = email.body || '';
+
       await mailApi.sendEmail({
-        to: (email.to || []).map(c => c.email),
-        cc: (email.cc || []).map(c => c.email),
-        bcc: (email.bcc || []).map(c => c.email),
-        subject: email.subject || '(No Subject)',
-        html: email.body || '',
+        to: toList,
+        cc: ccList,
+        bcc: bccList,
+        subject: subj,
+        html: htmlBody,
         inReplyTo: email.headers?.inReplyTo,
         references: email.headers?.references,
       });
+
+      // Build RFC 822 message and append to Sent folder via IMAP
+      try {
+        const fromAddr = `${settings.account.name} <${settings.account.email}>`;
+        const dateLine = new Date().toUTCString();
+        const boundary = `----=_Part_${Date.now()}`;
+        const lines: string[] = [
+          `From: ${fromAddr}`,
+          `To: ${toList.join(', ')}`,
+        ];
+        if (ccList.length) lines.push(`Cc: ${ccList.join(', ')}`);
+        lines.push(`Subject: ${subj}`);
+        lines.push(`Date: ${dateLine}`);
+        lines.push(`MIME-Version: 1.0`);
+        if (email.headers?.inReplyTo) lines.push(`In-Reply-To: ${email.headers.inReplyTo}`);
+        if (email.headers?.references) lines.push(`References: ${email.headers.references}`);
+        lines.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+        lines.push('');
+        // plain text part
+        const plainText = htmlBody.replace(/<[^>]*>/g, '');
+        lines.push(`--${boundary}`);
+        lines.push('Content-Type: text/plain; charset=UTF-8');
+        lines.push('Content-Transfer-Encoding: 8bit');
+        lines.push('');
+        lines.push(plainText);
+        lines.push('');
+        // html part
+        lines.push(`--${boundary}`);
+        lines.push('Content-Type: text/html; charset=UTF-8');
+        lines.push('Content-Transfer-Encoding: 8bit');
+        lines.push('');
+        lines.push(htmlBody);
+        lines.push('');
+        lines.push(`--${boundary}--`);
+        const rawMessage = lines.join('\r\n');
+
+        // Try common sent folder names
+        const sentFolder = folders.find(f =>
+          ['Sent', 'INBOX.Sent', 'Sent Items', 'Sent Messages', 'Отправленные'].some(n =>
+            f.name.toLowerCase() === n.toLowerCase() || f.id.toLowerCase() === n.toLowerCase()
+          )
+        );
+        if (sentFolder) {
+          await mailApi.appendToFolder(sentFolder.id, rawMessage, ['\\Seen']);
+        }
+      } catch (appendErr) {
+        console.warn('Failed to append to Sent folder:', appendErr);
+      }
 
       // Add to local sent list
       const newEmail: Email = {

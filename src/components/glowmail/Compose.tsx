@@ -123,7 +123,7 @@ export function Compose({
       try {
         setIsCryptoProcessing(true);
 
-        if (settings.cryptoSignOutgoing && settings.cryptoKeys?.pgpPrivateKey) {
+        if (signThis && settings.cryptoKeys?.pgpPrivateKey) {
           const result = await pgpSignMessage({
             text: plainText,
             privateKeyArmored: settings.cryptoKeys.pgpPrivateKey,

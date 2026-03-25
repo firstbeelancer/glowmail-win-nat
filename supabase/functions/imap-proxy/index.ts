@@ -1381,13 +1381,22 @@ Deno.serve(async (req) => {
         const { folder = "INBOX", uid: flagUid, addFlags, removeFlags } = body;
         if (!flagUid) return err("Missing uid", 400);
 
-        await client.selectMailbox(folder);
+        console.log("[flags] uid:", flagUid, "folder:", folder, "add:", addFlags, "remove:", removeFlags);
 
-        if (addFlags?.length) {
-          await client.setFlags(String(flagUid), addFlags, "add", true);
-        }
-        if (removeFlags?.length) {
-          await client.setFlags(String(flagUid), removeFlags, "remove", true);
+        const mbStatus = await client.selectMailbox(folder);
+        console.log("[flags] mailbox selected, exists:", (mbStatus as any)?.exists);
+
+        try {
+          if (addFlags?.length) {
+            const result = await client.setFlags(String(flagUid), addFlags, "add", true);
+            console.log("[flags] addFlags result:", JSON.stringify(result));
+          }
+          if (removeFlags?.length) {
+            const result = await client.setFlags(String(flagUid), removeFlags, "remove", true);
+            console.log("[flags] removeFlags result:", JSON.stringify(result));
+          }
+        } catch (flagErr: any) {
+          console.error("[flags] setFlags error:", flagErr?.message || flagErr);
         }
 
         await syncCachedFlags(accountKey, folder, Number(flagUid), addFlags, removeFlags);

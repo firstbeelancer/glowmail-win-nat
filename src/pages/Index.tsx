@@ -210,6 +210,7 @@ function MailApp() {
           body: buildRenderableEmailBody(full),
           read: true,
           attachments: fetchedAttachments.length > 0 ? fetchedAttachments : email.attachments,
+          cryptoInfo: full.cryptoInfo || undefined,
         };
         setSelectedEmail(enriched);
       } catch (e) {

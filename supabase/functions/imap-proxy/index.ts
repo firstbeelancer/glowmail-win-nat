@@ -1287,6 +1287,55 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Detect S/MIME and PGP signatures/encryption
+        const cryptoInfo: { type: string | null; signed: boolean; encrypted: boolean } = {
+          type: null,
+          signed: false,
+          encrypted: false,
+        };
+
+        // Check content-type header for multipart/signed or multipart/encrypted
+        const contentType = (parsed.headers?.get?.("content-type") || "").toString().toLowerCase();
+        
+        // Check attachments for signature files
+        const allAttachments = parsed.attachments || [];
+        const hasSmimeSig = allAttachments.some((a: any) => {
+          const mt = (a.mimeType || "").toLowerCase();
+          return mt === "application/pkcs7-signature" || mt === "application/x-pkcs7-signature" || (a.filename || "").endsWith(".p7s");
+        });
+        const hasPgpSig = allAttachments.some((a: any) => {
+          const mt = (a.mimeType || "").toLowerCase();
+          return mt === "application/pgp-signature" || (a.filename || "").endsWith(".asc");
+        });
+        const hasSmimeEncrypted = allAttachments.some((a: any) => {
+          const mt = (a.mimeType || "").toLowerCase();
+          return mt === "application/pkcs7-mime" || mt === "application/x-pkcs7-mime" || (a.filename || "").endsWith(".p7m");
+        });
+        const hasPgpEncrypted = allAttachments.some((a: any) => {
+          const mt = (a.mimeType || "").toLowerCase();
+          return mt === "application/pgp-encrypted";
+        });
+
+        // Also check content-type header
+        const isSigned = contentType.includes("multipart/signed");
+        const isEncrypted = contentType.includes("multipart/encrypted") || contentType.includes("pkcs7-mime");
+        const isSmimeFromHeader = contentType.includes("pkcs7") || contentType.includes("smime");
+        const isPgpFromHeader = contentType.includes("pgp");
+
+        // Check raw source for PGP inline markers
+        const rawText = rawSource ? new TextDecoder().decode(rawSource.slice(0, 2000)) : "";
+        const hasPgpInline = rawText.includes("-----BEGIN PGP SIGNED MESSAGE-----") || rawText.includes("-----BEGIN PGP MESSAGE-----");
+
+        if (hasSmimeSig || isSmimeFromHeader || hasSmimeEncrypted) {
+          cryptoInfo.type = "smime";
+          cryptoInfo.signed = hasSmimeSig || (isSigned && isSmimeFromHeader);
+          cryptoInfo.encrypted = hasSmimeEncrypted || (isEncrypted && isSmimeFromHeader);
+        } else if (hasPgpSig || isPgpFromHeader || hasPgpEncrypted || hasPgpInline) {
+          cryptoInfo.type = "pgp";
+          cryptoInfo.signed = hasPgpSig || (isSigned && isPgpFromHeader) || rawText.includes("-----BEGIN PGP SIGNED MESSAGE-----");
+          cryptoInfo.encrypted = hasPgpEncrypted || (isEncrypted && isPgpFromHeader) || rawText.includes("-----BEGIN PGP MESSAGE-----");
+        }
+
         return ok({
           uid: resolvedUid,
           flags,
@@ -1312,6 +1361,7 @@ Deno.serve(async (req) => {
           html: finalHtml,
           hasBody,
           attachments,
+          cryptoInfo: cryptoInfo.type ? cryptoInfo : undefined,
         });
       }
 

@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useMail } from '../../store';
 import { motion } from 'framer-motion';
-import { X, User, Server, Palette, PenTool, Tags, Plus, Trash2, Image as ImageIcon, Globe, FolderTree, Loader2, Layers, Sparkles, RefreshCw, Plug } from 'lucide-react';
+import { X, User, Server, Palette, PenTool, Tags, Plus, Trash2, Image as ImageIcon, Globe, FolderTree, Loader2, Layers, Sparkles, RefreshCw, Plug, Shield, Upload, Check, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { t } from '@/lib/i18n';
@@ -54,12 +54,16 @@ function ReindexButton({ lang }: { lang: string }) {
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { settings, updateSettings, addFolder, addContact, allFoldersFlat } = useMail();
-  const [activeTab, setActiveTab] = useState<'account' | 'server' | 'appearance' | 'signature' | 'tags' | 'integrations'>('account');
+  const [activeTab, setActiveTab] = useState<'account' | 'server' | 'appearance' | 'signature' | 'tags' | 'integrations' | 'security'>('account');
   const [localSettings, setLocalSettings] = useState(settings);
   const [newTag, setNewTag] = useState('');
   const [newTagColor, setNewTagColor] = useState('#10b981');
   const [isFetchingFolders, setIsFetchingFolders] = useState(false);
   const [isLoadingLdap, setIsLoadingLdap] = useState(false);
+  const smimeCertRef = useRef<HTMLInputElement>(null);
+  const smimeKeyRef = useRef<HTMLInputElement>(null);
+  const pgpPubRef = useRef<HTMLInputElement>(null);
+  const pgpPrivRef = useRef<HTMLInputElement>(null);
   const lang = localSettings.language;
 
   const handleSave = () => {
@@ -98,6 +102,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     { id: 'appearance', label: t('settings.appearance', lang), icon: Palette },
     { id: 'signature', label: t('settings.signature', lang), icon: PenTool },
     { id: 'tags', label: t('settings.tags', lang), icon: Tags },
+    { id: 'security', label: t('settings.security', lang), icon: Shield },
     { id: 'integrations', label: t('settings.integrations', lang), icon: Plug },
   ] as const;
 
@@ -149,6 +154,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               {activeTab === 'appearance' && t('settings.appearanceSettings', lang)}
               {activeTab === 'signature' && t('settings.signatureSettings', lang)}
               {activeTab === 'tags' && t('settings.tagsSettings', lang)}
+              {activeTab === 'security' && t('settings.securitySettings', lang)}
               {activeTab === 'integrations' && t('settings.integrationsSettings', lang)}
             </h3>
             <button onClick={onClose} className="p-2 -mr-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors">
@@ -780,6 +786,179 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     {localSettings.availableTags.length === 0 && (
                       <p className="text-sm text-zinc-500 italic">{t('settings.noTags', lang)}</p>
                     )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'security' && (
+              <div className="space-y-6 max-w-md">
+                {/* S/MIME Section */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2 flex items-center gap-2">
+                    🔐 S/MIME
+                  </h4>
+                  <div className="space-y-3 pl-2 border-l-2 border-emerald-500/20 ml-2">
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">{t('crypto.smimeCert', lang)}</label>
+                      <div className="flex items-center gap-2">
+                        <input ref={smimeCertRef} type="file" accept=".pem,.crt,.cer" className="hidden" onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            setLocalSettings({ ...localSettings, cryptoKeys: { ...localSettings.cryptoKeys, smimeCertPem: reader.result as string } });
+                            toast.success(t('crypto.keyLoaded', lang));
+                          };
+                          reader.readAsText(file);
+                        }} />
+                        <button onClick={() => smimeCertRef.current?.click()} className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm text-zinc-300 transition-colors">
+                          <Upload className="w-4 h-4" /> {t('crypto.uploadFile', lang)}
+                        </button>
+                        {localSettings.cryptoKeys?.smimeCertPem ? (
+                          <span className="text-xs text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" /> {t('crypto.keyLoaded', lang)}</span>
+                        ) : (
+                          <span className="text-xs text-zinc-500">{t('crypto.noKey', lang)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">{t('crypto.smimeKey', lang)}</label>
+                      <div className="flex items-center gap-2">
+                        <input ref={smimeKeyRef} type="file" accept=".pem,.key,.p12,.pfx" className="hidden" onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            setLocalSettings({ ...localSettings, cryptoKeys: { ...localSettings.cryptoKeys, smimeKeyPem: reader.result as string } });
+                            toast.success(t('crypto.keyLoaded', lang));
+                          };
+                          reader.readAsText(file);
+                        }} />
+                        <button onClick={() => smimeKeyRef.current?.click()} className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm text-zinc-300 transition-colors">
+                          <Upload className="w-4 h-4" /> {t('crypto.uploadFile', lang)}
+                        </button>
+                        {localSettings.cryptoKeys?.smimeKeyPem ? (
+                          <span className="text-xs text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" /> {t('crypto.keyLoaded', lang)}</span>
+                        ) : (
+                          <span className="text-xs text-zinc-500">{t('crypto.noKey', lang)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">{t('crypto.smimeCertPassword', lang)}</label>
+                      <input
+                        type="password"
+                        value={localSettings.cryptoKeys?.smimeCertPassword || ''}
+                        onChange={(e) => setLocalSettings({ ...localSettings, cryptoKeys: { ...localSettings.cryptoKeys, smimeCertPassword: e.target.value } })}
+                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* PGP Section */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2 flex items-center gap-2">
+                    🔑 PGP / GPG
+                  </h4>
+                  <div className="space-y-3 pl-2 border-l-2 border-emerald-500/20 ml-2">
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">{t('crypto.pgpPublicKey', lang)}</label>
+                      <div className="flex items-center gap-2">
+                        <input ref={pgpPubRef} type="file" accept=".asc,.gpg,.pgp,.pub" className="hidden" onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            setLocalSettings({ ...localSettings, cryptoKeys: { ...localSettings.cryptoKeys, pgpPublicKey: reader.result as string } });
+                            toast.success(t('crypto.keyLoaded', lang));
+                          };
+                          reader.readAsText(file);
+                        }} />
+                        <button onClick={() => pgpPubRef.current?.click()} className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm text-zinc-300 transition-colors">
+                          <Upload className="w-4 h-4" /> {t('crypto.uploadFile', lang)}
+                        </button>
+                        {localSettings.cryptoKeys?.pgpPublicKey ? (
+                          <span className="text-xs text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" /> {t('crypto.keyLoaded', lang)}</span>
+                        ) : (
+                          <span className="text-xs text-zinc-500">{t('crypto.noKey', lang)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">{t('crypto.pgpPrivateKey', lang)}</label>
+                      <div className="flex items-center gap-2">
+                        <input ref={pgpPrivRef} type="file" accept=".asc,.gpg,.pgp,.key" className="hidden" onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            setLocalSettings({ ...localSettings, cryptoKeys: { ...localSettings.cryptoKeys, pgpPrivateKey: reader.result as string } });
+                            toast.success(t('crypto.keyLoaded', lang));
+                          };
+                          reader.readAsText(file);
+                        }} />
+                        <button onClick={() => pgpPrivRef.current?.click()} className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm text-zinc-300 transition-colors">
+                          <Upload className="w-4 h-4" /> {t('crypto.uploadFile', lang)}
+                        </button>
+                        {localSettings.cryptoKeys?.pgpPrivateKey ? (
+                          <span className="text-xs text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" /> {t('crypto.keyLoaded', lang)}</span>
+                        ) : (
+                          <span className="text-xs text-zinc-500">{t('crypto.noKey', lang)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-zinc-500">{t('crypto.pgpPassphrase', lang)}</label>
+                      <input
+                        type="password"
+                        value={localSettings.cryptoKeys?.pgpPassphrase || ''}
+                        onChange={(e) => setLocalSettings({ ...localSettings, cryptoKeys: { ...localSettings.cryptoKeys, pgpPassphrase: e.target.value } })}
+                        className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Outgoing Protection */}
+                <div className="space-y-4 pt-4 border-t border-zinc-800/50">
+                  <h4 className="text-sm font-semibold text-zinc-300 pb-2 flex items-center gap-2">
+                    <Shield className="w-4 h-4" /> {t('crypto.outgoingSection', lang)}
+                  </h4>
+                  <p className="text-xs text-zinc-500">{t('crypto.outgoingDesc', lang)}</p>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.cryptoSignOutgoing || false}
+                      onChange={(e) => setLocalSettings({ ...localSettings, cryptoSignOutgoing: e.target.checked })}
+                      className="w-4 h-4 rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500/50 bg-zinc-900"
+                    />
+                    <span className="text-sm text-zinc-300">{t('crypto.signOutgoing', lang)}</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.cryptoEncryptOutgoing || false}
+                      onChange={(e) => setLocalSettings({ ...localSettings, cryptoEncryptOutgoing: e.target.checked })}
+                      className="w-4 h-4 rounded border-zinc-700 text-emerald-500 focus:ring-emerald-500/50 bg-zinc-900"
+                    />
+                    <span className="text-sm text-zinc-300">{t('crypto.encryptOutgoing', lang)}</span>
+                  </label>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-zinc-500">{t('crypto.preferredType', lang)}</label>
+                    <Select
+                      value={localSettings.cryptoPreferredType || 'smime'}
+                      onValueChange={(v) => setLocalSettings({ ...localSettings, cryptoPreferredType: v as 'smime' | 'pgp' })}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="smime">S/MIME</SelectItem>
+                        <SelectItem value="pgp">PGP / GPG</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>

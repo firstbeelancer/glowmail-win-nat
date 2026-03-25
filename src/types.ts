@@ -27,6 +27,23 @@ export type TagDef = {
   color: string;
 };
 
+export type CryptoInfo = {
+  type: 'smime' | 'pgp' | null;
+  signed: boolean;
+  encrypted: boolean;
+  verified?: boolean;         // null = not checked, true = valid, false = invalid
+  verificationError?: string;
+};
+
+export type CryptoKeys = {
+  smimeCertPem?: string;       // PEM-encoded S/MIME certificate (public)
+  smimeKeyPem?: string;        // PEM-encoded S/MIME private key
+  smimeCertPassword?: string;  // Password for PKCS#12 container
+  pgpPublicKey?: string;       // Armored PGP public key
+  pgpPrivateKey?: string;      // Armored PGP private key
+  pgpPassphrase?: string;      // PGP key passphrase
+};
+
 export type Email = {
   id: string;
   folderId: string;
@@ -43,6 +60,7 @@ export type Email = {
   tags: string[];
   importance?: 'high' | 'normal' | 'low';
   attachments: Attachment[];
+  cryptoInfo?: CryptoInfo;
   headers: {
     messageId: string;
     inReplyTo?: string;
@@ -100,4 +118,8 @@ export type UserSettings = {
     userId: string;
     defaultFolder: string;
   };
+  cryptoKeys: CryptoKeys;
+  cryptoSignOutgoing: boolean;
+  cryptoEncryptOutgoing: boolean;
+  cryptoPreferredType: 'smime' | 'pgp';
 };

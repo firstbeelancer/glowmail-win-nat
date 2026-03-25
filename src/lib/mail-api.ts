@@ -105,6 +105,53 @@ export async function sendEmail(params: {
   return data;
 }
 
+/* ─── Crypto proxy helpers ─── */
+async function callCrypto(action: string, extra: Record<string, unknown> = {}) {
+  const { data, error } = await supabase.functions.invoke("crypto-proxy", {
+    body: { action, ...extra },
+  });
+  if (error) throw new Error(error.message || "Crypto request failed");
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function pgpVerifySignature(params: {
+  armoredMessage?: string;
+  cleartext?: string;
+  publicKeyArmored: string;
+}) {
+  return callCrypto("pgp-verify", params);
+}
+
+export async function pgpDecryptMessage(params: {
+  armoredMessage: string;
+  privateKeyArmored: string;
+  passphrase?: string;
+}) {
+  return callCrypto("pgp-decrypt", params);
+}
+
+export async function pgpSignMessage(params: {
+  text: string;
+  privateKeyArmored: string;
+  passphrase?: string;
+}) {
+  return callCrypto("pgp-sign", params);
+}
+
+export async function pgpEncryptMessage(params: {
+  text: string;
+  recipientPublicKeys: string[];
+  privateKeyArmored?: string;
+  passphrase?: string;
+}) {
+  return callCrypto("pgp-encrypt", params);
+}
+
+export async function smimeCertInfo(certPem: string) {
+  return callCrypto("smime-info", { certPem });
+}
+
 export async function sendToTigerMediaHub(params: {
   projectUrl: string;
   apiKey: string;

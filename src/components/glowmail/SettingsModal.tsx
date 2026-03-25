@@ -54,7 +54,7 @@ function ReindexButton({ lang }: { lang: string }) {
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { settings, updateSettings, addFolder, addContact, allFoldersFlat } = useMail();
-  const [activeTab, setActiveTab] = useState<'account' | 'server' | 'appearance' | 'signature' | 'tags' | 'integrations'>('account');
+  const [activeTab, setActiveTab] = useState<'account' | 'server' | 'appearance' | 'signature' | 'tags' | 'integrations' | 'security'>('account');
   const [localSettings, setLocalSettings] = useState(settings);
   const [newTag, setNewTag] = useState('');
   const [newTagColor, setNewTagColor] = useState('#10b981');

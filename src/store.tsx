@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Email, Folder, Contact, UserSettings, TagDef } from './types';
 import * as mailApi from './lib/mail-api';
+import { toast } from '@/hooks/use-toast';
 
 /** Decode RFC 2047 MIME-encoded words (=?charset?encoding?text?=) */
 function decodeMime(str: string): string {
@@ -196,6 +197,15 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequestIdRef = useRef(0);
+  const knownEmailIdsRef = useRef<Set<string>>(new Set());
+  const isFirstFetchRef = useRef(true);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
   // Derived: UI always reads from `emails`, which switches based on search mode
   const emails = isSearchActive ? searchResults : folderEmails;
@@ -400,6 +410,46 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const PAGE_SIZE = 50;
   const SEARCH_PAGE_SIZE = 30;
 
+  const notifyNewEmails = useCallback((newEmails: Email[]) => {
+    if (newEmails.length === 0) return;
+
+    // In-app toast
+    if (newEmails.length === 1) {
+      const e = newEmails[0];
+      toast({
+        title: `📬 ${e.from.name || e.from.email}`,
+        description: e.subject || '(No Subject)',
+      });
+    } else {
+      toast({
+        title: `📬 ${newEmails.length} new emails`,
+        description: newEmails.slice(0, 3).map(e => e.from.name || e.from.email).join(', '),
+      });
+    }
+
+    // Browser / system notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        if (newEmails.length === 1) {
+          const e = newEmails[0];
+          new Notification(e.from.name || e.from.email, {
+            body: e.subject || '(No Subject)',
+            icon: '/pwa-192x192.png',
+            tag: `new-email-${e.id}`,
+          });
+        } else {
+          new Notification(`${newEmails.length} new emails`, {
+            body: newEmails.slice(0, 3).map(e => e.from.name || e.from.email).join(', '),
+            icon: '/pwa-192x192.png',
+            tag: 'new-emails-batch',
+          });
+        }
+      } catch (err) {
+        console.warn('Notification error:', err);
+      }
+    }
+  }, []);
+
   const fetchEmails = useCallback(async () => {
     setIsLoading(true);
     setConnectionError(null);
@@ -408,6 +458,16 @@ export function MailProvider({ children }: { children: ReactNode }) {
 
       const data = await mailApi.fetchEmailList(currentFolder, 1, PAGE_SIZE);
       const mapped = mapMessages(data, currentFolder);
+
+      // Detect new emails (only after first fetch, only for INBOX)
+      if (!isFirstFetchRef.current && currentFolder === 'INBOX') {
+        const newEmails = mapped.filter(e => !knownEmailIdsRef.current.has(e.id) && !e.read);
+        notifyNewEmails(newEmails);
+      }
+      isFirstFetchRef.current = false;
+
+      // Update known IDs
+      mapped.forEach(e => knownEmailIdsRef.current.add(e.id));
 
       const total = data.total || 0;
       setFolderEmails(mapped);
@@ -423,7 +483,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [currentFolder, loadFolders, mapMessages, collectContacts]);
+  }, [currentFolder, loadFolders, mapMessages, collectContacts, notifyNewEmails]);
 
   const loadMoreEmails = useCallback(async () => {
     if (isSearchActive) {

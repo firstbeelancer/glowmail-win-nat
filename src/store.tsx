@@ -357,8 +357,8 @@ export function MailProvider({ children }: { children: ReactNode }) {
         snippet: decodeMime(msg.subject || ''),
         body: '',
         date: msg.date || new Date().toISOString(),
-        read: (msg.flags || []).includes('\\Seen'),
-        starred: (msg.flags || []).includes('\\Flagged'),
+        read: (msg.flags || []).some((f: string) => f === '\\Seen' || f === 'Seen'),
+        starred: (msg.flags || []).some((f: string) => f === '\\Flagged' || f === 'Flagged'),
         tags: [],
         attachments: msg.hasAttachments
           ? [{ id: `att-${msg.uid}-0`, name: 'attachment', size: 0, type: 'application/octet-stream', url: '' }]

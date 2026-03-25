@@ -132,12 +132,12 @@ export function Compose({
           finalBody = `<pre style="white-space:pre-wrap">${result.signed}</pre>`;
         }
 
-        if (settings.cryptoEncryptOutgoing && settings.cryptoKeys?.pgpPublicKey) {
+        if (encryptThis && settings.cryptoKeys?.pgpPublicKey) {
           const recipientKeys = [settings.cryptoKeys.pgpPublicKey];
           const result = await pgpEncryptMessage({
             text: plainText,
             recipientPublicKeys: recipientKeys,
-            privateKeyArmored: settings.cryptoSignOutgoing ? settings.cryptoKeys.pgpPrivateKey : undefined,
+            privateKeyArmored: signThis ? settings.cryptoKeys.pgpPrivateKey : undefined,
             passphrase: settings.cryptoKeys.pgpPassphrase,
           });
           finalBody = `<pre style="white-space:pre-wrap">${result.encrypted}</pre>`;

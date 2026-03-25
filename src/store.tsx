@@ -197,6 +197,15 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRequestIdRef = useRef(0);
+  const knownEmailIdsRef = useRef<Set<string>>(new Set());
+  const isFirstFetchRef = useRef(true);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
   // Derived: UI always reads from `emails`, which switches based on search mode
   const emails = isSearchActive ? searchResults : folderEmails;

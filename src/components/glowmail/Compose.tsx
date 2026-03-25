@@ -910,7 +910,7 @@ export function Compose({
                   <SelectValue placeholder={t('compose.noSignature', lang)} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">{t('compose.noSignature', lang)}</SelectItem>
+                  <SelectItem value="__none__">{t('compose.noSignature', lang)}</SelectItem>
                   {settings.signatures.map(sig => (
                     <SelectItem key={sig.id} value={sig.id}>{sig.name}</SelectItem>
                   ))}

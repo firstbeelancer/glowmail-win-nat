@@ -154,6 +154,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               {activeTab === 'appearance' && t('settings.appearanceSettings', lang)}
               {activeTab === 'signature' && t('settings.signatureSettings', lang)}
               {activeTab === 'tags' && t('settings.tagsSettings', lang)}
+              {activeTab === 'security' && t('settings.securitySettings', lang)}
               {activeTab === 'integrations' && t('settings.integrationsSettings', lang)}
             </h3>
             <button onClick={onClose} className="p-2 -mr-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors">

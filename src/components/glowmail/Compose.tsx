@@ -903,8 +903,8 @@ export function Compose({
             </button>
             {settings.signatures && settings.signatures.length > 0 && (
               <Select
-                value={selectedSignatureId || ''}
-                onValueChange={(v) => setSelectedSignatureId(v)}
+                value={selectedSignatureId || '__none__'}
+                onValueChange={(v) => setSelectedSignatureId(v === '__none__' ? undefined : v)}
               >
                 <SelectTrigger className="w-auto h-8 px-2 text-xs gap-1 rounded-lg min-w-0 max-w-[140px]">
                   <SelectValue placeholder={t('compose.noSignature', lang)} />

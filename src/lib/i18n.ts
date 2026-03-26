@@ -452,6 +452,13 @@ const translations = {
     'tmh.sent': 'Отправлено в Tiger Hub!',
     'tmh.error': 'Ошибка отправки в Tiger Hub',
     'tmh.notConfigured': 'Tiger Hub не настроен. Перейдите в Настройки → Интеграции.',
+    'tmh.testConnection': 'Проверить подключение',
+    'tmh.testing': 'Проверка...',
+    'tmh.connected': 'Подключено',
+    'tmh.disconnected': 'Не подключено',
+    'tmh.connectionOk': 'Подключение успешно!',
+    'tmh.connectionFail': 'Ошибка подключения',
+    'tmh.fillAllFields': 'Сначала заполните все поля',
 
     // Crypto / S/MIME / PGP
     'crypto.signed': 'Подписано',

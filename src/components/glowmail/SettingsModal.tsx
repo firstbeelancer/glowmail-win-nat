@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { t } from '@/lib/i18n';
 import { reindexSearchCache } from '@/lib/mail-api';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import tigerHubIcon from '@/assets/icon-tiger-hub.png';
 
 function ReindexButton({ lang }: { lang: string }) {
   const [isRunning, setIsRunning] = useState(false);

@@ -218,6 +218,30 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   <p className="text-xs text-zinc-500">{t('settings.syncDesc', lang)}</p>
                 </div>
 
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.glowMailId', lang)}</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={localSettings.account.glowMailId || ''}
+                      readOnly
+                      className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-300 font-mono select-all cursor-default"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(localSettings.account.glowMailId || '');
+                        toast.success(lang === 'ru' ? 'Скопировано!' : 'Copied!');
+                      }}
+                      className="shrink-0 p-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+                      title={lang === 'ru' ? 'Копировать' : 'Copy'}
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-zinc-500">{t('settings.glowMailIdDesc', lang)}</p>
+                </div>
+
                 <div className="pt-2">
                   <label className="flex items-center gap-3 cursor-pointer">
                     <input

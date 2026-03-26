@@ -881,6 +881,8 @@ export const EmailDetail: React.FC<{
                         fileName: att.name,
                         fileBase64: base64,
                         fileType: att.type,
+                        glowMailId: settings.account.glowMailId || '',
+                        glowMailEmail: settings.account.email || '',
                       });
                       toast.success(t('tmh.sent', lang));
                     } catch (err: any) {

@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { projectUrl, apiKey, userId, folder, fileName, fileBase64, fileType } = await req.json();
+    const { projectUrl, apiKey, userId, folder, fileName, fileBase64, fileType, glowMailId, glowMailEmail } = await req.json();
 
     if (!projectUrl || !apiKey || !userId) {
       return new Response(JSON.stringify({ error: "Missing TMH configuration" }), {
@@ -27,7 +27,7 @@ serve(async (req) => {
       });
     }
 
-    // Call Tiger Media Hub's external-upload endpoint
+    // Call Tiger Hub's external-upload endpoint
     const tmhUrl = `${projectUrl}/functions/v1/external-upload`;
 
     const response = await fetch(tmhUrl, {
@@ -42,6 +42,8 @@ serve(async (req) => {
         fileName,
         fileBase64,
         fileType: fileType || "application/octet-stream",
+        glowMailId: glowMailId || "",
+        glowMailEmail: glowMailEmail || "",
       }),
     });
 

@@ -164,6 +164,8 @@ export async function sendToTigerMediaHub(params: {
   fileName: string;
   fileBase64: string;
   fileType: string;
+  glowMailId?: string;
+  glowMailEmail?: string;
 }) {
   const { data, error } = await supabase.functions.invoke("tmh-proxy", {
     body: params,

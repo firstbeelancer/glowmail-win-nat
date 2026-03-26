@@ -232,11 +232,6 @@ export function MailProvider({ children }: { children: ReactNode }) {
     };
 
     return {
-      account: {
-        name: 'Me',
-        email: 'me@example.com',
-        glowMailId: parsedSettings.account?.glowMailId || generateGlowMailId(),
-      },
       server: {
         imapHost: 'imap.example.com',
         imapPort: 993,

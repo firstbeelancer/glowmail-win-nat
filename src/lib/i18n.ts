@@ -208,6 +208,13 @@ const translations = {
     'tmh.sent': 'Sent to Tiger Hub!',
     'tmh.error': 'Failed to send to Tiger Hub',
     'tmh.notConfigured': 'Tiger Hub is not configured. Go to Settings → Integrations.',
+    'tmh.testConnection': 'Test Connection',
+    'tmh.testing': 'Testing...',
+    'tmh.connected': 'Connected',
+    'tmh.disconnected': 'Not connected',
+    'tmh.connectionOk': 'Connection successful!',
+    'tmh.connectionFail': 'Connection failed',
+    'tmh.fillAllFields': 'Fill in all fields first',
 
     // Crypto / S/MIME / PGP
     'crypto.signed': 'Digitally Signed',

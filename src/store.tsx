@@ -224,10 +224,18 @@ export function MailProvider({ children }: { children: ReactNode }) {
     const signatures = parsedSettings.signatures || [{ id: 'default', name: 'Default', content: defaultSignature }];
     const legacyLayout = localStorage.getItem('glowmail_layout');
     
+    const generateGlowMailId = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let id = 'GM-';
+      for (let i = 0; i < 8; i++) id += chars[Math.floor(Math.random() * chars.length)];
+      return id;
+    };
+
     return {
       account: {
         name: 'Me',
         email: 'me@example.com',
+        glowMailId: parsedSettings.account?.glowMailId || generateGlowMailId(),
       },
       server: {
         imapHost: 'imap.example.com',

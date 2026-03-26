@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { t } from '@/lib/i18n';
 import { reindexSearchCache } from '@/lib/mail-api';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import tigerHubIcon from '@/assets/icon-tiger-hub.png';
 
 function ReindexButton({ lang }: { lang: string }) {
   const [isRunning, setIsRunning] = useState(false);
@@ -215,6 +216,30 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-zinc-500">{t('settings.syncDesc', lang)}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.glowMailId', lang)}</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={localSettings.account.glowMailId || ''}
+                      readOnly
+                      className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-300 font-mono select-all cursor-default"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(localSettings.account.glowMailId || '');
+                        toast.success(lang === 'ru' ? 'Скопировано!' : 'Copied!');
+                      }}
+                      className="shrink-0 p-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+                      title={lang === 'ru' ? 'Копировать' : 'Copy'}
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-zinc-500">{t('settings.glowMailIdDesc', lang)}</p>
                 </div>
 
                 <div className="pt-2">
@@ -966,10 +991,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
             {activeTab === 'integrations' && (
               <div className="space-y-6 max-w-md">
-                {/* Tiger Media Hub */}
+                {/* Tiger Hub */}
                 <div className="space-y-4">
                   <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2 flex items-center gap-2">
-                    🐯 {t('tmh.title', lang)}
+                    <img src={tigerHubIcon} alt="Tiger Hub" className="w-5 h-5 object-contain" />
+                    {t('tmh.title', lang)}
                   </h4>
 
                   <label className="flex items-center gap-3 cursor-pointer">

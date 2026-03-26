@@ -840,7 +840,7 @@ export const EmailDetail: React.FC<{
               className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 w-80 shadow-2xl"
             >
               <h3 className="text-sm font-semibold text-zinc-200 mb-3">
-                {lang === 'ru' ? 'Папка в Tiger Media Hub' : 'Tiger Media Hub Folder'}
+                {lang === 'ru' ? 'Папка в Tiger Hub' : 'Tiger Hub Folder'}
               </h3>
               <input
                 type="text"

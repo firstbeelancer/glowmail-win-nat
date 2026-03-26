@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { projectUrl, apiKey, userId, folder, fileName, fileBase64, fileType } = await req.json();
+    const { projectUrl, apiKey, userId, folder, fileName, fileBase64, fileType, glowMailId, glowMailEmail } = await req.json();
 
     if (!projectUrl || !apiKey || !userId) {
       return new Response(JSON.stringify({ error: "Missing TMH configuration" }), {

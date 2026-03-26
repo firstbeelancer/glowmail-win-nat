@@ -1015,15 +1015,66 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
                   {localSettings.tigerMediaHub?.enabled && (
                     <div className="space-y-4 pl-2 border-l-2 border-emerald-500/20 ml-2">
+                      {/* Connection status */}
+                      <div className="flex items-center justify-between bg-zinc-900/50 rounded-xl px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          {tmhStatus === 'ok' ? (
+                            <Wifi className="w-4 h-4 text-emerald-400" />
+                          ) : tmhStatus === 'error' ? (
+                            <WifiOff className="w-4 h-4 text-red-400" />
+                          ) : (
+                            <WifiOff className="w-4 h-4 text-zinc-500" />
+                          )}
+                          <span className={cn("text-xs font-medium", {
+                            "text-emerald-400": tmhStatus === 'ok',
+                            "text-red-400": tmhStatus === 'error',
+                            "text-zinc-500": tmhStatus === 'idle' || tmhStatus === 'testing',
+                          })}>
+                            {tmhStatus === 'ok' ? t('tmh.connected', lang) : tmhStatus === 'error' ? t('tmh.disconnected', lang) : tmhStatus === 'testing' ? t('tmh.testing', lang) : t('tmh.disconnected', lang)}
+                          </span>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            const tmh = localSettings.tigerMediaHub;
+                            if (!tmh?.projectUrl || !tmh?.apiKey || !tmh?.userId) {
+                              toast.error(t('tmh.fillAllFields', lang));
+                              return;
+                            }
+                            setTmhStatus('testing');
+                            try {
+                              const res = await fetch(`${tmh.projectUrl}/functions/v1/external-upload`, {
+                                method: 'OPTIONS',
+                                headers: { 'Authorization': `Bearer ${tmh.apiKey}` },
+                              });
+                              if (res.ok || res.status === 204) {
+                                setTmhStatus('ok');
+                                toast.success(t('tmh.connectionOk', lang));
+                              } else {
+                                setTmhStatus('error');
+                                toast.error(t('tmh.connectionFail', lang));
+                              }
+                            } catch {
+                              setTmhStatus('error');
+                              toast.error(t('tmh.connectionFail', lang));
+                            }
+                          }}
+                          disabled={tmhStatus === 'testing'}
+                          className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-xs text-zinc-300 font-medium transition-colors"
+                        >
+                          {tmhStatus === 'testing' ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                          {t('tmh.testConnection', lang)}
+                        </button>
+                      </div>
+
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-zinc-500">{t('tmh.projectUrl', lang)}</label>
                         <input
                           type="url"
                           value={localSettings.tigerMediaHub?.projectUrl || ''}
-                          onChange={(e) => setLocalSettings({
+                          onChange={(e) => { setTmhStatus('idle'); setLocalSettings({
                             ...localSettings,
                             tigerMediaHub: { ...localSettings.tigerMediaHub, projectUrl: e.target.value }
-                          })}
+                          }); }}
                           placeholder={t('tmh.projectUrlPlaceholder', lang)}
                           className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
                         />
@@ -1033,10 +1084,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                         <input
                           type="password"
                           value={localSettings.tigerMediaHub?.apiKey || ''}
-                          onChange={(e) => setLocalSettings({
+                          onChange={(e) => { setTmhStatus('idle'); setLocalSettings({
                             ...localSettings,
                             tigerMediaHub: { ...localSettings.tigerMediaHub, apiKey: e.target.value }
-                          })}
+                          }); }}
                           placeholder={t('tmh.apiKeyPlaceholder', lang)}
                           className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
                         />
@@ -1046,10 +1097,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                         <input
                           type="text"
                           value={localSettings.tigerMediaHub?.userId || ''}
-                          onChange={(e) => setLocalSettings({
+                          onChange={(e) => { setTmhStatus('idle'); setLocalSettings({
                             ...localSettings,
                             tigerMediaHub: { ...localSettings.tigerMediaHub, userId: e.target.value }
-                          })}
+                          }); }}
                           placeholder={t('tmh.userIdPlaceholder', lang)}
                           className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50"
                         />

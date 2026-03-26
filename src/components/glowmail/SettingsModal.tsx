@@ -991,10 +991,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
             {activeTab === 'integrations' && (
               <div className="space-y-6 max-w-md">
-                {/* Tiger Media Hub */}
+                {/* Tiger Hub */}
                 <div className="space-y-4">
                   <h4 className="text-sm font-semibold text-zinc-300 border-b border-zinc-800/50 pb-2 flex items-center gap-2">
-                    🐯 {t('tmh.title', lang)}
+                    <img src={tigerHubIcon} alt="Tiger Hub" className="w-5 h-5 object-contain" />
+                    {t('tmh.title', lang)}
                   </h4>
 
                   <label className="flex items-center gap-3 cursor-pointer">

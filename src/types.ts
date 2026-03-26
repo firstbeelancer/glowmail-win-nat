@@ -84,6 +84,7 @@ export type UserSettings = {
     name: string;
     email: string;
     avatar?: string;
+    glowMailId?: string;
   };
   server: {
     imapHost: string;

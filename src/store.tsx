@@ -851,7 +851,33 @@ export function MailProvider({ children }: { children: ReactNode }) {
   };
 
   const updateSettings = (newSettings: Partial<UserSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
+    const generateGlowMailId = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let id = 'GM-';
+      for (let i = 0; i < 8; i++) id += chars[Math.floor(Math.random() * chars.length)];
+      return id;
+    };
+
+    setSettings((prev) => ({
+      ...prev,
+      ...newSettings,
+      account: {
+        ...prev.account,
+        ...newSettings.account,
+        glowMailId:
+          newSettings.account?.glowMailId ||
+          prev.account?.glowMailId ||
+          generateGlowMailId(),
+      },
+      server: {
+        ...prev.server,
+        ...newSettings.server,
+      },
+      tigerMediaHub: {
+        ...prev.tigerMediaHub,
+        ...newSettings.tigerMediaHub,
+      },
+    }));
   };
 
   const addFolder = (name: string) => {

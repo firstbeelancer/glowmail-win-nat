@@ -27,7 +27,7 @@ serve(async (req) => {
       });
     }
 
-    // Call Tiger Media Hub's external-upload endpoint
+    // Call Tiger Hub's external-upload endpoint
     const tmhUrl = `${projectUrl}/functions/v1/external-upload`;
 
     const response = await fetch(tmhUrl, {
@@ -42,6 +42,8 @@ serve(async (req) => {
         fileName,
         fileBase64,
         fileType: fileType || "application/octet-stream",
+        glowMailId: glowMailId || "",
+        glowMailEmail: glowMailEmail || "",
       }),
     });
 

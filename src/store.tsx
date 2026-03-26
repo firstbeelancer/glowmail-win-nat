@@ -281,6 +281,12 @@ export function MailProvider({ children }: { children: ReactNode }) {
       cryptoEncryptOutgoing: false,
       cryptoPreferredType: 'smime' as const,
       ...parsedSettings,
+      account: {
+        name: 'Me',
+        email: 'me@example.com',
+        ...parsedSettings.account,
+        glowMailId: parsedSettings.account?.glowMailId || generateGlowMailId(),
+      },
     };
   });
 

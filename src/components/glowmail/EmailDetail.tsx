@@ -34,6 +34,7 @@ export const EmailDetail: React.FC<{
   const [tmhFolderPrompt, setTmhFolderPrompt] = useState<{ attId: string; folder: string } | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<{ verified: boolean; error?: string } | null>(null);
+  const [downloadingAttId, setDownloadingAttId] = useState<string | null>(null);
 
   // Keyboard shortcuts for next/prev
   useEffect(() => {

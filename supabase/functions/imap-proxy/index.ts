@@ -1449,6 +1449,8 @@ Deno.serve(async (req) => {
           contentBase64: base64Content,
         });
       }
+
+      case "copy": {
         const { folder = "INBOX", uid: copyUid, targetFolder } = body;
         if (!copyUid || !targetFolder) return err("Missing uid or targetFolder", 400);
 

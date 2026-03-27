@@ -740,7 +740,7 @@ export const EmailDetail: React.FC<{
                             className="p-2 bg-zinc-900/80 rounded-full text-zinc-200 hover:text-emerald-400 hover:scale-110 transition-all shadow-lg"
                             title={lang === 'ru' ? 'Скачать' : 'Download'}
                           >
-                            <Download className="w-5 h-5" />
+                            {downloadingAttId === att.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
                           </button>
                           {settings.tigerMediaHub?.enabled && (
                             <button

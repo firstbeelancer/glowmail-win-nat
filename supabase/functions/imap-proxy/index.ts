@@ -1365,7 +1365,90 @@ Deno.serve(async (req) => {
         });
       }
 
-      case "copy": {
+      case "fetch-attachment": {
+        const { folder = "INBOX", uid: attUid, attachmentIndex } = body;
+        if (!attUid || attachmentIndex === undefined) return err("Missing uid or attachmentIndex", 400);
+
+        await client.selectMailbox(folder);
+        const targetAttUid = Number(attUid);
+
+        // Fetch raw source
+        const attMessages = await (client as any).fetch(String(targetAttUid), {
+          byUid: true,
+          uid: true,
+          source: true,
+        });
+        const attFetched = (Array.isArray(attMessages) ? attMessages : [attMessages]).filter(Boolean);
+        const attMsg = attFetched.find((m: any) => Number(m?.uid) === targetAttUid) || attFetched[0];
+
+        if (!attMsg?.source) {
+          await client.disconnect();
+          client = null;
+          return err("Could not fetch message source", 404);
+        }
+
+        let attRawSource: Uint8Array | null = null;
+        if (attMsg.source instanceof Uint8Array) {
+          attRawSource = attMsg.source;
+        } else if (typeof attMsg.source === "string") {
+          attRawSource = new TextEncoder().encode(attMsg.source);
+        } else if (attMsg.source instanceof ArrayBuffer) {
+          attRawSource = new Uint8Array(attMsg.source);
+        }
+
+        if (!attRawSource) {
+          await client.disconnect();
+          client = null;
+          return err("Could not read message source", 500);
+        }
+
+        let attParsed: any;
+        try {
+          attParsed = await PostalMime.parse(attRawSource);
+        } catch (e) {
+          await client.disconnect();
+          client = null;
+          return err("Failed to parse message", 500);
+        }
+
+        await client.disconnect();
+        client = null;
+
+        const realAttachments = (attParsed.attachments || []).filter((a: any) => {
+          const mt = (a.mimeType || "").toLowerCase();
+          return mt !== "text/plain" && mt !== "text/html";
+        });
+
+        const targetAtt = realAttachments[Number(attachmentIndex)];
+        if (!targetAtt) return err("Attachment not found at index " + attachmentIndex, 404);
+
+        let attBytes: Uint8Array | null = null;
+        try {
+          if (targetAtt.content instanceof Uint8Array) {
+            attBytes = targetAtt.content;
+          } else if (targetAtt.content instanceof ArrayBuffer) {
+            attBytes = new Uint8Array(targetAtt.content);
+          } else if (targetAtt.content && typeof targetAtt.content === "object") {
+            attBytes = new Uint8Array(targetAtt.content);
+          }
+        } catch {
+          attBytes = null;
+        }
+
+        if (!attBytes) return err("Could not extract attachment content", 500);
+
+        // Encode as base64
+        let binary = "";
+        for (let i = 0; i < attBytes.length; i++) binary += String.fromCharCode(attBytes[i]);
+        const base64Content = btoa(binary);
+
+        return ok({
+          name: targetAtt.filename || "unnamed",
+          type: targetAtt.mimeType || "application/octet-stream",
+          size: attBytes.length,
+          contentBase64: base64Content,
+        });
+      }
         const { folder = "INBOX", uid: copyUid, targetFolder } = body;
         if (!copyUid || !targetFolder) return err("Missing uid or targetFolder", 400);
 

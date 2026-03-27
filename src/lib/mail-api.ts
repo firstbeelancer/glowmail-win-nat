@@ -65,6 +65,11 @@ export async function deleteEmail(folder: string, uid: number) {
   return callImap("delete", { folder, uid });
 }
 
+export async function fetchAttachmentContent(folder: string, uid: number, attachmentIndex: number) {
+  const data = await callImap("fetch-attachment", { folder, uid, attachmentIndex });
+  return data;
+}
+
 export async function searchEmails(folder: string, query: string, page = 1, pageSize = 30) {
   const data = await callImap("search", { folder, query, page, pageSize });
   return data;

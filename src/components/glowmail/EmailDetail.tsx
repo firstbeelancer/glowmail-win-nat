@@ -707,7 +707,7 @@ export const EmailDetail: React.FC<{
                         
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]">
                           <button
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
                               if (att.url) {
                                 const a = document.createElement('a');
@@ -715,7 +715,26 @@ export const EmailDetail: React.FC<{
                                 a.download = att.name;
                                 a.click();
                               } else {
-                                toast(lang === 'ru' ? 'Файл недоступен для скачивания' : 'File not available for download', { icon: '⚠️' });
+                                // Fetch attachment content on demand
+                                try {
+                                  setDownloadingAttId(att.id);
+                                  const attIndex = email.attachments.indexOf(att);
+                                  const result = await fetchAttachmentContent(currentFolder, Number(email.id), attIndex);
+                                  if (result.contentBase64) {
+                                    const dataUrl = `data:${result.type || 'application/octet-stream'};base64,${result.contentBase64}`;
+                                    const a = document.createElement('a');
+                                    a.href = dataUrl;
+                                    a.download = result.name || att.name;
+                                    a.click();
+                                  } else {
+                                    toast(lang === 'ru' ? 'Не удалось загрузить файл' : 'Failed to download file', { icon: '⚠️' });
+                                  }
+                                } catch (err) {
+                                  console.error('Attachment download failed:', err);
+                                  toast(lang === 'ru' ? 'Ошибка загрузки файла' : 'File download error', { icon: '❌' });
+                                } finally {
+                                  setDownloadingAttId(null);
+                                }
                               }
                             }}
                             className="p-2 bg-zinc-900/80 rounded-full text-zinc-200 hover:text-emerald-400 hover:scale-110 transition-all shadow-lg"

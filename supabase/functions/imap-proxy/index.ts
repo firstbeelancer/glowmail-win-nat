@@ -1371,8 +1371,13 @@ Deno.serve(async (req) => {
 
         await client.selectMailbox(folder);
         const targetAttUid = Number(attUid);
+        const targetIndex = Number(attachmentIndex);
+        if (!Number.isInteger(targetIndex) || targetIndex < 0) {
+          await client.disconnect();
+          client = null;
+          return err("Invalid attachmentIndex", 400);
+        }
 
-        // Step 1: Get bodyStructure to find attachment part paths
         const structMsgs = await (client as any).fetch(String(targetAttUid), {
           byUid: true,
           uid: true,
@@ -1387,63 +1392,119 @@ Deno.serve(async (req) => {
           return err("Could not get message structure", 404);
         }
 
-        // Step 2: Walk bodyStructure to find all attachment parts with their IMAP paths
         type AttPart = { path: string; filename: string; mimeType: string; encoding: string; size: number };
         const attachmentParts: AttPart[] = [];
+        const seenPartPaths = new Set<string>();
 
-        const walkForAttachments = (node: any, path = "") => {
+        const addAttachmentPart = (part: AttPart) => {
+          if (!part.path || seenPartPaths.has(part.path)) return;
+          seenPartPaths.add(part.path);
+          attachmentParts.push(part);
+        };
+
+        const extractFilename = (node: any) => {
+          const rawDisp = node?.disposition || node?.contentDisposition || "";
+          return node?.dispositionParameters?.filename
+            || node?.parameters?.name
+            || node?.contentDispositionParameters?.filename
+            || node?.attrs?.name
+            || (typeof rawDisp === "object" && rawDisp?.params?.filename)
+            || "";
+        };
+
+        const isAttachmentNode = (node: any) => {
+          const type = (node?.type || node?.mediaType || "").toLowerCase();
+          const subtype = (node?.subtype || node?.mediaSubtype || "").toLowerCase();
+          const mimeType = `${type}/${subtype}`;
+          const rawDisp = node?.disposition || node?.contentDisposition || "";
+          const disposition = (typeof rawDisp === "string" ? rawDisp : rawDisp?.type || "").toString().toLowerCase();
+          const filename = extractFilename(node);
+          const isTextBody = ["text/plain", "text/html"].includes(mimeType);
+          const isMultipart = mimeType.startsWith("multipart/") || mimeType.startsWith("message/");
+
+          return disposition === "attachment"
+            || (disposition === "inline" && node?.id && mimeType.startsWith("image/"))
+            || (filename && !isTextBody)
+            || (!isTextBody && !isMultipart && mimeType !== "/" && type !== "" && disposition !== "" && disposition !== "inline");
+        };
+
+        const walkStructured = (node: any, path = "") => {
           if (!node) return;
           const type = (node.type || node.mediaType || "").toLowerCase();
           const subtype = (node.subtype || node.mediaSubtype || "").toLowerCase();
-          const mimeType = `${type}/${subtype}`;
-          const rawDisp = node.disposition || node.contentDisposition || "";
-          const disposition = (typeof rawDisp === "string" ? rawDisp : rawDisp?.type || "").toString().toLowerCase();
-          const filename = node.dispositionParameters?.filename
-            || node.parameters?.name
-            || node.contentDispositionParameters?.filename
-            || node.attrs?.name
-            || (typeof rawDisp === "object" && rawDisp?.params?.filename)
-            || "";
-          const isTextBody = ["text/plain", "text/html"].includes(mimeType);
-          const isMultipart = mimeType.startsWith("multipart/") || mimeType.startsWith("message/");
-          const isAtt = disposition === "attachment"
-            || (disposition === "inline" && node.id && mimeType.startsWith("image/"))
-            || (filename && !isTextBody)
-            || (!isTextBody && !isMultipart && mimeType !== "/" && type !== "" && disposition !== "" && disposition !== "inline");
+          const mimeType = `${type}/${subtype}` || "application/octet-stream";
+          const resolvedPath = node.part || path || "1";
 
-          if (isAtt) {
-            const resolvedPath = node.part || path || "1";
-            attachmentParts.push({
+          if (isAttachmentNode(node)) {
+            addAttachmentPart({
               path: resolvedPath,
-              filename: filename || "unnamed",
-              mimeType: mimeType || "application/octet-stream",
-              encoding: (node.encoding || node.contentTransferEncoding || "").toLowerCase(),
-              size: node.size || 0,
+              filename: extractFilename(node) || "unnamed",
+              mimeType,
+              encoding: String(node.encoding || node.contentTransferEncoding || "").toLowerCase(),
+              size: Number(node.size || 0),
             });
           }
 
-          const children = node.childNodes || node.parts || [];
+          const children = node.childNodes || node.parts || node.body || [];
           if (Array.isArray(children)) {
             for (let i = 0; i < children.length; i++) {
               const childPath = path ? `${path}.${i + 1}` : `${i + 1}`;
-              walkForAttachments(children[i], childPath);
+              walkStructured(children[i], childPath);
             }
           }
         };
 
-        walkForAttachments(structMsg.bodyStructure);
-        console.log("[fetch-attachment] found", attachmentParts.length, "attachment parts, requested index:", attachmentIndex);
+        const walkLooseParts = (value: any, inheritedPath = "") => {
+          if (!value) return;
+          if (Array.isArray(value)) {
+            value.forEach((item, idx) => walkLooseParts(item, inheritedPath ? `${inheritedPath}.${idx + 1}` : `${idx + 1}`));
+            return;
+          }
+          if (typeof value !== "object") return;
 
-        const targetPart = attachmentParts[Number(attachmentIndex)];
+          const node = value as any;
+          const resolvedPath = node.part || node.path || inheritedPath;
+          const type = (node.type || node.mediaType || "").toLowerCase();
+          const subtype = (node.subtype || node.mediaSubtype || "").toLowerCase();
+          const mimeType = `${type}/${subtype}` || "application/octet-stream";
+
+          if (resolvedPath && isAttachmentNode(node)) {
+            addAttachmentPart({
+              path: String(resolvedPath),
+              filename: extractFilename(node) || "unnamed",
+              mimeType,
+              encoding: String(node.encoding || node.contentTransferEncoding || "").toLowerCase(),
+              size: Number(node.size || 0),
+            });
+          }
+
+          const nestedCandidates = [node.childNodes, node.parts, node.body, node.children];
+          for (const nested of nestedCandidates) {
+            if (Array.isArray(nested)) {
+              nested.forEach((item: any, idx: number) => {
+                const childPath = resolvedPath ? `${resolvedPath}.${idx + 1}` : `${idx + 1}`;
+                walkLooseParts(item, childPath);
+              });
+            } else if (nested && typeof nested === "object") {
+              walkLooseParts(nested, resolvedPath);
+            }
+          }
+        };
+
+        walkStructured(structMsg.bodyStructure);
+        if (attachmentParts.length === 0 && structMsg.parts) {
+          walkLooseParts(structMsg.parts);
+        }
+
+        console.log("[fetch-attachment] found", attachmentParts.length, "attachment parts, requested index:", targetIndex);
+
+        const targetPart = attachmentParts[targetIndex];
         if (!targetPart) {
           await client.disconnect();
           client = null;
-          return err("Attachment not found at index " + attachmentIndex + " (found " + attachmentParts.length + " attachments)", 404);
+          return err("Attachment not found at index " + targetIndex + " (found " + attachmentParts.length + " attachments)", 404);
         }
 
-        console.log("[fetch-attachment] fetching part:", targetPart.path, "mime:", targetPart.mimeType, "encoding:", targetPart.encoding);
-
-        // Step 3: Fetch only the specific MIME part
         const partMsgs = await (client as any).fetch(String(targetAttUid), {
           byUid: true,
           uid: true,
@@ -1463,54 +1524,26 @@ Deno.serve(async (req) => {
           return err("Could not fetch attachment content", 500);
         }
 
-        // Convert to Uint8Array
-        let partBytes: Uint8Array | null = null;
-        if (partContent instanceof Uint8Array) {
-          partBytes = partContent;
-        } else if (typeof partContent === "string") {
-          // If base64 encoded by the server, decode; otherwise encode as-is
-          if (targetPart.encoding === "base64") {
-            try {
-              const cleaned = partContent.replace(/\r?\n/g, "");
-              const binary = atob(cleaned);
-              partBytes = new Uint8Array(binary.length);
-              for (let i = 0; i < binary.length; i++) partBytes[i] = binary.charCodeAt(i);
-            } catch {
-              partBytes = new TextEncoder().encode(partContent);
+        let partBytes = toSearchableBytes(partContent);
+        if (!partBytes && typeof partContent === "string" && targetPart.encoding.includes("base64")) {
+          partBytes = decodeBase64ToBytes(partContent);
+        }
+
+        if (!partBytes && partContent && typeof partContent === "object" && "getReader" in (partContent as any)) {
+          try {
+            const reader = (partContent as ReadableStream).getReader();
+            const chunks: Uint8Array[] = [];
+            while (true) {
+              const { done, value: chunk } = await reader.read();
+              if (done) break;
+              chunks.push(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
             }
-          } else {
-            partBytes = new TextEncoder().encode(partContent);
-          }
-        } else if (partContent instanceof ArrayBuffer) {
-          partBytes = new Uint8Array(partContent);
-        } else if (partContent && typeof partContent === "object") {
-          // ReadableStream or AsyncIterable
-          if ("getReader" in (partContent as any)) {
-            try {
-              const reader = (partContent as ReadableStream).getReader();
-              const chunks: Uint8Array[] = [];
-              while (true) {
-                const { done, value: chunk } = await reader.read();
-                if (done) break;
-                chunks.push(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
-              }
-              const totalLen = chunks.reduce((s, c) => s + c.length, 0);
-              partBytes = new Uint8Array(totalLen);
-              let off = 0;
-              for (const c of chunks) { partBytes.set(c, off); off += c.length; }
-            } catch { /* fall through */ }
-          }
-          if (!partBytes && Symbol.asyncIterator in (partContent as any)) {
-            try {
-              const chunks: Uint8Array[] = [];
-              for await (const chunk of partContent as AsyncIterable<Uint8Array>) {
-                chunks.push(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk as any));
-              }
-              const totalLen = chunks.reduce((s, c) => s + c.length, 0);
-              partBytes = new Uint8Array(totalLen);
-              let off = 0;
-              for (const c of chunks) { partBytes.set(c, off); off += c.length; }
-            } catch { /* fall through */ }
+            const totalLen = chunks.reduce((s, c) => s + c.length, 0);
+            partBytes = new Uint8Array(totalLen);
+            let off = 0;
+            for (const c of chunks) { partBytes.set(c, off); off += c.length; }
+          } catch {
+            partBytes = null;
           }
         }
 
@@ -1521,12 +1554,12 @@ Deno.serve(async (req) => {
           return err("Attachment content is empty", 500);
         }
 
-        // Encode as base64 for JSON response
         let binary = "";
-        for (let i = 0; i < partBytes.length; i++) binary += String.fromCharCode(partBytes[i]);
+        const CHUNK_SIZE = 0x8000;
+        for (let i = 0; i < partBytes.length; i += CHUNK_SIZE) {
+          binary += String.fromCharCode(...partBytes.subarray(i, i + CHUNK_SIZE));
+        }
         const base64Content = btoa(binary);
-
-        console.log("[fetch-attachment] success, size:", partBytes.length, "base64len:", base64Content.length);
 
         return ok({
           name: targetPart.filename,

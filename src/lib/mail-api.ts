@@ -45,7 +45,7 @@ export async function fetchEmailList(folder = "INBOX", page = 1, pageSize = 50) 
 }
 
 export async function fetchEmailBody(folder: string, uid: number) {
-  const data = await callImap("fetch", { folder, uid, includeAttachmentContent: false });
+  const data = await callImap("fetch", { folder, uid, includeAttachmentContent: true });
   return data;
 }
 
@@ -63,6 +63,11 @@ export async function copyEmail(folder: string, uid: number, targetFolder: strin
 
 export async function deleteEmail(folder: string, uid: number) {
   return callImap("delete", { folder, uid });
+}
+
+export async function fetchAttachmentContent(folder: string, uid: number, attachmentIndex: number) {
+  const data = await callImap("fetch-attachment", { folder, uid, attachmentIndex });
+  return data;
 }
 
 export async function searchEmails(folder: string, query: string, page = 1, pageSize = 30) {

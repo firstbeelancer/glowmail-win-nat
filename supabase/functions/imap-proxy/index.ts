@@ -1372,34 +1372,103 @@ Deno.serve(async (req) => {
         await client.selectMailbox(folder);
         const targetAttUid = Number(attUid);
 
-        // Fetch raw source
-        const attMessages = await (client as any).fetch(String(targetAttUid), {
-          byUid: true,
-          uid: true,
-          source: true,
-        });
-        const attFetched = (Array.isArray(attMessages) ? attMessages : [attMessages]).filter(Boolean);
-        const attMsg = attFetched.find((m: any) => Number(m?.uid) === targetAttUid) || attFetched[0];
+        // Helper to convert various source types to Uint8Array
+        const toBytes = async (value: unknown): Promise<Uint8Array | null> => {
+          if (value instanceof Uint8Array) return value;
+          if (typeof value === "string") return new TextEncoder().encode(value);
+          if (value instanceof ArrayBuffer) return new Uint8Array(value);
+          if (value && typeof value === "object") {
+            // Handle ReadableStream
+            if ("getReader" in (value as any)) {
+              try {
+                const reader = (value as ReadableStream).getReader();
+                const chunks: Uint8Array[] = [];
+                while (true) {
+                  const { done, value: chunk } = await reader.read();
+                  if (done) break;
+                  chunks.push(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk));
+                }
+                const totalLen = chunks.reduce((s, c) => s + c.length, 0);
+                const result = new Uint8Array(totalLen);
+                let offset = 0;
+                for (const c of chunks) { result.set(c, offset); offset += c.length; }
+                return result;
+              } catch { return null; }
+            }
+            // Handle AsyncIterable
+            if (Symbol.asyncIterator in (value as any)) {
+              try {
+                const chunks: Uint8Array[] = [];
+                for await (const chunk of value as AsyncIterable<Uint8Array>) {
+                  chunks.push(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk as any));
+                }
+                const totalLen = chunks.reduce((s, c) => s + c.length, 0);
+                const result = new Uint8Array(totalLen);
+                let offset = 0;
+                for (const c of chunks) { result.set(c, offset); offset += c.length; }
+                return result;
+              } catch { return null; }
+            }
+            const maybe = value as { buffer?: unknown; byteOffset?: unknown; byteLength?: unknown };
+            if (maybe.buffer instanceof ArrayBuffer) {
+              const byteOffset = typeof maybe.byteOffset === "number" ? maybe.byteOffset : 0;
+              const byteLength = typeof maybe.byteLength === "number" ? maybe.byteLength : undefined;
+              return new Uint8Array(maybe.buffer, byteOffset, byteLength);
+            }
+            const keys = Object.keys(value);
+            if (keys.length > 0 && keys.every(k => /^\d+$/.test(k))) {
+              const arr = new Uint8Array(keys.length);
+              for (let i = 0; i < keys.length; i++) arr[i] = (value as any)[i];
+              return arr;
+            }
+          }
+          return null;
+        };
 
-        if (!attMsg?.source) {
-          await client.disconnect();
-          client = null;
-          return err("Could not fetch message source", 404);
+        // Fetch raw source
+        let attRawSource: Uint8Array | null = null;
+        try {
+          const attMessages = await (client as any).fetch(String(targetAttUid), {
+            byUid: true,
+            uid: true,
+            source: true,
+          });
+          const attFetched = (Array.isArray(attMessages) ? attMessages : [attMessages]).filter(Boolean);
+          const attMsg = attFetched.find((m: any) => Number(m?.uid) === targetAttUid) || attFetched[0];
+          if (attMsg?.source) {
+            attRawSource = await toBytes(attMsg.source);
+          }
+        } catch (fetchErr) {
+          console.error("[fetch-attachment] source fetch failed:", fetchErr);
         }
 
-        let attRawSource: Uint8Array | null = null;
-        if (attMsg.source instanceof Uint8Array) {
-          attRawSource = attMsg.source;
-        } else if (typeof attMsg.source === "string") {
-          attRawSource = new TextEncoder().encode(attMsg.source);
-        } else if (attMsg.source instanceof ArrayBuffer) {
-          attRawSource = new Uint8Array(attMsg.source);
+        // Fallback: fetch with raw body
+        if (!attRawSource) {
+          try {
+            console.log("[fetch-attachment] trying raw body fallback for uid:", targetAttUid);
+            const msgs2 = await (client as any).fetch(String(targetAttUid), {
+              byUid: true,
+              uid: true,
+              bodyParts: [""],
+            });
+            const fetched2 = (Array.isArray(msgs2) ? msgs2 : [msgs2]).filter(Boolean);
+            const msg2 = fetched2.find((m: any) => Number(m?.uid) === targetAttUid) || fetched2[0];
+            if (msg2) {
+              let rawContent: unknown = null;
+              if (msg2.bodyParts instanceof Map) rawContent = msg2.bodyParts.get("");
+              else if (msg2.body instanceof Map) rawContent = msg2.body.get("");
+              if (!rawContent) rawContent = msg2["body[]"];
+              if (rawContent) attRawSource = await toBytes(rawContent);
+            }
+          } catch (fallbackErr) {
+            console.error("[fetch-attachment] raw body fallback failed:", fallbackErr);
+          }
         }
 
         if (!attRawSource) {
           await client.disconnect();
           client = null;
-          return err("Could not read message source", 500);
+          return err("Could not fetch message source for attachment", 404);
         }
 
         let attParsed: any;
@@ -1410,52 +1479,6 @@ Deno.serve(async (req) => {
           client = null;
           return err("Failed to parse message", 500);
         }
-
-        await client.disconnect();
-        client = null;
-
-        const realAttachments = (attParsed.attachments || []).filter((a: any) => {
-          const mt = (a.mimeType || "").toLowerCase();
-          return mt !== "text/plain" && mt !== "text/html";
-        });
-
-        const targetAtt = realAttachments[Number(attachmentIndex)];
-        if (!targetAtt) return err("Attachment not found at index " + attachmentIndex, 404);
-
-        let attBytes: Uint8Array | null = null;
-        try {
-          if (targetAtt.content instanceof Uint8Array) {
-            attBytes = targetAtt.content;
-          } else if (targetAtt.content instanceof ArrayBuffer) {
-            attBytes = new Uint8Array(targetAtt.content);
-          } else if (targetAtt.content && typeof targetAtt.content === "object") {
-            attBytes = new Uint8Array(targetAtt.content);
-          }
-        } catch {
-          attBytes = null;
-        }
-
-        if (!attBytes) return err("Could not extract attachment content", 500);
-
-        // Encode as base64
-        let binary = "";
-        for (let i = 0; i < attBytes.length; i++) binary += String.fromCharCode(attBytes[i]);
-        const base64Content = btoa(binary);
-
-        return ok({
-          name: targetAtt.filename || "unnamed",
-          type: targetAtt.mimeType || "application/octet-stream",
-          size: attBytes.length,
-          contentBase64: base64Content,
-        });
-      }
-
-      case "copy": {
-        const { folder = "INBOX", uid: copyUid, targetFolder } = body;
-        if (!copyUid || !targetFolder) return err("Missing uid or targetFolder", 400);
-
-        await client.selectMailbox(folder);
-        await client.copyMessages(String(copyUid), targetFolder, true);
 
         await client.disconnect();
         client = null;

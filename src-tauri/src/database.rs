@@ -103,6 +103,14 @@ pub struct CacheDeleteEmailRequest {
     pub email_id: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CacheEmailDetailRequest {
+    pub account_email: String,
+    pub folder_path: String,
+    pub email_id: String,
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FolderSyncStateRecord {
@@ -450,7 +458,7 @@ impl AppDatabase {
             .prepare(
                 r#"
                 SELECT uid, folder_path, subject, sender_name, sender_email, recipients_to, recipients_cc,
-                       sent_at, snippet, body_html, labels_json, attachments_json, headers_json, is_read, is_starred
+                       sent_at, snippet, '' as body_html, labels_json, attachments_json, headers_json, is_read, is_starred
                 FROM emails
                 WHERE account_email = ?1 AND folder_path = ?2
                 ORDER BY datetime(sent_at) DESC
@@ -466,6 +474,35 @@ impl AppDatabase {
             .map_err(|err| err.to_string())?;
 
         rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|err| err.to_string())
+    }
+
+    pub fn get_email_detail(
+        &self,
+        request: &CacheEmailDetailRequest,
+    ) -> Result<Option<CachedEmailRecord>, String> {
+        let connection = self.connection.lock().map_err(|err| err.to_string())?;
+        let uid = request.email_id.parse::<i64>().unwrap_or_default();
+        let mut statement = connection
+            .prepare(
+                r#"
+                SELECT uid, folder_path, subject, sender_name, sender_email, recipients_to, recipients_cc,
+                       sent_at, snippet, body_html, labels_json, attachments_json, headers_json, is_read, is_starred
+                FROM emails
+                WHERE account_email = ?1 AND folder_path = ?2 AND uid = ?3
+                LIMIT 1
+                "#,
+            )
+            .map_err(|err| err.to_string())?;
+
+        let mut rows = statement
+            .query(params![request.account_email, request.folder_path, uid])
+            .map_err(|err| err.to_string())?;
+
+        rows.next()
+            .map_err(|err| err.to_string())?
+            .map(map_cached_email_row)
+            .transpose()
             .map_err(|err| err.to_string())
     }
 
@@ -495,7 +532,7 @@ impl AppDatabase {
             .prepare(
                 r#"
                 SELECT emails.uid, emails.folder_path, emails.subject, emails.sender_name, emails.sender_email,
-                       emails.recipients_to, emails.recipients_cc, emails.sent_at, emails.snippet, emails.body_html,
+                       emails.recipients_to, emails.recipients_cc, emails.sent_at, emails.snippet, '' as body_html,
                        emails.labels_json, emails.attachments_json, emails.headers_json, emails.is_read, emails.is_starred
                 FROM emails_fts
                 JOIN emails ON emails.id = emails_fts.rowid

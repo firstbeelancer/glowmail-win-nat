@@ -101,6 +101,20 @@ export async function getCachedFolderEmails(
   })) || [];
 }
 
+export async function getCachedEmailDetail(
+  accountEmail: string,
+  folderPath: string,
+  emailId: string,
+): Promise<Email | null> {
+  return (await safeInvoke<Email>("cache_get_email_detail", {
+    request: {
+      accountEmail,
+      folderPath,
+      emailId,
+    },
+  })) || null;
+}
+
 export async function searchCachedEmails(
   accountEmail: string,
   folderPath: string,

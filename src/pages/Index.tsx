@@ -9,6 +9,7 @@ import { Toaster } from 'react-hot-toast';
 import { AnimatePresence } from 'framer-motion';
 import Login from './Login';
 import * as mailApi from '../lib/mail-api';
+import * as desktopCache from '../lib/desktop/cache';
 import { saveCredentials, hasCredentials, loadCredentials } from '../lib/credentials';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 
@@ -218,6 +219,21 @@ function MailApp() {
     // Fetch full body from IMAP if not already loaded
     if (!email.body) {
       try {
+        const creds = await loadCredentials();
+        if (creds && await desktopCache.isDesktopRuntime()) {
+          const cached = await desktopCache.getCachedEmailDetail(creds.email, currentFolder, email.id);
+          if (cached?.body) {
+            const enrichedCached = {
+              ...email,
+              ...cached,
+              read: true,
+            };
+            upsertLocalEmail(enrichedCached);
+            setSelectedEmail(enrichedCached);
+            return;
+          }
+        }
+
         const full = await mailApi.fetchEmailBody(currentFolder, Number(email.id));
         
         // Map attachments from fetch response

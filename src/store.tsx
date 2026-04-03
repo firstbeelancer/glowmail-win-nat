@@ -474,6 +474,29 @@ export function MailProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const readCachedFolderEmailsWithTimeout = useCallback(async (
+    accountEmail: string,
+    folderPath: string,
+    limit: number,
+    offset = 0,
+    timeoutMs = 150,
+  ): Promise<{ emails: Email[]; completed: boolean }> => {
+    if (!isDesktopCacheReady) {
+      return { emails: [], completed: true };
+    }
+
+    const cachePromise = desktopCache
+      .getCachedFolderEmails(accountEmail, folderPath, limit, offset)
+      .then((emails) => ({ emails, completed: true }))
+      .catch(() => ({ emails: [], completed: true }));
+
+    const timeoutPromise = new Promise<{ emails: Email[]; completed: boolean }>((resolve) => {
+      window.setTimeout(() => resolve({ emails: [], completed: false }), timeoutMs);
+    });
+
+    return Promise.race([cachePromise, timeoutPromise]);
+  }, [isDesktopCacheReady]);
+
   const PAGE_SIZE = 50;
   const SEARCH_PAGE_SIZE = 30;
   const BACKGROUND_SYNC_PAGE_LIMIT = 1;
@@ -738,6 +761,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     try {
       const accountEmail = getCurrentAccountEmail();
       let cachedEmails: Email[] = [];
+      let cachedEmailsPromise: Promise<Email[]> | null = null;
 
       if (folders.length === 0) {
         setStatusBanner({
@@ -756,8 +780,12 @@ export function MailProvider({ children }: { children: ReactNode }) {
             ? `Открываю локальный кэш ${currentFolder}...`
             : `Opening local cache for ${currentFolder}...`,
         });
-        cachedEmails = await desktopCache.getCachedFolderEmails(accountEmail, currentFolder, PAGE_SIZE, 0);
-        if (cachedEmails.length > 0) {
+        cachedEmailsPromise = desktopCache
+          .getCachedFolderEmails(accountEmail, currentFolder, PAGE_SIZE, 0)
+          .catch(() => []);
+        const quickCache = await readCachedFolderEmailsWithTimeout(accountEmail, currentFolder, PAGE_SIZE, 0);
+        cachedEmails = quickCache.emails;
+        if (quickCache.completed && cachedEmails.length > 0) {
           setFolderEmails(cachedEmails);
           setCurrentPage(1);
           setHasMoreEmails(cachedEmails.length >= PAGE_SIZE);
@@ -772,6 +800,9 @@ export function MailProvider({ children }: { children: ReactNode }) {
           : `Fetching latest mail for ${currentFolder}...`,
       });
       const data = await mailApi.fetchEmailList(currentFolder, 1, PAGE_SIZE);
+      if (cachedEmailsPromise) {
+        cachedEmails = await cachedEmailsPromise;
+      }
       const mapped = mergeFetchedEmails(
         mapMessages(data, currentFolder),
         [
@@ -815,7 +846,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
         setStatusBanner(null);
       }
     }
-  }, [currentFolder, loadFolders, folders.length, mapMessages, mergeFetchedEmails, collectContacts, notifyNewEmails, getCurrentAccountEmail, isDesktopCacheReady, syncFolderPagesToCache, folderEmails, settings.language]);
+  }, [currentFolder, loadFolders, folders.length, mapMessages, mergeFetchedEmails, collectContacts, notifyNewEmails, getCurrentAccountEmail, isDesktopCacheReady, syncFolderPagesToCache, folderEmails, settings.language, readCachedFolderEmailsWithTimeout]);
 
   useEffect(() => {
     if (!isDesktopCacheReady || folderEmails.length === 0) return;

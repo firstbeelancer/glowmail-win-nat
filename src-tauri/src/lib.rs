@@ -45,6 +45,14 @@ struct CacheDeleteEmailRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct CacheEmailDetailRequest {
+    account_email: String,
+    folder_path: String,
+    email_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct FolderSyncStateRequest {
     account_email: String,
     folder_path: String,
@@ -117,6 +125,18 @@ fn cache_get_folder_emails(
     database: tauri::State<AppDatabase>,
 ) -> Result<Vec<database::CachedEmailRecord>, String> {
     database.get_folder_emails(&account_email, &folder_path, limit, offset)
+}
+
+#[tauri::command]
+fn cache_get_email_detail(
+    request: CacheEmailDetailRequest,
+    database: tauri::State<AppDatabase>,
+) -> Result<Option<database::CachedEmailRecord>, String> {
+    database.get_email_detail(&database::CacheEmailDetailRequest {
+        account_email: request.account_email,
+        folder_path: request.folder_path,
+        email_id: request.email_id,
+    })
 }
 
 #[tauri::command]
@@ -194,6 +214,7 @@ pub fn run() {
             cache_get_folders,
             cache_upsert_emails,
             cache_get_folder_emails,
+            cache_get_email_detail,
             cache_search_emails,
             cache_delete_email,
             cache_mark_folder_sync_started,

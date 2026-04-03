@@ -421,12 +421,7 @@ fn raw_list_emails(client: &mut RawImapClient, request: &ImapRequest) -> Result<
         .take(page_size)
         .collect();
 
-    let mut emails = Vec::new();
-    for uid in &selected_uids {
-        if let Ok(email) = client.fetch_header_summary(*uid) {
-            emails.push(email);
-        }
-    }
+    let emails = client.fetch_header_summaries(&selected_uids)?;
 
     Ok(json!({
         "emails": emails,
@@ -803,45 +798,31 @@ impl RawImapClient {
             .collect())
     }
 
-    fn fetch_header_summary(&mut self, uid: u32) -> Result<Value, String> {
+    fn fetch_header_summaries(&mut self, uids: &[u32]) -> Result<Vec<Value>, String> {
+        if uids.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let response = self.command(&format!(
             "UID FETCH {} (UID FLAGS INTERNALDATE RFC822.HEADER)",
-            uid
+            join_uids(uids)
         ))?;
-        let prefix = String::from_utf8_lossy(&response);
-        let header = extract_literal(&response, b"RFC822.HEADER").unwrap_or_default();
-        let parsed = mailparse::parse_headers(&header).map_err(err_to_string)?.0;
 
-        let from = parse_single_address(parsed.get_first_value("From").as_deref().unwrap_or(""));
-        let to = parse_address_list(parsed.get_first_value("To").as_deref().unwrap_or(""));
-        let cc = parse_address_list(parsed.get_first_value("Cc").as_deref().unwrap_or(""));
-        let subject = parsed
-            .get_first_value("Subject")
-            .unwrap_or_else(|| "(No Subject)".to_string());
-        let date = parsed
-            .get_first_value("Date")
-            .or_else(|| extract_quoted_attr(&prefix, "INTERNALDATE"))
-            .unwrap_or_default();
-        let message_id = parsed.get_first_value("Message-ID").unwrap_or_default();
-        let in_reply_to = parsed.get_first_value("In-Reply-To").unwrap_or_default();
-        let references = parsed.get_first_value("References").unwrap_or_default();
-        let flags = extract_flags(&prefix);
+        let mut parsed = parse_fetch_header_summaries(&response)?;
+        let mut ordered = Vec::with_capacity(uids.len());
 
-        Ok(json!({
-            "uid": uid,
-            "from": from,
-            "to": to,
-            "cc": cc,
-            "subject": subject.clone(),
-            "snippet": subject,
-            "date": date,
-            "flags": flags,
-            "hasAttachments": false,
-            "attachments": [],
-            "messageId": message_id,
-            "inReplyTo": in_reply_to,
-            "references": references,
-        }))
+        for uid in uids {
+            if let Some(index) = parsed.iter().position(|item| {
+                item.get("uid")
+                    .and_then(Value::as_u64)
+                    .map(|value| value == *uid as u64)
+                    .unwrap_or(false)
+            }) {
+                ordered.push(parsed.remove(index));
+            }
+        }
+
+        Ok(ordered)
     }
 
     fn fetch_full_message(&mut self, uid: u32) -> Result<Vec<u8>, String> {
@@ -923,6 +904,10 @@ fn contains_bytes(haystack: &[u8], needle: &[u8]) -> bool {
     haystack.windows(needle.len()).any(|window| window == needle)
 }
 
+fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack.windows(needle.len()).position(|window| window == needle)
+}
+
 fn extract_literal(response: &[u8], marker: &[u8]) -> Option<Vec<u8>> {
     let marker_pos = response.windows(marker.len()).position(|window| window == marker)?;
     let brace_start = response[marker_pos..]
@@ -961,6 +946,96 @@ fn extract_quoted_attr(response: &str, attribute: &str) -> Option<String> {
     let tail = &response[start..];
     let end = tail.find('"')?;
     Some(tail[..end].to_string())
+}
+
+fn extract_numeric_attr(response: &str, attribute: &str) -> Option<u32> {
+    let marker = format!("{attribute} ");
+    let start = response.find(&marker)? + marker.len();
+    let digits: String = response[start..]
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit())
+        .collect();
+    digits.parse::<u32>().ok()
+}
+
+fn join_uids(uids: &[u32]) -> String {
+    uids.iter()
+        .map(|uid| uid.to_string())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn parse_fetch_header_summaries(response: &[u8]) -> Result<Vec<Value>, String> {
+    let mut cursor = 0usize;
+    let mut emails = Vec::new();
+
+    while let Some(fetch_rel) = find_bytes(&response[cursor..], b" FETCH (") {
+        let fetch_pos = cursor + fetch_rel;
+        let marker_rel = find_bytes(&response[fetch_pos..], b"RFC822.HEADER {")
+            .ok_or_else(|| "Missing RFC822.HEADER literal in FETCH response".to_string())?;
+        let marker_pos = fetch_pos + marker_rel;
+        let brace_start = marker_pos + "RFC822.HEADER ".len();
+        let brace_end = response[brace_start..]
+            .iter()
+            .position(|byte| *byte == b'}')
+            .ok_or_else(|| "Malformed FETCH literal length".to_string())?
+            + brace_start;
+        let literal_len = std::str::from_utf8(&response[brace_start + 1..brace_end])
+            .map_err(err_to_string)?
+            .parse::<usize>()
+            .map_err(err_to_string)?;
+        let header_start = brace_end + 3;
+        let header_end = header_start + literal_len;
+        let prefix_start = response[..fetch_pos]
+            .iter()
+            .rposition(|byte| *byte == b'\n')
+            .map(|index| index + 1)
+            .unwrap_or(0);
+        let prefix = String::from_utf8_lossy(&response[prefix_start..header_start]).to_string();
+        let header = response
+            .get(header_start..header_end)
+            .ok_or_else(|| "FETCH literal truncated".to_string())?;
+
+        emails.push(map_raw_header_summary(&prefix, header)?);
+        cursor = header_end;
+    }
+
+    Ok(emails)
+}
+
+fn map_raw_header_summary(prefix: &str, header: &[u8]) -> Result<Value, String> {
+    let parsed = mailparse::parse_headers(header).map_err(err_to_string)?.0;
+    let uid = extract_numeric_attr(prefix, "UID").unwrap_or_default();
+    let from = parse_single_address(parsed.get_first_value("From").as_deref().unwrap_or(""));
+    let to = parse_address_list(parsed.get_first_value("To").as_deref().unwrap_or(""));
+    let cc = parse_address_list(parsed.get_first_value("Cc").as_deref().unwrap_or(""));
+    let subject = parsed
+        .get_first_value("Subject")
+        .unwrap_or_else(|| "(No Subject)".to_string());
+    let date = parsed
+        .get_first_value("Date")
+        .or_else(|| extract_quoted_attr(prefix, "INTERNALDATE"))
+        .unwrap_or_default();
+    let message_id = parsed.get_first_value("Message-ID").unwrap_or_default();
+    let in_reply_to = parsed.get_first_value("In-Reply-To").unwrap_or_default();
+    let references = parsed.get_first_value("References").unwrap_or_default();
+    let flags = extract_flags(prefix);
+
+    Ok(json!({
+        "uid": uid,
+        "from": from,
+        "to": to,
+        "cc": cc,
+        "subject": subject.clone(),
+        "snippet": subject,
+        "date": date,
+        "flags": flags,
+        "hasAttachments": false,
+        "attachments": [],
+        "messageId": message_id,
+        "inReplyTo": in_reply_to,
+        "references": references,
+    }))
 }
 
 fn parse_header_map(header_bytes: &[u8]) -> std::collections::HashMap<String, String> {

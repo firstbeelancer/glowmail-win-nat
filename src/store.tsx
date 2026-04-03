@@ -175,6 +175,10 @@ type MailContextType = {
   hasMoreSearchResults: boolean;
   searchError: string | null;
   upsertLocalEmail: (email: Email) => void;
+  statusBanner: {
+    tone: 'loading' | 'syncing' | 'error';
+    text: string;
+  } | null;
 };
 
 const MailContext = createContext<MailContextType | undefined>(undefined);
@@ -197,6 +201,10 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [searchResultCount, setSearchResultCount] = useState(0);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [statusBanner, setStatusBanner] = useState<{
+    tone: 'loading' | 'syncing' | 'error';
+    text: string;
+  } | null>(null);
   const [searchPage, setSearchPage] = useState(1);
   const [hasMoreSearchResults, setHasMoreSearchResults] = useState(false);
   const [isDesktopCacheReady, setIsDesktopCacheReady] = useState(false);
@@ -441,6 +449,31 @@ export function MailProvider({ children }: { children: ReactNode }) {
     });
   }, [updateBothEmailStates]);
 
+  const mergeFetchedEmails = useCallback((incoming: Email[], preserved: Email[]) => {
+    const preservedMap = new Map(preserved.map((email) => [email.id, email]));
+
+    return incoming.map((email) => {
+      const cached = preservedMap.get(email.id);
+      if (!cached) return email;
+
+      return {
+        ...email,
+        from: cached.from?.email || cached.from?.name ? cached.from : email.from,
+        to: email.to.length > 0 ? email.to : cached.to,
+        cc: (email.cc && email.cc.length > 0) ? email.cc : cached.cc,
+        bcc: (email.bcc && email.bcc.length > 0) ? email.bcc : cached.bcc,
+        snippet: email.snippet || cached.snippet,
+        body: cached.body || email.body,
+        read: cached.read || email.read,
+        starred: cached.starred || email.starred,
+        tags: cached.tags.length > 0 ? cached.tags : email.tags,
+        attachments: cached.attachments.length > 0 ? cached.attachments : email.attachments,
+        cryptoInfo: cached.cryptoInfo || email.cryptoInfo,
+        headers: Object.keys(cached.headers || {}).length > 0 ? cached.headers : email.headers,
+      };
+    });
+  }, []);
+
   const PAGE_SIZE = 50;
   const SEARCH_PAGE_SIZE = 30;
   const BACKGROUND_SYNC_PAGE_LIMIT = 1;
@@ -501,6 +534,12 @@ export function MailProvider({ children }: { children: ReactNode }) {
 
     try {
       const accountEmail = getCurrentAccountEmail();
+      setStatusBanner({
+        tone: 'syncing',
+        text: settings.language === 'ru'
+          ? `Индексирую папку ${folder} и сохраняю письма локально...`
+          : `Indexing ${folder} and saving mail locally...`,
+      });
       await desktopCache.markFolderSyncStarted(accountEmail, folder, knownLastUid);
       const firstPageData = await mailApi.fetchEmailList(folder, 1, PAGE_SIZE);
       const firstPageMapped = mapMessages(firstPageData, folder);
@@ -555,6 +594,10 @@ export function MailProvider({ children }: { children: ReactNode }) {
       await desktopCache.markFolderSyncFinished(accountEmail, folder, lastUid, null);
     } catch (error) {
       console.warn(`Background cache sync failed for folder ${folder}:`, error);
+      setStatusBanner({
+        tone: 'error',
+        text: error instanceof Error ? error.message : 'Background sync failed',
+      });
       await desktopCache.markFolderSyncFinished(
         getCurrentAccountEmail(),
         folder,
@@ -563,8 +606,11 @@ export function MailProvider({ children }: { children: ReactNode }) {
       );
     } finally {
       backgroundSyncFoldersRef.current.delete(lockKey);
+      if (backgroundSyncFoldersRef.current.size === 0 && !isLoading && !isSearching) {
+        setStatusBanner(null);
+      }
     }
-  }, [collectContacts, getCurrentAccountEmail, isDesktopCacheReady, mapMessages]);
+  }, [collectContacts, getCurrentAccountEmail, isDesktopCacheReady, isLoading, isSearching, mapMessages, settings.language]);
 
   const runBackgroundFolderQueue = useCallback(async (folderList: Folder[]) => {
     if (!isDesktopCacheReady || backgroundSyncQueueRunningRef.current || folderList.length === 0) {
@@ -683,12 +729,34 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const fetchEmails = useCallback(async () => {
     setIsLoading(true);
     setConnectionError(null);
+    setStatusBanner({
+      tone: 'loading',
+      text: settings.language === 'ru'
+        ? `Обновляю ${currentFolder}...`
+        : `Refreshing ${currentFolder}...`,
+    });
     try {
       const accountEmail = getCurrentAccountEmail();
-      await loadFolders();
+      let cachedEmails: Email[] = [];
+
+      if (folders.length === 0) {
+        setStatusBanner({
+          tone: 'loading',
+          text: settings.language === 'ru'
+            ? 'Загружаю структуру папок...'
+            : 'Loading folder structure...',
+        });
+        await loadFolders();
+      }
 
       if (isDesktopCacheReady) {
-        const cachedEmails = await desktopCache.getCachedFolderEmails(accountEmail, currentFolder, PAGE_SIZE, 0);
+        setStatusBanner({
+          tone: 'loading',
+          text: settings.language === 'ru'
+            ? `Открываю локальный кэш ${currentFolder}...`
+            : `Opening local cache for ${currentFolder}...`,
+        });
+        cachedEmails = await desktopCache.getCachedFolderEmails(accountEmail, currentFolder, PAGE_SIZE, 0);
         if (cachedEmails.length > 0) {
           setFolderEmails(cachedEmails);
           setCurrentPage(1);
@@ -697,8 +765,20 @@ export function MailProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      setStatusBanner({
+        tone: 'loading',
+        text: settings.language === 'ru'
+          ? `Получаю новые письма для ${currentFolder}...`
+          : `Fetching latest mail for ${currentFolder}...`,
+      });
       const data = await mailApi.fetchEmailList(currentFolder, 1, PAGE_SIZE);
-      const mapped = mapMessages(data, currentFolder);
+      const mapped = mergeFetchedEmails(
+        mapMessages(data, currentFolder),
+        [
+          ...cachedEmails,
+          ...folderEmails.filter((email) => email.folderId === currentFolder),
+        ],
+      );
 
       // Detect new emails (only after first fetch, only for INBOX)
       if (!isFirstFetchRef.current && currentFolder === 'INBOX') {
@@ -725,10 +805,17 @@ export function MailProvider({ children }: { children: ReactNode }) {
     } catch (e: any) {
       console.error('fetchEmails error:', e);
       setConnectionError(e.message || 'Connection failed');
+      setStatusBanner({
+        tone: 'error',
+        text: e.message || 'Connection failed',
+      });
     } finally {
       setIsLoading(false);
+      if (backgroundSyncFoldersRef.current.size === 0) {
+        setStatusBanner(null);
+      }
     }
-  }, [currentFolder, loadFolders, mapMessages, collectContacts, notifyNewEmails, getCurrentAccountEmail, isDesktopCacheReady, syncFolderPagesToCache]);
+  }, [currentFolder, loadFolders, folders.length, mapMessages, mergeFetchedEmails, collectContacts, notifyNewEmails, getCurrentAccountEmail, isDesktopCacheReady, syncFolderPagesToCache, folderEmails, settings.language]);
 
   useEffect(() => {
     if (!isDesktopCacheReady || folderEmails.length === 0) return;
@@ -796,7 +883,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     try {
       const nextPage = currentPage + 1;
       const data = await mailApi.fetchEmailList(currentFolder, nextPage, PAGE_SIZE);
-      const mapped = mapMessages(data, currentFolder);
+      const mapped = mergeFetchedEmails(mapMessages(data, currentFolder), folderEmails);
 
       setFolderEmails(prev => {
         const existingIds = new Set(prev.map(e => e.id));
@@ -816,7 +903,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [currentFolder, currentPage, isLoadingMore, hasMoreEmails, totalEmails, mapMessages, collectContacts, isSearchActive, hasMoreSearchResults, searchQuery, searchPage, isDesktopCacheReady, getCurrentAccountEmail]);
+  }, [currentFolder, currentPage, isLoadingMore, hasMoreEmails, totalEmails, mapMessages, mergeFetchedEmails, collectContacts, isSearchActive, hasMoreSearchResults, searchQuery, searchPage, isDesktopCacheReady, getCurrentAccountEmail, folderEmails]);
 
   // Auto-fetch on mount and folder change
   useEffect(() => {
@@ -1225,8 +1312,9 @@ export function MailProvider({ children }: { children: ReactNode }) {
       hasMoreSearchResults,
       searchError,
       upsertLocalEmail,
+      statusBanner,
     }),
-    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isLoadingMore, hasMoreEmails, totalEmails, isConnected, connectionError, fetchEmails, loadMoreEmails, allFoldersFlat, isSearching, isSearchActive, searchResultCount, hasMoreSearchResults, searchError, upsertLocalEmail]
+    [folders, emails, contacts, settings, currentFolder, searchQuery, isLoading, isLoadingMore, hasMoreEmails, totalEmails, isConnected, connectionError, fetchEmails, loadMoreEmails, allFoldersFlat, isSearching, isSearchActive, searchResultCount, hasMoreSearchResults, searchError, upsertLocalEmail, statusBanner]
   );
 
   return <MailContext.Provider value={value}>{children}</MailContext.Provider>;

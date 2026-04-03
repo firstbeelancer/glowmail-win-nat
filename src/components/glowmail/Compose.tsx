@@ -9,6 +9,16 @@ import { t } from '@/lib/i18n';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { pgpSignMessage, pgpEncryptMessage } from '@/lib/mail-api';
 
+const COMPOSE_CHANNEL_NAME = 'glowmail-compose-channel';
+
+function normalizeRecipientList(value: string) {
+  return value
+    .split(/[,\n;]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
 export function Compose({
   onClose,
   initialData,
@@ -219,24 +229,58 @@ export function Compose({
 
   const [isCryptoProcessing, setIsCryptoProcessing] = useState(false);
 
+  const finalizeRecipientField = useCallback((
+    value: string,
+    setter: React.Dispatch<React.SetStateAction<string>>,
+  ) => {
+    setter(normalizeRecipientList(value));
+  }, []);
+
+  const handleRecipientKeyDown = useCallback((
+    event: React.KeyboardEvent<HTMLInputElement>,
+    value: string,
+    setter: React.Dispatch<React.SetStateAction<string>>,
+  ) => {
+    if (!['Enter', 'Tab', ';'].includes(event.key)) return;
+
+    const normalized = normalizeRecipientList(value);
+    if (!normalized) return;
+
+    event.preventDefault();
+    setter(`${normalized}, `);
+  }, []);
+
+  const handleRecipientPaste = useCallback((
+    event: React.ClipboardEvent<HTMLInputElement>,
+    currentValue: string,
+    setter: React.Dispatch<React.SetStateAction<string>>,
+  ) => {
+    const pasted = event.clipboardData.getData('text');
+    if (!/[;\n]/.test(pasted)) return;
+
+    event.preventDefault();
+    const combined = [currentValue, pasted].filter(Boolean).join(', ');
+    setter(`${normalizeRecipientList(combined)}, `);
+  }, []);
+
   const doSend = async () => {
-    const toContacts: Contact[] = to.split(',').map((emailStr) => {
+    const toContacts: Contact[] = normalizeRecipientList(to).split(',').map((emailStr) => {
       const email = emailStr.trim();
       const existing = contacts.find((c) => c.email === email);
       return existing || { id: `c${Date.now()}`, name: email.split('@')[0], email };
-    });
+    }).filter((contact) => contact.email);
 
-    const ccContacts: Contact[] = cc ? cc.split(',').map((emailStr) => {
+    const ccContacts: Contact[] = cc ? normalizeRecipientList(cc).split(',').map((emailStr) => {
       const email = emailStr.trim();
       const existing = contacts.find((c) => c.email === email);
       return existing || { id: `c${Date.now()}`, name: email.split('@')[0], email };
-    }) : [];
+    }).filter((contact) => contact.email) : [];
 
-    const bccContacts: Contact[] = bcc ? bcc.split(',').map((emailStr) => {
+    const bccContacts: Contact[] = bcc ? normalizeRecipientList(bcc).split(',').map((emailStr) => {
       const email = emailStr.trim();
       const existing = contacts.find((c) => c.email === email);
       return existing || { id: `c${Date.now()}`, name: email.split('@')[0], email };
-    }) : [];
+    }).filter((contact) => contact.email) : [];
 
     let finalBody = editorRef.current?.innerHTML || '';
     const plainText = editorRef.current?.innerText || '';
@@ -294,7 +338,7 @@ export function Compose({
   };
 
   const handleSend = () => {
-    if (!to) {
+    if (!normalizeRecipientList(to)) {
       toast.error(t('compose.recipientRequired', lang));
       return;
     }
@@ -322,11 +366,15 @@ export function Compose({
   };
 
   const handleSaveDraft = () => {
+    const toContacts = normalizeRecipientList(to).split(',').map((email) => email.trim()).filter(Boolean).map((email) => ({ id: email, name: email, email }));
+    const ccContacts = normalizeRecipientList(cc).split(',').map((email) => email.trim()).filter(Boolean).map((email) => ({ id: email, name: email, email }));
+    const bccContacts = normalizeRecipientList(bcc).split(',').map((email) => email.trim()).filter(Boolean).map((email) => ({ id: email, name: email, email }));
+
     saveDraft({
       id: initialData?.id,
-      to: [{ id: 'temp', name: to, email: to }],
-      cc: cc ? [{ id: 'temp_cc', name: cc, email: cc }] : [],
-      bcc: bcc ? [{ id: 'temp_bcc', name: bcc, email: bcc }] : [],
+      to: toContacts,
+      cc: ccContacts,
+      bcc: bccContacts,
       subject,
       body: editorRef.current?.innerHTML || '',
       importance,
@@ -456,7 +504,7 @@ export function Compose({
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                const w = window.open('', '_blank', 'width=800,height=700,menubar=no,toolbar=no,status=no');
+                const w = window.open('about:blank', `glowmail-compose-${Date.now()}`, 'popup=yes,width=800,height=700,menubar=no,toolbar=no,status=no');
                 if (w) {
                   const sigOptions = (settings.signatures || []).map(s => `<option value="${s.id}"${s.id === selectedSignatureId ? ' selected' : ''}>${s.name}</option>`).join('');
                   const tagOptions = (settings.availableTags || []).map(t => `<option value="${t.name}">${t.name}</option>`).join('');
@@ -475,6 +523,7 @@ export function Compose({
                   const borderColorHover = isLight ? '#3f3f46' : '#3f3f46';
                   const mutedText = isLight ? '#52525b' : '#71717a';
                   const subtleBg = isLight ? '#e4e4e7' : '#27272a';
+                  w.document.open();
                   w.document.write(`<!DOCTYPE html><html><head><title>${t('compose.newMessage', lang)}</title>
                     <style>
                        * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -589,10 +638,10 @@ export function Compose({
                         </select>
                       </div>
                       <div style="display:flex;gap:8px;">
-                        <button class="btn-draft" onclick="window.opener.postMessage({type:'glowmail-draft',to:document.getElementById('to').value,cc:document.getElementById('cc').value,bcc:document.getElementById('bcc').value,subject:document.getElementById('subject').value,body:document.getElementById('body').innerHTML},'*');window.close();">
+                        <button class="btn-draft" onclick="sendComposePayload('glowmail-draft');">
                           ${t('compose.saveDraft', lang)}
                         </button>
-                        <button class="btn" onclick="window.opener.postMessage({type:'glowmail-compose',to:document.getElementById('to').value,cc:document.getElementById('cc').value,bcc:document.getElementById('bcc').value,subject:document.getElementById('subject').value,body:document.getElementById('body').innerHTML},'*');window.close();">
+                        <button class="btn" onclick="sendComposePayload('glowmail-compose');">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;"><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                           ${t('compose.send', lang)}
                         </button>
@@ -613,6 +662,28 @@ export function Compose({
                         encEnabled = !encEnabled;
                         var btn = document.getElementById('enc-toggle');
                         btn.className = 'crypto-toggle ' + (encEnabled ? 'active-enc' : 'inactive');
+                      }
+                      function normalizeRecipients(value) {
+                        return value.split(/[,\\n;]+/).map(function(part){ return part.trim(); }).filter(Boolean).join(', ');
+                      }
+                      function sendComposePayload(type) {
+                        var payload = {
+                          type: type,
+                          to: normalizeRecipients(document.getElementById('to').value),
+                          cc: normalizeRecipients(document.getElementById('cc').value),
+                          bcc: normalizeRecipients(document.getElementById('bcc').value),
+                          subject: document.getElementById('subject').value,
+                          body: document.getElementById('body').innerHTML
+                        };
+                        try {
+                          var channel = new BroadcastChannel('${COMPOSE_CHANNEL_NAME}');
+                          channel.postMessage(payload);
+                          channel.close();
+                        } catch (err) {}
+                        if (window.opener && !window.opener.closed) {
+                          window.opener.postMessage(payload, '*');
+                        }
+                        window.close();
                       }
                       function addAttachments(files) {
                         var list = document.getElementById('att-list');
@@ -808,7 +879,10 @@ export function Compose({
                     <\/script>
                   </body></html>`);
                   w.document.close();
+                  w.focus();
                   onClose();
+                } else {
+                  toast.error(lang === 'ru' ? 'Не смогла открыть отдельное окно письма.' : 'Could not open a separate compose window.');
                 }
               }}
               className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
@@ -833,6 +907,9 @@ export function Compose({
               type="text"
               value={to}
               onChange={(e) => setTo(e.target.value)}
+              onBlur={(e) => finalizeRecipientField(e.target.value, setTo)}
+              onKeyDown={(e) => handleRecipientKeyDown(e, to, setTo)}
+              onPaste={(e) => handleRecipientPaste(e, to, setTo)}
               className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-100 placeholder:text-zinc-600"
               placeholder="recipient@example.com"
               autoFocus
@@ -853,6 +930,9 @@ export function Compose({
                   type="text"
                   value={cc}
                   onChange={(e) => setCc(e.target.value)}
+                  onBlur={(e) => finalizeRecipientField(e.target.value, setCc)}
+                  onKeyDown={(e) => handleRecipientKeyDown(e, cc, setCc)}
+                  onPaste={(e) => handleRecipientPaste(e, cc, setCc)}
                   className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-100 placeholder:text-zinc-600"
                   placeholder="cc@example.com"
                 />
@@ -863,6 +943,9 @@ export function Compose({
                   type="text"
                   value={bcc}
                   onChange={(e) => setBcc(e.target.value)}
+                  onBlur={(e) => finalizeRecipientField(e.target.value, setBcc)}
+                  onKeyDown={(e) => handleRecipientKeyDown(e, bcc, setBcc)}
+                  onPaste={(e) => handleRecipientPaste(e, bcc, setBcc)}
                   className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-100 placeholder:text-zinc-600"
                   placeholder="bcc@example.com"
                 />

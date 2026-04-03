@@ -350,7 +350,7 @@ impl AppDatabase {
             let headers_json =
                 serde_json::to_string(&email.headers).map_err(|err| err.to_string())?;
             let body_plain = if email.body.trim().is_empty() {
-                email.snippet.clone()
+                String::new()
             } else {
                 strip_html(&email.body)
             };
@@ -372,16 +372,40 @@ impl AppDatabase {
                       recipients_to=excluded.recipients_to,
                       recipients_cc=excluded.recipients_cc,
                       sent_at=excluded.sent_at,
-                      snippet=excluded.snippet,
-                      body_plain=excluded.body_plain,
-                      body_html=excluded.body_html,
+                      snippet=CASE
+                        WHEN excluded.snippet <> '' THEN excluded.snippet
+                        ELSE emails.snippet
+                      END,
+                      body_plain=CASE
+                        WHEN excluded.body_plain <> '' THEN excluded.body_plain
+                        ELSE emails.body_plain
+                      END,
+                      body_html=CASE
+                        WHEN excluded.body_html <> '' THEN excluded.body_html
+                        ELSE emails.body_html
+                      END,
                       flags_json=excluded.flags_json,
                       labels_json=excluded.labels_json,
-                      attachments_json=excluded.attachments_json,
-                      headers_json=excluded.headers_json,
-                      has_attachments=excluded.has_attachments,
-                      is_read=excluded.is_read,
-                      is_starred=excluded.is_starred,
+                      attachments_json=CASE
+                        WHEN excluded.attachments_json <> '[]' THEN excluded.attachments_json
+                        ELSE emails.attachments_json
+                      END,
+                      headers_json=CASE
+                        WHEN excluded.headers_json <> '{}' THEN excluded.headers_json
+                        ELSE emails.headers_json
+                      END,
+                      has_attachments=CASE
+                        WHEN excluded.has_attachments <> 0 THEN excluded.has_attachments
+                        ELSE emails.has_attachments
+                      END,
+                      is_read=CASE
+                        WHEN excluded.is_read <> 0 THEN excluded.is_read
+                        ELSE emails.is_read
+                      END,
+                      is_starred=CASE
+                        WHEN excluded.is_starred <> 0 THEN excluded.is_starred
+                        ELSE emails.is_starred
+                      END,
                       updated_at=CURRENT_TIMESTAMP
                     "#,
                     params![

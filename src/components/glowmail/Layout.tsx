@@ -19,7 +19,7 @@ const iconMap: Record<string, any> = {
 };
 
 export function Layout({ children, onCompose }: { children: ReactNode; onCompose: (prefill?: { to?: string }) => void }) {
-  const { folders, currentFolder, setCurrentFolder, searchQuery, setSearchQuery, settings, fetchEmails } = useMail();
+  const { folders, currentFolder, setCurrentFolder, searchQuery, setSearchQuery, settings, fetchEmails, statusBanner } = useMail();
   const lang = settings.language;
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -161,6 +161,18 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
             <LogOut className="w-5 h-5 text-zinc-400" />
           </button>
         </header>
+
+        {statusBanner && (
+          <div className={cn(
+            "border-b px-4 py-2 text-xs flex items-center gap-2 shrink-0",
+            statusBanner.tone === 'error'
+              ? "bg-red-500/10 border-red-500/20 text-red-300"
+              : "bg-emerald-500/10 border-emerald-500/20 text-emerald-300",
+          )}>
+            <RefreshCw className={cn("w-3.5 h-3.5", statusBanner.tone !== 'error' && "animate-spin")} />
+            <span>{statusBanner.text}</span>
+          </div>
+        )}
 
         {/* Content Area */}
         <div className="flex-1 overflow-hidden relative">

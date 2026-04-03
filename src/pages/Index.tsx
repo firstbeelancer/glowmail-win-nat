@@ -12,6 +12,15 @@ import * as mailApi from '../lib/mail-api';
 import { saveCredentials, hasCredentials, loadCredentials } from '../lib/credentials';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 
+const COMPOSE_CHANNEL_NAME = 'glowmail-compose-channel';
+
+function parseRecipientEmails(value: string) {
+  return value
+    .split(/[,\n;]+/)
+    .map((email) => email.trim())
+    .filter(Boolean);
+}
+
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [composeData, setComposeData] = useState<Partial<Email> | null>(null);
@@ -38,31 +47,46 @@ function MailApp() {
 
   // Listen for messages from detached composer window
   useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      if (event.data?.type === 'glowmail-compose') {
-        const { to, cc, bcc, subject, body } = event.data;
-        const toContacts = to.split(',').map((email: string) => ({
-          id: email.trim(), name: email.trim(), email: email.trim(),
-        })).filter((c: any) => c.email);
-        const ccContacts = cc ? cc.split(',').map((email: string) => ({
-          id: email.trim(), name: email.trim(), email: email.trim(),
-        })).filter((c: any) => c.email) : [];
-        const bccContacts = bcc ? bcc.split(',').map((email: string) => ({
-          id: email.trim(), name: email.trim(), email: email.trim(),
-        })).filter((c: any) => c.email) : [];
+    const handleComposePayload = (payload: any) => {
+      if (payload?.type === 'glowmail-compose') {
+        const { to, cc, bcc, subject, body } = payload;
+        const toContacts = parseRecipientEmails(to || '').map((email: string) => ({
+          id: email, name: email, email,
+        }));
+        const ccContacts = parseRecipientEmails(cc || '').map((email: string) => ({
+          id: email, name: email, email,
+        }));
+        const bccContacts = parseRecipientEmails(bcc || '').map((email: string) => ({
+          id: email, name: email, email,
+        }));
         sendEmail({ to: toContacts, cc: ccContacts, bcc: bccContacts, subject, body });
       }
-      if (event.data?.type === 'glowmail-draft') {
-        const { to, cc, bcc, subject, body } = event.data;
-        const toContacts = to ? [{ id: to, name: to, email: to }] : [];
-        const ccContacts = cc ? [{ id: cc, name: cc, email: cc }] : [];
-        const bccContacts = bcc ? [{ id: bcc, name: bcc, email: bcc }] : [];
+      if (payload?.type === 'glowmail-draft') {
+        const { to, cc, bcc, subject, body } = payload;
+        const toContacts = parseRecipientEmails(to || '').map((email) => ({ id: email, name: email, email }));
+        const ccContacts = parseRecipientEmails(cc || '').map((email) => ({ id: email, name: email, email }));
+        const bccContacts = parseRecipientEmails(bcc || '').map((email) => ({ id: email, name: email, email }));
         saveDraft({ to: toContacts, cc: ccContacts, bcc: bccContacts, subject, body });
       }
     };
+
+    const handler = (event: MessageEvent) => {
+      handleComposePayload(event.data);
+    };
+
     window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, [sendEmail]);
+    const broadcastChannel = typeof BroadcastChannel !== 'undefined'
+      ? new BroadcastChannel(COMPOSE_CHANNEL_NAME)
+      : null;
+    broadcastChannel?.addEventListener('message', (event) => {
+      handleComposePayload(event.data);
+    });
+
+    return () => {
+      window.removeEventListener('message', handler);
+      broadcastChannel?.close();
+    };
+  }, [sendEmail, saveDraft]);
 
   useEffect(() => {
     if (settings.theme === 'light') {

@@ -1,4 +1,11 @@
-import { supabase } from "@/integrations/supabase/client";
+import { invokeBackendFunction } from "@/lib/backend/transport";
+import {
+  pgpDecryptMessage as localPgpDecryptMessage,
+  pgpEncryptMessage as localPgpEncryptMessage,
+  pgpSignMessage as localPgpSignMessage,
+  pgpVerifySignature as localPgpVerifySignature,
+  smimeCertInfo as localSmimeCertInfo,
+} from "@/lib/crypto";
 import { loadCredentials } from "./credentials";
 
 export type MailCredentials = {
@@ -10,27 +17,23 @@ export type MailCredentials = {
   password: string;
 };
 
-function getCredentials(): MailCredentials | null {
+async function getCredentials(): Promise<MailCredentials | null> {
   return loadCredentials();
 }
 
 async function callImap(action: string, extra: Record<string, unknown> = {}) {
-  const creds = getCredentials();
+  const creds = await getCredentials();
   if (!creds) throw new Error("Not logged in");
 
-  const { data, error } = await supabase.functions.invoke("imap-proxy", {
-    body: {
-      action,
-      host: creds.imapHost,
-      port: creds.imapPort,
-      username: creds.email,
-      password: creds.password,
-      ...extra,
-    },
+  const data = await invokeBackendFunction("imap-proxy", {
+    action,
+    host: creds.imapHost,
+    port: creds.imapPort,
+    username: creds.email,
+    password: creds.password,
+    ...extra,
   });
 
-  if (error) throw new Error(error.message || "IMAP request failed");
-  if (data?.error) throw new Error(data.error);
   return data;
 }
 
@@ -80,7 +83,6 @@ export async function reindexSearchCache(folder = "INBOX", limit = 50, cursor: n
   return data;
 }
 
-
 export async function appendToFolder(folder: string, rawMessage: string, flags?: string[]) {
   return callImap("append", { folder, rawMessage, flags });
 }
@@ -95,33 +97,17 @@ export async function sendEmail(params: {
   inReplyTo?: string;
   references?: string;
 }) {
-  const creds = getCredentials();
+  const creds = await getCredentials();
   if (!creds) throw new Error("Not logged in");
 
-  const { data, error } = await supabase.functions.invoke("smtp-proxy", {
-    body: {
-      host: creds.smtpHost,
-      port: creds.smtpPort,
-      username: creds.email,
-      password: creds.password,
-      from: creds.email,
-      ...params,
-    },
+  return invokeBackendFunction("smtp-proxy", {
+    host: creds.smtpHost,
+    port: creds.smtpPort,
+    username: creds.email,
+    password: creds.password,
+    from: creds.email,
+    ...params,
   });
-
-  if (error) throw new Error(error.message || "SMTP request failed");
-  if (data?.error) throw new Error(data.error);
-  return data;
-}
-
-/* ─── Crypto proxy helpers ─── */
-async function callCrypto(action: string, extra: Record<string, unknown> = {}) {
-  const { data, error } = await supabase.functions.invoke("crypto-proxy", {
-    body: { action, ...extra },
-  });
-  if (error) throw new Error(error.message || "Crypto request failed");
-  if (data?.error) throw new Error(data.error);
-  return data;
 }
 
 export async function pgpVerifySignature(params: {
@@ -129,7 +115,7 @@ export async function pgpVerifySignature(params: {
   cleartext?: string;
   publicKeyArmored: string;
 }) {
-  return callCrypto("pgp-verify", params);
+  return localPgpVerifySignature(params);
 }
 
 export async function pgpDecryptMessage(params: {
@@ -137,7 +123,7 @@ export async function pgpDecryptMessage(params: {
   privateKeyArmored: string;
   passphrase?: string;
 }) {
-  return callCrypto("pgp-decrypt", params);
+  return localPgpDecryptMessage(params);
 }
 
 export async function pgpSignMessage(params: {
@@ -145,7 +131,7 @@ export async function pgpSignMessage(params: {
   privateKeyArmored: string;
   passphrase?: string;
 }) {
-  return callCrypto("pgp-sign", params);
+  return localPgpSignMessage(params);
 }
 
 export async function pgpEncryptMessage(params: {
@@ -154,11 +140,11 @@ export async function pgpEncryptMessage(params: {
   privateKeyArmored?: string;
   passphrase?: string;
 }) {
-  return callCrypto("pgp-encrypt", params);
+  return localPgpEncryptMessage(params);
 }
 
 export async function smimeCertInfo(certPem: string) {
-  return callCrypto("smime-info", { certPem });
+  return localSmimeCertInfo(certPem);
 }
 
 export async function sendToTigerMediaHub(params: {
@@ -172,11 +158,31 @@ export async function sendToTigerMediaHub(params: {
   glowMailId?: string;
   glowMailEmail?: string;
 }) {
-  const { data, error } = await supabase.functions.invoke("tmh-proxy", {
-    body: params,
-  });
+  const response = await fetch(
+    `${params.projectUrl.replace(/\/$/, "")}/functions/v1/external-upload`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${params.apiKey}`,
+      },
+      body: JSON.stringify({
+        userId: params.userId,
+        folder: params.folder || "",
+        fileName: params.fileName,
+        fileBase64: params.fileBase64,
+        fileType: params.fileType || "application/octet-stream",
+        glowMailId: params.glowMailId || "",
+        glowMailEmail: params.glowMailEmail || "",
+      }),
+    },
+  );
 
-  if (error) throw new Error(error.message || "TMH request failed");
-  if (data?.error) throw new Error(data.error);
-  return data;
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(data?.error || `TMH returned ${response.status}`);
+  }
+
+  return { success: true, ...data };
 }

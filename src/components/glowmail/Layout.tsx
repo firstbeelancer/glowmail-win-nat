@@ -150,8 +150,9 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
           <button
             onClick={() => {
               import('@/lib/credentials').then(({ clearCredentials }) => {
-                clearCredentials();
-                window.location.reload();
+                clearCredentials().finally(() => {
+                  window.location.reload();
+                });
               });
             }}
             className="p-2 rounded-full hover:bg-zinc-800 transition-colors"

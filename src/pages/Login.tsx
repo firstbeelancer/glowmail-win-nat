@@ -29,7 +29,7 @@ function detectPreset(email: string) {
   return domain ? PRESETS[domain] : undefined;
 }
 
-export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) => void }) {
+export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) => Promise<void> | void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -43,7 +43,7 @@ export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) 
 
   const preset = detectPreset(email);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     const finalImap = imapHost || preset?.imapHost || '';
@@ -51,15 +51,19 @@ export default function Login({ onLogin }: { onLogin: (creds: LoginCredentials) 
     const finalImapPort = imapHost ? imapPort : (preset?.imapPort || 993);
     const finalSmtpPort = smtpHost ? smtpPort : (preset?.smtpPort || 465);
 
-    onLogin({
-      email,
-      password,
-      name: name || email.split('@')[0],
-      imapHost: finalImap,
-      imapPort: finalImapPort,
-      smtpHost: finalSmtp,
-      smtpPort: finalSmtpPort,
-    });
+    try {
+      await onLogin({
+        email,
+        password,
+        name: name || email.split('@')[0],
+        imapHost: finalImap,
+        imapPort: finalImapPort,
+        smtpHost: finalSmtp,
+        smtpPort: finalSmtpPort,
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const detectedProvider = preset ? (email.split('@')[1]) : null;

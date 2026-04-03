@@ -1,61 +1,58 @@
 # GlowMail AI
 
-AI-powered email client built with React, Vite, and Tailwind CSS.
+AI-powered email client built with React, Vite, Tauri, and Rust.
 
 ## Authentication
 
 ### Supported Auth Methods
 
-GlowMail supports **two** authentication methods, both based on username + password sent to your mail server via IMAP/SMTP:
+GlowMail currently supports two authentication methods based on username + password sent to your mail server via IMAP/SMTP:
 
 | Method | Description | When to use |
 |---|---|---|
-| **Password** | Standard email password | Self-hosted / corporate servers |
-| **App Password** | Provider-generated app-specific password | Gmail, Yandex, Mail.ru, iCloud, Yahoo (recommended) |
+| **Password** | Standard email password | Self-hosted or corporate servers |
+| **App Password** | Provider-generated app-specific password | Gmail, Yandex, Mail.ru, iCloud, Yahoo |
 
-> **Note:** OAuth 2.0, Kerberos, NTLM, and TLS certificate authentication are **not** currently supported. The UI only shows methods that actually work.
+> OAuth 2.0, Kerberos, NTLM, and TLS certificate authentication are not currently supported.
 
 ### How Credentials Are Stored
 
-- Credentials are stored in the browser's `localStorage` under the key `glowmail_credentials`.
-- The password is **obfuscated** (XOR + base64) to prevent casual inspection. This is **not** cryptographic encryption — it protects against shoulder-surfing, not a determined attacker with devtools access.
-- Legacy unobfuscated credentials are auto-migrated on first read.
-- On logout, credentials are fully removed from localStorage.
+- Credentials are stored in local storage under `glowmail_credentials`.
+- The password is obfuscated with XOR + base64 to reduce casual inspection.
+- This is not strong encryption and should be treated as a temporary desktop-era storage strategy.
 
 ### Login Flow
 
-1. User enters email + app password on the login page.
-2. Server presets (IMAP/SMTP host/port) are auto-detected for popular providers (Gmail, Yandex, Mail.ru, Outlook, iCloud, Yahoo).
-3. Credentials are obfuscated and stored in localStorage.
-4. On each mail operation, credentials are deobfuscated and sent to backend Edge Functions (`imap-proxy`, `smtp-proxy`) which connect to the actual mail server.
+1. The user enters an email and password or app password.
+2. IMAP/SMTP presets are auto-detected for popular providers.
+3. Credentials are saved locally.
+4. The native desktop backend connects directly to the mail server.
 
 ## Architecture
 
 - **Frontend**: React + Vite + Tailwind CSS + TypeScript
-- **Backend**: Supabase Edge Functions (`imap-proxy` for IMAP, `smtp-proxy` for SMTP)
-- **Email protocols**: IMAP for reading, SMTP for sending — proxied through Deno edge functions to bypass browser TCP limitations
-- **AI features**: Email rewriting, tone adjustment, proofreading via Supabase Edge Function (`email-ai`)
+- **Desktop shell**: Tauri
+- **Backend**: Rust native mail backend with local SQLite cache and FTS search
+- **Email protocols**: IMAP for reading, SMTP for sending
+- **AI features**: Direct AI API calls without Supabase
 
 ## Local Development
 
 ```bash
-# Install dependencies
 npm install
-
-# Start dev server
-npm run dev
+npm run desktop:dev
 ```
 
-The app requires a connected Supabase project for the Edge Functions to work (IMAP/SMTP proxy, AI features).
+The desktop build no longer requires Supabase for AI features or SMTP sending. IMAP/SMTP transport is handled by the native backend.
 
 ## Features
 
 - Full IMAP email reading with folder navigation
-- SMTP email sending with rich text editor
-- Detached compose window (opens in new browser window)
-- AI-powered email rewriting and proofreading
-- Dark/light theme support
-- Russian and English UI languages
-- Email search with Cyrillic support
+- Native SMTP email sending
+- Detached compose window
+- AI-powered rewriting, proofreading, tone adjustment, and quick replies
+- Dark and light themes
+- Russian and English UI
+- Local search with Cyrillic support
 - Drag-to-resize panels
 - Code block and terminal log insertion in composer

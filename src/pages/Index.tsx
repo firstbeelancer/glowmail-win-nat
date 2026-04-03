@@ -15,7 +15,7 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/componen
 function MailApp() {
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [composeData, setComposeData] = useState<Partial<Email> | null>(null);
-  const { markAsRead, settings, sendEmail, saveDraft, currentFolder, emails } = useMail();
+  const { markAsRead, settings, sendEmail, saveDraft, currentFolder, emails, upsertLocalEmail } = useMail();
 
   // Get sorted email list for next/prev navigation
   const folderEmails = emails.filter(e => e.folderId === currentFolder)
@@ -212,6 +212,7 @@ function MailApp() {
           attachments: fetchedAttachments.length > 0 ? fetchedAttachments : email.attachments,
           cryptoInfo: full.cryptoInfo || undefined,
         };
+        upsertLocalEmail(enriched);
         setSelectedEmail(enriched);
       } catch (e) {
         console.error('Failed to fetch email body:', e);
@@ -375,8 +376,8 @@ const Index = () => {
   const [loggedIn, setLoggedIn] = useState(() => hasCredentials());
 
   if (!loggedIn) {
-    return <Login onLogin={(creds) => {
-      saveCredentials(creds);
+    return <Login onLogin={async (creds) => {
+      await saveCredentials(creds);
       setLoggedIn(true);
     }} />;
   }
@@ -409,20 +410,22 @@ function MailAppWithCreds() {
   const { updateSettings } = useMail();
 
   useEffect(() => {
-    const creds = loadCredentials();
-    if (creds) {
-      updateSettings({
-        account: { name: creds.name, email: creds.email },
-        server: {
-          imapHost: creds.imapHost,
-          imapPort: creds.imapPort,
-          smtpHost: creds.smtpHost,
-          smtpPort: creds.smtpPort,
-          secure: true,
-          authMethod: 'app-password',
-        },
-      });
-    }
+    loadCredentials()
+      .then((creds) => {
+        if (!creds) return;
+        updateSettings({
+          account: { name: creds.name, email: creds.email },
+          server: {
+            imapHost: creds.imapHost,
+            imapPort: creds.imapPort,
+            smtpHost: creds.smtpHost,
+            smtpPort: creds.smtpPort,
+            secure: true,
+            authMethod: 'app-password',
+          },
+        });
+      })
+      .catch((error) => console.error('Failed to load secure credentials', error));
   }, []);
 
   return <MailApp />;

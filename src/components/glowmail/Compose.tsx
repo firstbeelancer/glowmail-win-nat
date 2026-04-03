@@ -459,10 +459,14 @@ export function Compose({
                 const w = window.open('', '_blank', 'width=800,height=700,menubar=no,toolbar=no,status=no');
                 if (w) {
                   const sigOptions = (settings.signatures || []).map(s => `<option value="${s.id}"${s.id === selectedSignatureId ? ' selected' : ''}>${s.name}</option>`).join('');
-                  const sigDataJson = JSON.stringify(settings.signatures || []).replace(/"/g, '&quot;').replace(/'/g, "\\'");
                   const tagOptions = (settings.availableTags || []).map(t => `<option value="${t.name}">${t.name}</option>`).join('');
-                  const edgeFnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/email-ai`;
-                  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+                  const aiConfigJson = JSON.stringify({
+                    enabled: settings.aiEnabled,
+                    provider: settings.aiProvider || 'openai',
+                    apiKey: settings.aiApiKey || '',
+                    model: settings.aiModel || (settings.aiProvider === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4.1-mini'),
+                    baseUrl: settings.aiBaseUrl || '',
+                  }).replace(/</g, '\\u003c');
                   const isLight = settings.theme === 'light';
                   const bg = isLight ? '#fafafa' : '#09090b';
                   const fg = isLight ? '#09090b' : '#f4f4f5';
@@ -597,6 +601,7 @@ export function Compose({
                     <script>
                       var attachments = [];
                       var sigData = ${JSON.stringify(settings.signatures || [])};
+                      var aiConfig = ${aiConfigJson};
                       var signEnabled = ${signThis};
                       var encEnabled = ${encryptThis};
                       function toggleSign() {
@@ -660,17 +665,80 @@ export function Compose({
                         if(sigEl) { userHtml = userHtml.replace(sigHtml, ''); }
                         var plain = userHtml.replace(/<[^>]*>/g,'').trim();
                         if(!plain) return;
+                        if(!aiConfig.enabled) {
+                          alert('${lang === 'ru' ? 'ИИ выключен в настройках.' : 'AI is disabled in settings.'}');
+                          return;
+                        }
+                        if(!aiConfig.apiKey) {
+                          alert('${lang === 'ru' ? 'Сначала добавь AI API-ключ в настройках.' : 'Add an AI API key in settings first.'}');
+                          return;
+                        }
                         try {
-                          var resp = await fetch('${edgeFnUrl}', {
-                            method:'POST',
-                            headers:{'Content-Type':'application/json','Authorization':'Bearer ${anonKey}'},
-                            body: JSON.stringify({action:action, text:plain})
-                          });
-                          var data = await resp.json();
-                          if(data.result) {
-                            ed.innerHTML = '<p>'+data.result.replace(/\\n/g,'<br>')+'</p>' + sigHtml + threadHtml;
+                          var prompts = {
+                            rewrite: {
+                              systemPrompt: 'You are an email writing assistant. Rewrite the given text to be clearer and more concise. Return only the rewritten text, no explanations.',
+                              userPrompt: plain
+                            },
+                            spellcheck: {
+                              systemPrompt: 'You are a proofreader. Fix all spelling and grammar errors in the given text. Return only the corrected text, no explanations.',
+                              userPrompt: plain
+                            },
+                            professional: {
+                              systemPrompt: 'You are an email writing assistant. Rewrite the given text in a professional, formal tone. Return only the rewritten text, no explanations.',
+                              userPrompt: plain
+                            },
+                            friendly: {
+                              systemPrompt: 'You are an email writing assistant. Rewrite the given text in a warm, friendly tone. Return only the rewritten text, no explanations.',
+                              userPrompt: plain
+                            },
+                            translate: {
+                              systemPrompt: 'You are a translator. Translate the given text to English. If it\\'s already in English, translate to Spanish. Return only the translated text, no explanations.',
+                              userPrompt: plain
+                            }
+                          };
+                          var prompt = prompts[action];
+                          if(!prompt) return;
+                          var result = '';
+                          if(aiConfig.provider === 'gemini') {
+                            var geminiResp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(aiConfig.model || 'gemini-2.5-flash') + ':generateContent?key=' + encodeURIComponent(aiConfig.apiKey), {
+                              method:'POST',
+                              headers:{'Content-Type':'application/json'},
+                              body: JSON.stringify({
+                                systemInstruction: { parts: [{ text: prompt.systemPrompt }] },
+                                contents: [{ role:'user', parts:[{ text: prompt.userPrompt }] }],
+                                generationConfig: { temperature: 0.4 }
+                              })
+                            });
+                            if(!geminiResp.ok) throw new Error(await geminiResp.text());
+                            var geminiData = await geminiResp.json();
+                            result = (((geminiData || {}).candidates || [])[0]?.content?.parts || []).map(function(part){ return typeof part?.text === 'string' ? part.text : ''; }).join('').trim();
+                          } else {
+                            var baseUrl = (aiConfig.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
+                            var resp = await fetch(baseUrl + '/chat/completions', {
+                              method:'POST',
+                              headers:{'Content-Type':'application/json','Authorization':'Bearer ' + aiConfig.apiKey},
+                              body: JSON.stringify({
+                                model: aiConfig.model || 'gpt-4.1-mini',
+                                temperature: 0.4,
+                                messages: [
+                                  { role:'system', content: prompt.systemPrompt },
+                                  { role:'user', content: prompt.userPrompt }
+                                ]
+                              })
+                            });
+                            if(!resp.ok) throw new Error(await resp.text());
+                            var data = await resp.json();
+                            var content = (((data || {}).choices || [])[0]?.message?.content);
+                            if(typeof content === 'string') result = content.trim();
+                            else if(Array.isArray(content)) result = content.map(function(part){ return typeof part === 'string' ? part : (part?.type === 'text' ? (part.text || '') : ''); }).join('').trim();
                           }
-                        } catch(e) { console.error(e); }
+                          if(result) {
+                            ed.innerHTML = '<p>'+result.replace(/\\n/g,'<br>')+'</p>' + sigHtml + threadHtml;
+                          }
+                        } catch(e) {
+                          console.error(e);
+                          alert((e && e.message) ? e.message : 'AI request failed');
+                        }
                       }
                       // Image resize functionality
                       (function() {

@@ -78,6 +78,7 @@ export type Signature = {
 };
 
 export type AuthMethod = 'password' | 'app-password';
+export type AIProvider = 'openai' | 'gemini' | 'openai-compatible';
 
 export type UserSettings = {
   account: {
@@ -111,6 +112,10 @@ export type UserSettings = {
   markAsReadDelay: number;
   language: 'en' | 'ru';
   aiEnabled: boolean;
+  aiProvider: AIProvider;
+  aiApiKey: string;
+  aiModel: string;
+  aiBaseUrl: string;
   folderColors: Record<string, string>;
   tigerMediaHub: {
     enabled: boolean;

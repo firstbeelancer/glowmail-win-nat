@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useMail } from '../../store';
 import { motion } from 'framer-motion';
 import { X, User, Server, Palette, PenTool, Tags, Plus, Trash2, Image as ImageIcon, Globe, FolderTree, Loader2, Layers, Sparkles, RefreshCw, Plug, Shield, Upload, Check, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
@@ -67,6 +67,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const pgpPubRef = useRef<HTMLInputElement>(null);
   const pgpPrivRef = useRef<HTMLInputElement>(null);
   const lang = localSettings.language;
+
+  useEffect(() => {
+    setLocalSettings(settings);
+  }, [settings]);
 
   const handleSave = () => {
     updateSettings(localSettings);
@@ -284,6 +288,74 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   </label>
                   <p className="text-xs text-zinc-500 ml-7 mt-1">{t('settings.aiEnabledDesc', lang)}</p>
                 </div>
+
+                <div className="space-y-2 pt-1">
+                  <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    {t('settings.aiProvider', lang)}
+                  </label>
+                  <Select
+                    value={localSettings.aiProvider}
+                    onValueChange={(v) =>
+                      setLocalSettings({
+                        ...localSettings,
+                        aiProvider: v as 'openai' | 'gemini' | 'openai-compatible',
+                        aiModel:
+                          localSettings.aiProvider === v
+                            ? localSettings.aiModel
+                            : v === 'gemini'
+                              ? 'gemini-2.5-flash'
+                              : 'gpt-4.1-mini',
+                      })
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="openai">{t('settings.aiProviderOpenAI', lang)}</SelectItem>
+                      <SelectItem value="gemini">{t('settings.aiProviderGemini', lang)}</SelectItem>
+                      <SelectItem value="openai-compatible">{t('settings.aiProviderCompatible', lang)}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-zinc-500">{t('settings.aiProviderDesc', lang)}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.aiApiKey', lang)}</label>
+                  <input
+                    type="password"
+                    value={localSettings.aiApiKey}
+                    onChange={(e) => setLocalSettings({ ...localSettings, aiApiKey: e.target.value })}
+                    placeholder={t('settings.aiApiKeyPlaceholder', lang)}
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-zinc-400">{t('settings.aiModel', lang)}</label>
+                  <input
+                    type="text"
+                    value={localSettings.aiModel}
+                    onChange={(e) => setLocalSettings({ ...localSettings, aiModel: e.target.value })}
+                    placeholder={t('settings.aiModelPlaceholder', lang)}
+                    className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                  />
+                </div>
+
+                {localSettings.aiProvider === 'openai-compatible' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-zinc-400">{t('settings.aiBaseUrl', lang)}</label>
+                    <input
+                      type="url"
+                      value={localSettings.aiBaseUrl}
+                      onChange={(e) => setLocalSettings({ ...localSettings, aiBaseUrl: e.target.value })}
+                      placeholder={t('settings.aiBaseUrlPlaceholder', lang)}
+                      className="w-full bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all"
+                    />
+                    <p className="text-xs text-zinc-500">{t('settings.aiBaseUrlDesc', lang)}</p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-zinc-400 flex items-center gap-2">

@@ -100,7 +100,30 @@ fn handle_imap(payload: Value) -> Result<Value, String> {
         request.action.as_str(),
         "list" | "fetch" | "fetch-attachment"
     ) {
-        return handle_imap_raw(&request);
+        return handle_imap_raw(&request).or_else(|raw_error| {
+            log::warn!(
+                "Raw IMAP action '{}' failed, falling back to session client: {}",
+                request.action,
+                raw_error
+            );
+
+            let mut session = connect_session(
+                &request.host,
+                request.port,
+                &request.username,
+                &request.password,
+            )?;
+
+            let result = match request.action.as_str() {
+                "list" => list_emails(&mut session, &request),
+                "fetch" => fetch_email(&mut session, &request),
+                "fetch-attachment" => fetch_attachment(&mut session, &request),
+                other => Err(format!("Unsupported native IMAP action '{}'.", other)),
+            };
+
+            let _ = session.logout();
+            result
+        });
     }
 
     let mut session = connect_session(
@@ -758,7 +781,7 @@ struct RawImapClient {
 impl RawImapClient {
     fn connect(host: &str, port: u16, username: &str, password: &str) -> Result<Self, String> {
         let tcp = TcpStream::connect((host, port)).map_err(err_to_string)?;
-        tcp.set_read_timeout(Some(Duration::from_millis(2000)))
+        tcp.set_read_timeout(Some(Duration::from_secs(15)))
             .map_err(err_to_string)?;
         tcp.set_write_timeout(Some(Duration::from_secs(10)))
             .map_err(err_to_string)?;

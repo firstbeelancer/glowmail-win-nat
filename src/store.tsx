@@ -214,6 +214,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
   const isFirstFetchRef = useRef(true);
   const backgroundSyncFoldersRef = useRef<Set<string>>(new Set());
   const backgroundSyncQueueRunningRef = useRef(false);
+  const folderEmailsRef = useRef<Email[]>([]);
 
   // Request notification permission on mount
   useEffect(() => {
@@ -225,6 +226,10 @@ export function MailProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     desktopCache.isDesktopRuntime().then(setIsDesktopCacheReady).catch(() => setIsDesktopCacheReady(false));
   }, []);
+
+  useEffect(() => {
+    folderEmailsRef.current = folderEmails;
+  }, [folderEmails]);
 
   // Derived: UI always reads from `emails`, which switches based on search mode
   const emails = isSearchActive ? searchResults : folderEmails;
@@ -807,7 +812,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
         mapMessages(data, currentFolder),
         [
           ...cachedEmails,
-          ...folderEmails.filter((email) => email.folderId === currentFolder),
+          ...folderEmailsRef.current.filter((email) => email.folderId === currentFolder),
         ],
       );
 
@@ -846,7 +851,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
         setStatusBanner(null);
       }
     }
-  }, [currentFolder, loadFolders, folders.length, mapMessages, mergeFetchedEmails, collectContacts, notifyNewEmails, getCurrentAccountEmail, isDesktopCacheReady, syncFolderPagesToCache, folderEmails, settings.language, readCachedFolderEmailsWithTimeout]);
+  }, [currentFolder, loadFolders, folders.length, mapMessages, mergeFetchedEmails, collectContacts, notifyNewEmails, getCurrentAccountEmail, isDesktopCacheReady, syncFolderPagesToCache, settings.language, readCachedFolderEmailsWithTimeout]);
 
   useEffect(() => {
     if (!isDesktopCacheReady || folderEmails.length === 0) return;
@@ -914,7 +919,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     try {
       const nextPage = currentPage + 1;
       const data = await mailApi.fetchEmailList(currentFolder, nextPage, PAGE_SIZE);
-      const mapped = mergeFetchedEmails(mapMessages(data, currentFolder), folderEmails);
+      const mapped = mergeFetchedEmails(mapMessages(data, currentFolder), folderEmailsRef.current);
 
       setFolderEmails(prev => {
         const existingIds = new Set(prev.map(e => e.id));
@@ -934,7 +939,7 @@ export function MailProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [currentFolder, currentPage, isLoadingMore, hasMoreEmails, totalEmails, mapMessages, mergeFetchedEmails, collectContacts, isSearchActive, hasMoreSearchResults, searchQuery, searchPage, isDesktopCacheReady, getCurrentAccountEmail, folderEmails]);
+  }, [currentFolder, currentPage, isLoadingMore, hasMoreEmails, totalEmails, mapMessages, mergeFetchedEmails, collectContacts, isSearchActive, hasMoreSearchResults, searchQuery, searchPage, isDesktopCacheReady, getCurrentAccountEmail]);
 
   // Auto-fetch on mount and folder change
   useEffect(() => {

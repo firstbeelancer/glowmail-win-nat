@@ -351,6 +351,7 @@ fn list_folders(session: &mut ImapSession) -> Result<Value, String> {
 }
 
 fn list_emails(session: &mut ImapSession, request: &ImapRequest) -> Result<Value, String> {
+    let started_at = std::time::Instant::now();
     let folder = request
         .folder
         .clone()
@@ -391,6 +392,11 @@ fn list_emails(session: &mut ImapSession, request: &ImapRequest) -> Result<Value
         )
         .map_err(err_to_string)?;
 
+    let estimated_bytes = messages
+        .iter()
+        .map(|message| message.header().map(|header| header.len()).unwrap_or_default())
+        .sum::<usize>();
+
     let mut emails: Vec<Value> = messages
         .iter()
         .filter_map(|message| map_list_message(message).ok())
@@ -409,10 +415,16 @@ fn list_emails(session: &mut ImapSession, request: &ImapRequest) -> Result<Value
         "page": page,
         "pageSize": page_size,
         "hasMore": start > 1,
+        "diagnostics": {
+            "source": "imap-session",
+            "bytesTransferred": estimated_bytes,
+            "durationMs": started_at.elapsed().as_millis(),
+        }
     }))
 }
 
 fn raw_list_emails(client: &mut RawImapClient, request: &ImapRequest) -> Result<Value, String> {
+    let started_at = std::time::Instant::now();
     let folder = request
         .folder
         .clone()
@@ -444,7 +456,7 @@ fn raw_list_emails(client: &mut RawImapClient, request: &ImapRequest) -> Result<
         .take(page_size)
         .collect();
 
-    let emails = client.fetch_header_summaries(&selected_uids)?;
+    let (emails, transferred_bytes) = client.fetch_header_summaries(&selected_uids)?;
 
     Ok(json!({
         "emails": emails,
@@ -452,6 +464,11 @@ fn raw_list_emails(client: &mut RawImapClient, request: &ImapRequest) -> Result<
         "page": page,
         "pageSize": page_size,
         "hasMore": offset + selected_uids.len() < total,
+        "diagnostics": {
+            "source": "imap-raw",
+            "bytesTransferred": transferred_bytes,
+            "durationMs": started_at.elapsed().as_millis(),
+        }
     }))
 }
 
@@ -821,9 +838,9 @@ impl RawImapClient {
             .collect())
     }
 
-    fn fetch_header_summaries(&mut self, uids: &[u32]) -> Result<Vec<Value>, String> {
+    fn fetch_header_summaries(&mut self, uids: &[u32]) -> Result<(Vec<Value>, usize), String> {
         if uids.is_empty() {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), 0));
         }
 
         let response = self.command(&format!(
@@ -845,7 +862,7 @@ impl RawImapClient {
             }
         }
 
-        Ok(ordered)
+        Ok((ordered, response.len()))
     }
 
     fn fetch_full_message(&mut self, uid: u32) -> Result<Vec<u8>, String> {

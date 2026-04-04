@@ -23,11 +23,40 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
   const lang = settings.language;
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [statusNow, setStatusNow] = useState(() => Date.now());
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('glowmail_sidebar_width');
     return saved ? Number(saved) : 256;
   });
   const isResizing = useRef(false);
+
+  useEffect(() => {
+    if (!statusBanner) return;
+    const timer = window.setInterval(() => setStatusNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [statusBanner]);
+
+  const elapsedSeconds = statusBanner
+    ? Math.max(0, Math.floor((statusNow - statusBanner.startedAt) / 1000))
+    : 0;
+
+  const progressPercent = statusBanner?.progress?.total
+    ? Math.min(100, Math.round((statusBanner.progress.loaded / statusBanner.progress.total) * 100))
+    : undefined;
+
+  const formatMegabytes = (bytes?: number) => {
+    if (!bytes || bytes <= 0) return null;
+    return `${(bytes / (1024 * 1024)).toFixed(bytes > 1024 * 1024 ? 2 : 3)} MB`;
+  };
+
+  const phaseLabelMap: Record<string, string> = {
+    refresh: lang === 'ru' ? 'Обновление' : 'Refresh',
+    folders: lang === 'ru' ? 'Папки' : 'Folders',
+    cache: lang === 'ru' ? 'Кэш' : 'Cache',
+    network: lang === 'ru' ? 'Сервер' : 'Server',
+    sync: lang === 'ru' ? 'Индекс' : 'Index',
+    error: lang === 'ru' ? 'Ошибка' : 'Error',
+  };
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -164,13 +193,108 @@ export function Layout({ children, onCompose }: { children: ReactNode; onCompose
 
         {statusBanner && (
           <div className={cn(
-            "border-b px-4 py-2 text-xs flex items-center gap-2 shrink-0",
+            "border-b px-4 py-3 shrink-0 relative overflow-hidden",
             statusBanner.tone === 'error'
-              ? "bg-red-500/10 border-red-500/20 text-red-300"
-              : "bg-emerald-500/10 border-emerald-500/20 text-emerald-300",
+              ? "border-red-500/25 bg-[linear-gradient(135deg,rgba(80,14,18,0.92),rgba(28,8,12,0.96))] text-red-100"
+              : "border-cyan-400/15 bg-[linear-gradient(135deg,rgba(7,15,22,0.96),rgba(8,26,31,0.96)_42%,rgba(7,14,21,0.98))] text-zinc-100",
           )}>
-            <RefreshCw className={cn("w-3.5 h-3.5", statusBanner.tone !== 'error' && "animate-spin")} />
-            <span>{statusBanner.text}</span>
+            <div className="absolute inset-0 opacity-70 pointer-events-none" style={{
+              backgroundImage: statusBanner.tone === 'error'
+                ? 'radial-gradient(circle at 12% 50%, rgba(240,72,72,0.16), transparent 28%), radial-gradient(circle at 88% 20%, rgba(240,72,72,0.12), transparent 24%)'
+                : 'radial-gradient(circle at 12% 50%, rgba(61,217,160,0.16), transparent 28%), radial-gradient(circle at 88% 20%, rgba(108,138,255,0.14), transparent 24%), linear-gradient(90deg, rgba(255,255,255,0.04), transparent 35%, rgba(255,255,255,0.02))'
+            }} />
+            <div className="relative flex items-start gap-3">
+              <div className={cn(
+                "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border backdrop-blur-md",
+                statusBanner.tone === 'error'
+                  ? "border-red-400/25 bg-red-500/10 shadow-[0_0_20px_rgba(240,72,72,0.18)]"
+                  : "border-cyan-300/15 bg-white/5 shadow-[0_0_24px_rgba(61,217,160,0.12)]"
+              )}>
+                <RefreshCw className={cn("w-4 h-4", statusBanner.tone !== 'error' && "animate-spin")} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold tracking-[0.01em]">{statusBanner.text}</span>
+                  {statusBanner.phase && (
+                    <span className={cn(
+                      "rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.22em]",
+                      statusBanner.tone === 'error'
+                        ? "border-red-400/30 bg-red-500/10 text-red-200"
+                        : "border-cyan-300/15 bg-white/5 text-cyan-100"
+                    )}>
+                      {phaseLabelMap[statusBanner.phase] || statusBanner.phase}
+                    </span>
+                  )}
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-[0.22em] text-zinc-300">
+                    {elapsedSeconds}s
+                  </span>
+                  {statusBanner.diagnostics?.source && (
+                    <span className="rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-zinc-400">
+                      {statusBanner.diagnostics.source}
+                    </span>
+                  )}
+                </div>
+                {statusBanner.detail && (
+                  <p className={cn(
+                    "mt-1 text-xs",
+                    statusBanner.tone === 'error' ? "text-red-200/80" : "text-zinc-300/85"
+                  )}>
+                    {statusBanner.detail}
+                  </p>
+                )}
+                {(statusBanner.progress || statusBanner.diagnostics?.durationMs) && (
+                  <div className="mt-2 space-y-2">
+                    {typeof progressPercent === 'number' && (
+                      <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-all duration-500",
+                            statusBanner.tone === 'error'
+                              ? "bg-[linear-gradient(90deg,#f87171,#ef4444)] shadow-[0_0_16px_rgba(240,72,72,0.35)]"
+                              : "bg-[linear-gradient(90deg,#3dd9a0,#6c8aff)] shadow-[0_0_18px_rgba(61,217,160,0.24)]"
+                          )}
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
+                    )}
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      {statusBanner.progress && (
+                        <>
+                          <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-zinc-200">
+                            {lang === 'ru' ? 'Загружено' : 'Loaded'}: <strong>{statusBanner.progress.loaded}</strong>
+                          </span>
+                          {typeof statusBanner.progress.total === 'number' && (
+                            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-zinc-200">
+                              {lang === 'ru' ? 'Всего' : 'Total'}: <strong>{statusBanner.progress.total}</strong>
+                            </span>
+                          )}
+                          {typeof statusBanner.progress.remaining === 'number' && (
+                            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-zinc-200">
+                              {lang === 'ru' ? 'Осталось' : 'Left'}: <strong>{statusBanner.progress.remaining}</strong>
+                            </span>
+                          )}
+                          {formatMegabytes(statusBanner.progress.loadedBytes) && (
+                            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-zinc-200">
+                              {lang === 'ru' ? 'Объём' : 'Volume'}: <strong>{formatMegabytes(statusBanner.progress.loadedBytes)}</strong>
+                            </span>
+                          )}
+                        </>
+                      )}
+                      {typeof statusBanner.diagnostics?.durationMs === 'number' && (
+                        <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-zinc-200">
+                          {lang === 'ru' ? 'Сеть' : 'Network'}: <strong>{statusBanner.diagnostics.durationMs} ms</strong>
+                        </span>
+                      )}
+                      {statusBanner.diagnostics?.step && (
+                        <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-zinc-400">
+                          {statusBanner.diagnostics.step}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
